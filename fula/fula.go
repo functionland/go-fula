@@ -29,54 +29,67 @@ type Fula struct {
 	appDir string
 }
 
-func NewFula(appDir string) *Fula {
+func NewFula(appDir string) (*Fula, error) {
 	node, err := create()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	f := &Fula{node: node, appDir: appDir}
-	return f
+	return f, nil
 }
 
-func (f *Fula) Connect(boxAddr string) {
-	peerAddr, _ := peer.AddrInfoFromString(boxAddr)
+func (f *Fula) Connect(boxAddr string) (error){
+	peerAddr, err := peer.AddrInfoFromString(boxAddr)
 	node := f.node
+	if err != nil {
+		return err
+	}
 	f.peers = append(f.peers, peerAddr.ID)
 	node.Peerstore().AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
+	return nil
 }
 
-func (f *Fula) Send(filePath string) string{
+func (f *Fula) Send(filePath string) (*string,error){
 	file, err := os.Open(filePath)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	defer file.Close()
 	stream, err := f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
+	defer stream.Close()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	fmt.Println("are u runing")
-	res := filePL.SendFile(file, stream)
+	res,err := filePL.SendFile(file, stream)
+
 	fmt.Println(res)
 
-	return res
+	return res, nil
 }
 
-func (f *Fula) Receive(fileId string) string{
+func (f *Fula) Receive(fileId string) (*string, error){
 	stream, err := f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	meta := filePL.ReceiveMeta(stream, fileId)
+	meta,err := filePL.ReceiveMeta(stream, fileId)
 	stream.Close()
 	stream, err = f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
-	file := filePL.ReceiveFile(stream, fileId)
-	fileName := fmt.Sprintf("%s/%s",f.appDir,meta.Name)
-	err = os.WriteFile(fileName, file, 0644)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return fileName
+	defer stream.Close()
+	file,err := filePL.ReceiveFile(stream, fileId)
+	if err != nil {
+		return nil, err
+	}
+	fileName := fmt.Sprintf("%s/%s",f.appDir,meta.Name)
+	err = os.WriteFile(fileName, *file, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return &fileName, nil
 }
 
 func create() (host.Host, error) {

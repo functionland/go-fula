@@ -12,15 +12,19 @@ import (
 
 func main() {
 
-	fula := fula.NewFula("/home/farhoud")
+	fula,_ := fula.NewFula("/home/farhoud")
 	fula.Connect("/ip4/192.168.1.10/tcp/4002/p2p/12D3KooWDVgPHx45ZsnNPyeQooqY8VNesSR2KiX2mJwzEK5hpjpb")
 	fmt.Println("We are know connected")
-	cid := fula.Send("/home/farhoud/workspace/functionland/rngofula/libfula/test.txt")
-
-	cid = string(cid)
+	cid,err := fula.Send("/home/farhoud/workspace/functionland/rngofula/libfula/test.txt")
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("cid", cid)
 	time.Sleep(2 * time.Second)
-	meta := fula.Receive(cid)
+	meta,err := fula.Receive(*cid)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(meta)
 
 	runtime.Goexit()
