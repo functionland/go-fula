@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+message Meta {
+  string name = 1;
+  string type = 2;
+  uint64 size = 3 [jstype = JS_NUMBER];
+  int64 lastModified = 4 [jstype = JS_NUMBER];
+}
+
+message Chunk {
+  string id = 1;
+}
+
+message Request {
+  oneof type {
+    string meta = 1;
+    Chunk receive = 2;
+    Meta send = 3;
+  }
+}
+
+message File {
+  Meta meta = 1;
+  string contentPath = 2;
+}
