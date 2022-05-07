@@ -38,58 +38,58 @@ func NewFula(appDir string) (*Fula, error) {
 	return f, nil
 }
 
-func (f *Fula) Connect(boxAddr string) (error){
+func (f *Fula) Connect(boxAddr string) (bool, error){
 	peerAddr, err := peer.AddrInfoFromString(boxAddr)
 	node := f.node
 	if err != nil {
-		return err
+		return false ,err
 	}
 	f.peers = append(f.peers, peerAddr.ID)
 	node.Peerstore().AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
-	return nil
+	return true, nil
 }
 
-func (f *Fula) Send(filePath string) (*string,error){
+func (f *Fula) Send(filePath string) (string,error){
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer file.Close()
 	stream, err := f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
 	defer stream.Close()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	fmt.Println("are u runing")
 	res,err := filePL.SendFile(file, stream)
 
 	fmt.Println(res)
 
-	return res, nil
+	return *res, nil
 }
 
-func (f *Fula) Receive(fileId string) (*string, error){
+func (f *Fula) Receive(fileId string) (string, error){
 	stream, err := f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	meta,err := filePL.ReceiveMeta(stream, fileId)
 	stream.Close()
 	stream, err = f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer stream.Close()
 	file,err := filePL.ReceiveFile(stream, fileId)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	fileName := fmt.Sprintf("%s/%s",f.appDir,meta.Name)
 	err = os.WriteFile(fileName, *file, 0644)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return &fileName, nil
+	return fileName, nil
 }
 
 func create() (host.Host, error) {
