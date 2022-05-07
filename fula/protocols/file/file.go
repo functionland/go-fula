@@ -1,12 +1,10 @@
-package protocol
+package file
 
 import (
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-
-	pb "github.com/farhoud/go-fula/fula/protocols/pb/file"
 
 	"github.com/gabriel-vasile/mimetype"
 	proto "github.com/gogo/protobuf/proto"
@@ -25,7 +23,7 @@ func protocolHandler(s network.Stream) {
 }
 
 func ReceiveFile(stream network.Stream, cid string) []byte {
-	reqMsg := &pb.Request{Type: &pb.Request_Receive{Receive: &pb.Chunk{Id: cid}}}
+	reqMsg := &Request{Type: &Request_Receive{Receive: &Chunk{Id: cid}}}
 	header, err := proto.Marshal(reqMsg)
 	if err != nil {
 		panic(err)
@@ -42,9 +40,9 @@ func ReceiveFile(stream network.Stream, cid string) []byte {
 	return buf
 }
 
-func ReceiveMeta(stream network.Stream, cid string) *pb.Meta {
-	reqMsg := &pb.Request{
-		Type: &pb.Request_Meta{Meta: cid}}
+func ReceiveMeta(stream network.Stream, cid string) *Meta {
+	reqMsg := &Request{
+		Type: &Request_Meta{Meta: cid}}
 
 	header, err := proto.Marshal(reqMsg)
 	if err != nil {
@@ -62,7 +60,7 @@ func ReceiveMeta(stream network.Stream, cid string) *pb.Meta {
 		panic(err)
 	}
 
-	meta := &pb.Meta{}
+	meta := &Meta{}
 	err = proto.Unmarshal(buf, meta)
 	if err != nil {
 		panic(err)
@@ -80,9 +78,9 @@ func SendFile(file *os.File, stream network.Stream) string {
 		panic(err)
 	}
 
-	reqMsg := &pb.Request{
-		Type: &pb.Request_Send{
-			Send: &pb.Meta{
+	reqMsg := &Request{
+		Type: &Request_Send{
+			Send: &Meta{
 				Name:         fileInfo.Name(),
 				Size_:        uint64(fileInfo.Size()),
 				LastModified: fileInfo.ModTime().Unix(),
