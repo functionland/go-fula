@@ -17,6 +17,8 @@ import (
 	graphPL "github.com/farhoud/go-fula/fula/protocols/graph"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	structpb "google.golang.org/protobuf/types/known/structpb"
+	proto "github.com/golang/protobuf/proto"
+	"encoding/json"
 )
 
 type IFula interface {
@@ -62,7 +64,7 @@ func (f *Fula) Send(filePath string) (string,error){
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("are u running!")
+	fmt.Println("are uuuxx running!")
 	res,err := filePL.SendFile(file, stream)
 
 	fmt.Println(res)
@@ -94,23 +96,25 @@ func (f *Fula) Receive(fileId string) (string, error){
 	return fileName, nil
 }
 
-func (f *Fula) GraphQL(query string, values map[string]interface{}) (string, error){
+func (f *Fula) GraphQL(query string, values string) (string, error){
 	stream, err := f.node.NewStream(context.Background(), f.peers[0], graphPL.Protocol)
 	if err != nil {
 		return "", err
 	}
 	defer stream.Close()
 
-	val, err := structpb.NewValue(values)
+	fmt.Println("after stream")
+	val, err := structpb.NewValue(map[string]interface{}{})
 	if err != nil {
 		return "", err
 	}
+	json.Unmarshal([]byte(values), &val)
 	res, err := graphPL.GraphQL(query, val, stream)
 	if err != nil {
 		return "", err
 	}
 
-	return string(*res), nil
+	return proto.MarshalTextString(res), nil
 }
 
 func create() (host.Host, error) {
