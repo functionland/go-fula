@@ -1,4 +1,6 @@
 syntax = "proto3";
+option go_package = "./file";
+package file;
 
 message Meta {
   string name = 1;

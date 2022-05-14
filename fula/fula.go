@@ -14,7 +14,9 @@ import (
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
 	filePL "github.com/farhoud/go-fula/fula/protocols/file"
+	graphPL "github.com/farhoud/go-fula/fula/protocols/graph"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 type IFula interface {
@@ -60,7 +62,7 @@ func (f *Fula) Send(filePath string) (string,error){
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("are u runing")
+	fmt.Println("are u running!")
 	res,err := filePL.SendFile(file, stream)
 
 	fmt.Println(res)
@@ -90,6 +92,25 @@ func (f *Fula) Receive(fileId string) (string, error){
 		return "", err
 	}
 	return fileName, nil
+}
+
+func (f *Fula) GraphQL(query string, values map[string]interface{}) (string, error){
+	stream, err := f.node.NewStream(context.Background(), f.peers[0], graphPL.Protocol)
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+
+	val, err := structpb.NewValue(values)
+	if err != nil {
+		return "", err
+	}
+	res, err := graphPL.GraphQL(query, val, stream)
+	if err != nil {
+		return "", err
+	}
+
+	return string(*res), nil
 }
 
 func create() (host.Host, error) {

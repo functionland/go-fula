@@ -1,5 +1,7 @@
 syntax = "proto3";
 import "google/protobuf/struct.proto";
+option go_package = "./graph";
+package graph;
 
 message Request {
   string query = 1;
