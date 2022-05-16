@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/farhoud/go-fula/fula"
+	fula "github.com/farhoud/go-fula/mobile"
 	"log"
 	"os"
 	"os/signal"
