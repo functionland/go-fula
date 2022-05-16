@@ -1,4 +1,4 @@
-package fula
+package mobile
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
-	filePL "github.com/farhoud/go-fula/fula/protocols/file"
-	graphPL "github.com/farhoud/go-fula/fula/protocols/graph"
+	filePL "github.com/farhoud/go-fula/protocols/file"
+	graphPL "github.com/farhoud/go-fula/protocols/graph"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	"encoding/json"
