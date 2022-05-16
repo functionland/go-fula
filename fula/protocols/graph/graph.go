@@ -37,12 +37,12 @@ func GraphQL(query string, values *structpb.Value, stream network.Stream) (*Resu
 	if err != nil {
 		return nil, err
 	}
+
 	res := &Result{}
 	err = proto.Unmarshal(buf, res)
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println(res)
+	
 	return res, nil
 }
