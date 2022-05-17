@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/gabriel-vasile/mimetype"
-	proto "github.com/gogo/protobuf/proto"
+	proto "github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 )
