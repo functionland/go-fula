@@ -18,7 +18,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	"encoding/json"
-	protojson "google.golang.org/protobuf/encoding/protojson"
 )
 
 type IFula interface {
@@ -96,30 +95,25 @@ func (f *Fula) Receive(fileId string) (string, error){
 	return fileName, nil
 }
 
-func (f *Fula) GraphQL(query string, values string) (string, error){
+func (f *Fula) GraphQL(query string, values string) ([]byte, error){
 	stream, err := f.node.NewStream(context.Background(), f.peers[0], graphPL.Protocol)
 	if err != nil {
-		return "error", err
+		return nil, err
 	}
 	defer stream.Close()
 
 	fmt.Println("after stream")
 	val, err := structpb.NewValue(map[string]interface{}{})
 	if err != nil {
-		return "error", err
+		return nil, err
 	}
 	json.Unmarshal([]byte(values), &val)
 	res, err := graphPL.GraphQL(query, val, stream)
 	if err != nil {
-		return "error", err
+		return nil, err
 	}
 
-	jsonBytes, err := protojson.Marshal(res)
-	if err != nil {
-		return "error", err
-	}
-
-	return string(jsonBytes), nil
+	return res, nil
 }
 
 func create() (host.Host, error) {

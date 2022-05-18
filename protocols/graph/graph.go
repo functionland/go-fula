@@ -19,7 +19,7 @@ func protocolHandler(s network.Stream) {
 	fmt.Println("Empty handler for Graph, not Implemented")
 }
 
-func GraphQL(query string, values *structpb.Value, stream network.Stream) (*Result, error) {
+func GraphQL(query string, values *structpb.Value, stream network.Stream) ([]byte, error) {
 
 	reqMsg := &Request{Query: query, Subscribe: false, OperationName: "", VariableValues: values}
 	
@@ -37,12 +37,6 @@ func GraphQL(query string, values *structpb.Value, stream network.Stream) (*Resu
 	if err != nil {
 		return nil, err
 	}
-
-	res := &Result{}
-	err = proto.Unmarshal(buf, res)
-	if err != nil {
-		return nil, err
-	}
 	
-	return res, nil
+	return buf, nil
 }
