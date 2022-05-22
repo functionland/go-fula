@@ -2,12 +2,12 @@ package mobile
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"os"
-	"encoding/json"
-	"path/filepath"
 
+	filePL "github.com/functionland/go-fula/protocols/file"
+	graphPL "github.com/functionland/go-fula/protocols/graph"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -15,8 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
-	filePL "github.com/farhoud/go-fula/protocols/file"
-	graphPL "github.com/farhoud/go-fula/protocols/graph"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
@@ -27,6 +25,7 @@ type IFula interface {
 	AddBox()
 	Send()
 	Receive()
+	FileInfo()
 }
 
 type Fula struct {
@@ -43,10 +42,9 @@ type ReceiveResponse struct {
 	FilePath string    `json:"filePath"`
 }
 
-func NewFula(storePath string) (*Fula, error) {
+func NewFula() (*Fula, error) {
 	node, err := create()
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, STORE_PATH, storePath)
 	if err != nil {
 		return nil, err
 	}
@@ -82,35 +80,32 @@ func (f *Fula) Send(filePath string) (string,error){
 	return *res, nil
 }
 
-func (f *Fula) Receive(fileId string) (string, error){
+func (f *Fula) FileInfo(fileId string) ([]byte, error) {
 	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
+	defer stream.Close()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	meta,err := filePL.ReceiveMeta(stream, fileId)
-	stream.Close()
-	stream, err = f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
+	
+	return meta, nil
+}
+
+func (f *Fula) Download(fileId string, filePath string) (error){
+	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer stream.Close()
 	fBytes,err := filePL.ReceiveFile(stream, fileId)
 	if err != nil {
-		return "", err
+		return err
 	}
-	storePath  := f.ctx.Value(STORE_PATH)
-	fileExtension := filepath.Ext(meta.Name)
-	fileName := fmt.Sprintf("%s/%s%s", storePath, fileId, fileExtension)
-	err = os.WriteFile(fileName, *fBytes, 0644)
+	err = os.WriteFile(filePath, *fBytes, 0644)
 	if err != nil {
-		return "", err
+		return err
 	}
-	res := &ReceiveResponse{Name: meta.Name,Size: meta.Size_, FilePath: fileName,MmType: meta.Type, LastModified: meta.LastModified}
-	resJSON, err := json.Marshal(res)
-	if err != nil {
-		return "", err
-	}
-	return string(resJSON), nil
+	return nil
 }
 
 func (f *Fula) GraphQL(query string, values string) ([]byte, error){
@@ -120,7 +115,6 @@ func (f *Fula) GraphQL(query string, values string) ([]byte, error){
 	}
 	defer stream.Close()
 
-	fmt.Println("after stream")
 	val, err := structpb.NewValue(map[string]interface{}{})
 	if err != nil {
 		return nil, err
