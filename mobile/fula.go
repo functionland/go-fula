@@ -24,22 +24,14 @@ const STORE_PATH = "storePath"
 type IFula interface {
 	AddBox()
 	Send()
-	Receive()
-	FileInfo()
+	ReceiveFileInfo()
+	ReceiveFile()
 }
 
 type Fula struct {
 	node  host.Host
 	peers []peer.ID
 	ctx context.Context
-}
-
-type ReceiveResponse struct {
-	Name string        `json:"name"`
-	MmType string      `json:"type"`
-	Size uint64        `json:"size"`
-	LastModified int64 `json:"lastModified"`
-	FilePath string    `json:"filePath"`
 }
 
 func NewFula() (*Fula, error) {
@@ -80,7 +72,7 @@ func (f *Fula) Send(filePath string) (string,error){
 	return *res, nil
 }
 
-func (f *Fula) FileInfo(fileId string) ([]byte, error) {
+func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
 	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
 	defer stream.Close()
 	if err != nil {
@@ -91,7 +83,7 @@ func (f *Fula) FileInfo(fileId string) ([]byte, error) {
 	return meta, nil
 }
 
-func (f *Fula) Download(fileId string, filePath string) (error){
+func (f *Fula) ReceiveFile(fileId string, filePath string) (error){
 	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
 	if err != nil {
 		return err

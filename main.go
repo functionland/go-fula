@@ -22,10 +22,10 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("cid", cid)
-	buf, err := fula.FileInfo(cid)
+	buf, err := fula.ReceiveFileInfo(cid)
 	meta := &filePL.Meta{}
 	err = proto.Unmarshal(buf, meta)
-	err = fula.Download(cid, "/home/farhoud/"+cid+"-"+meta.Name)
+	err = fula.ReceiveFile(cid, "/home/farhoud/"+cid+"-"+meta.Name)
 	if err != nil {
 		panic(err)
 	}
