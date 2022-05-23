@@ -2,10 +2,12 @@ package mobile
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"os"
 
+	filePL "github.com/functionland/go-fula/protocols/file"
+	graphPL "github.com/functionland/go-fula/protocols/graph"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -13,43 +15,44 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
-	filePL "github.com/farhoud/go-fula/protocols/file"
-	graphPL "github.com/farhoud/go-fula/protocols/graph"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	structpb "google.golang.org/protobuf/types/known/structpb"
-	"encoding/json"
 )
 
+const STORE_PATH = "storePath"
+
 type IFula interface {
-	Connect()
+	AddBox()
 	Send()
-	Receive()
+	ReceiveFileInfo()
+	ReceiveFile()
 }
 
 type Fula struct {
 	node  host.Host
 	peers []peer.ID
-	appDir string
+	ctx context.Context
 }
 
-func NewFula(appDir string) (*Fula, error) {
+func NewFula() (*Fula, error) {
 	node, err := create()
+	ctx := context.Background()
 	if err != nil {
 		return nil, err
 	}
-	f := &Fula{node: node, appDir: appDir}
+	f := &Fula{node: node, ctx: ctx}
 	return f, nil
 }
 
-func (f *Fula) Connect(boxAddr string) (bool, error){
+func (f *Fula) AddBox(boxAddr string)  error {
 	peerAddr, err := peer.AddrInfoFromString(boxAddr)
 	node := f.node
 	if err != nil {
-		return false ,err
+		return err
 	}
 	f.peers = append(f.peers, peerAddr.ID)
 	node.Peerstore().AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
-	return true, nil
+	return nil
 }
 
 func (f *Fula) Send(filePath string) (string,error){
@@ -58,51 +61,52 @@ func (f *Fula) Send(filePath string) (string,error){
 		return "", err
 	}
 	defer file.Close()
-	stream, err := f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
 	defer stream.Close()
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("are uuuxx running!")
-	res,err := filePL.SendFile(file, stream)
 
-	fmt.Println(res)
+	res,err := filePL.SendFile(file, stream)
 
 	return *res, nil
 }
 
-func (f *Fula) Receive(fileId string) (string, error){
-	stream, err := f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
+func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
+	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
+	defer stream.Close()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	meta,err := filePL.ReceiveMeta(stream, fileId)
-	stream.Close()
-	stream, err = f.node.NewStream(context.Background(), f.peers[0], filePL.Protocol)
+	
+	return meta, nil
+}
+
+func (f *Fula) ReceiveFile(fileId string, filePath string) (error){
+	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer stream.Close()
-	file,err := filePL.ReceiveFile(stream, fileId)
+	fBytes,err := filePL.ReceiveFile(stream, fileId)
 	if err != nil {
-		return "", err
+		return err
 	}
-	fileName := fmt.Sprintf("%s/%s",f.appDir,meta.Name)
-	err = os.WriteFile(fileName, *file, 0644)
+	err = os.WriteFile(filePath, *fBytes, 0644)
 	if err != nil {
-		return "", err
+		return err
 	}
-	return fileName, nil
+	return nil
 }
 
 func (f *Fula) GraphQL(query string, values string) ([]byte, error){
-	stream, err := f.node.NewStream(context.Background(), f.peers[0], graphPL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, f.peers[0], graphPL.Protocol)
 	if err != nil {
 		return nil, err
 	}
 	defer stream.Close()
 
-	fmt.Println("after stream")
 	val, err := structpb.NewValue(map[string]interface{}{})
 	if err != nil {
 		return nil, err
