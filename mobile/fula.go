@@ -17,6 +17,7 @@ import (
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -49,6 +50,20 @@ func (f *Fula) AddBox(boxAddr string) error {
 	if err != nil {
 		return err
 	}
+	var check bool
+	check = len(peerAddr.Addrs) < 0
+	if check {
+		return errors.New("Bad Input")
+	}
+	check = manet.IsIPLoopback(peerAddr.Addrs[0])
+	if check {
+		return errors.New("Cant Use loop back")
+	}
+	check = manet.IsIPUnspecified(peerAddr.Addrs[0])
+	if check {
+		return errors.New("Not Specified")
+	}
+
 	ps := f.node.Peerstore()
 	ps.AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
 	ps.AddProtocols(peerAddr.ID, filePL.Protocol, graphPL.Protocol)
