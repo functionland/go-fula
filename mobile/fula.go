@@ -3,6 +3,7 @@ package mobile
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 
@@ -16,6 +17,7 @@ import (
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -29,9 +31,8 @@ type IFula interface {
 }
 
 type Fula struct {
-	node  host.Host
-	peers []peer.ID
-	ctx context.Context
+	node host.Host
+	ctx  context.Context
 }
 
 func NewFula() (*Fula, error) {
@@ -44,52 +45,101 @@ func NewFula() (*Fula, error) {
 	return f, nil
 }
 
-func (f *Fula) AddBox(boxAddr string)  error {
+func (f *Fula) AddBox(boxAddr string) error {
 	peerAddr, err := peer.AddrInfoFromString(boxAddr)
-	node := f.node
 	if err != nil {
 		return err
 	}
-	f.peers = append(f.peers, peerAddr.ID)
-	node.Peerstore().AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
+	var check bool
+	check = len(peerAddr.Addrs) < 0
+	if check {
+		return errors.New("Bad Input")
+	}
+	check = manet.IsIPLoopback(peerAddr.Addrs[0])
+	if check {
+		return errors.New("Cant Use loop back")
+	}
+	check = manet.IsIPUnspecified(peerAddr.Addrs[0])
+	if check {
+		return errors.New("Not Specified")
+	}
+
+	ps := f.node.Peerstore()
+	ps.AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
+	ps.AddProtocols(peerAddr.ID, filePL.Protocol, graphPL.Protocol)
 	return nil
 }
 
-func (f *Fula) Send(filePath string) (string,error){
+func (f *Fula) getBox(protocol string) (peer.ID, error) {
+	ps := f.node.Peerstore()
+	allPeers := ps.PeersWithAddrs()
+	log.Println("All peer", allPeers.String())
+	boxPeers := peer.IDSlice{}
+	for _, id := range allPeers {
+		supported, err := ps.SupportsProtocols(id, protocol)
+		if err == nil && len(supported) > 0 {
+			boxPeers = append(boxPeers, id)
+		}
+
+	}
+	log.Println("All peer", boxPeers.String())
+	for _, id := range boxPeers {
+		_, err := f.node.Network().DialPeer(f.ctx, id)
+		if err == nil {
+			return id, nil
+		}
+
+	}
+	return "", errors.New("No Box Available")
+}
+
+func (f *Fula) Send(filePath string) (string, error) {
+	peer, err := f.getBox(filePL.Protocol)
+	if err != nil {
+		return "", err
+	}
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
-	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
 	defer stream.Close()
 	if err != nil {
 		return "", err
 	}
 
-	res,err := filePL.SendFile(file, stream)
+	res, err := filePL.SendFile(file, stream)
 
 	return *res, nil
 }
 
 func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
-	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
+	peer, err := f.getBox(filePL.Protocol)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
 	defer stream.Close()
 	if err != nil {
 		return nil, err
 	}
-	meta,err := filePL.ReceiveMeta(stream, fileId)
-	
+	meta, err := filePL.ReceiveMeta(stream, fileId)
+
 	return meta, nil
 }
 
-func (f *Fula) ReceiveFile(fileId string, filePath string) (error){
-	stream, err := f.node.NewStream(f.ctx, f.peers[0], filePL.Protocol)
+func (f *Fula) ReceiveFile(fileId string, filePath string) error {
+	peer, err := f.getBox(filePL.Protocol)
+	if err != nil {
+		return err
+	}
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
-	fBytes,err := filePL.ReceiveFile(stream, fileId)
+	fBytes, err := filePL.ReceiveFile(stream, fileId)
 	if err != nil {
 		return err
 	}
@@ -100,8 +150,12 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) (error){
 	return nil
 }
 
-func (f *Fula) GraphQL(query string, values string) ([]byte, error){
-	stream, err := f.node.NewStream(f.ctx, f.peers[0], graphPL.Protocol)
+func (f *Fula) GraphQL(query string, values string) ([]byte, error) {
+	peer, err := f.getBox(filePL.Protocol)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := f.node.NewStream(f.ctx, peer, graphPL.Protocol)
 	if err != nil {
 		return nil, err
 	}
