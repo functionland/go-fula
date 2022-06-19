@@ -9,6 +9,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.15.1
 	github.com/libp2p/go-libp2p-mplex v0.7.0
 	github.com/libp2p/go-libp2p-noise v0.4.0
+	github.com/mergermarket/go-pkcs7 v0.0.0-20170926155232-153b18ea13c9
 	github.com/multiformats/go-multiaddr v0.5.0
 	google.golang.org/protobuf v1.28.0
 )

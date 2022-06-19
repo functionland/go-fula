@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"log"
 	"os"
 
+	"github.com/functionland/go-fula/common"
 	filePL "github.com/functionland/go-fula/protocols/file"
 	graphPL "github.com/functionland/go-fula/protocols/graph"
 	libp2p "github.com/libp2p/go-libp2p"
@@ -28,6 +30,8 @@ type IFula interface {
 	Send()
 	ReceiveFileInfo()
 	ReceiveFile()
+	EncryptSend()
+	ReceiveDecryptFile()
 }
 
 type Fula struct {
@@ -108,8 +112,9 @@ func (f *Fula) Send(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	meta, err := common.FromFile(file)
 
-	res, err := filePL.SendFile(file, stream)
+	res, err := filePL.SendFile(file, meta.ToMetaProto(), stream)
 
 	return *res, nil
 }
@@ -139,11 +144,12 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 		return err
 	}
 	defer stream.Close()
-	fBytes, err := filePL.ReceiveFile(stream, fileId)
+	fReader, err := filePL.ReceiveFile(stream, fileId)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filePath, *fBytes, 0644)
+	fBytes, err := ioutil.ReadAll(fReader)
+	err = os.WriteFile(filePath, fBytes, 0644)
 	if err != nil {
 		return err
 	}

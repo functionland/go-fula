@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 
-	"github.com/gabriel-vasile/mimetype"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -22,7 +20,7 @@ func protocolHandler(s network.Stream) {
 	fmt.Println("we are at the protocol")
 }
 
-func ReceiveFile(stream network.Stream, cid string) (*[]byte, error) {
+func ReceiveFile(stream network.Stream, cid string) (io.Reader, error) {
 	reqMsg := &Request{Type: &Request_Receive{Receive: &Chunk{Id: cid}}}
 	header, err := proto.Marshal(reqMsg)
 	if err != nil {
@@ -33,11 +31,7 @@ func ReceiveFile(stream network.Stream, cid string) (*[]byte, error) {
 		return nil, err
 	}
 	stream.CloseWrite()
-	buf, err := ioutil.ReadAll(stream)
-	if err != nil {
-		return nil, err
-	}
-	return &buf, nil
+	return stream, nil
 }
 
 func ReceiveMeta(stream network.Stream, cid string) ([]byte, error) {
@@ -67,21 +61,9 @@ func ReceiveMeta(stream network.Stream, cid string) ([]byte, error) {
 	return buf, nil
 }
 
-func SendFile(file *os.File, stream network.Stream) (*string, error) {
-	fileInfo, _ := os.Lstat(file.Name())
+func SendFile(file io.Reader, filemeta Meta, stream network.Stream) (*string, error) {
 
-	mtype, err := mimetype.DetectFile(file.Name())
-	if err != nil {
-		return nil, err
-	}
-
-	reqMsg := &Request{
-		Type: &Request_Send{
-			Send: &Meta{
-				Name:         fileInfo.Name(),
-				Size_:        uint64(fileInfo.Size()),
-				LastModified: fileInfo.ModTime().Unix(),
-				Type:         mtype.String()}}}
+	reqMsg := &Request{Type: &Request_Send{Send: &filemeta}}
 
 	header, err := proto.Marshal(reqMsg)
 	if err != nil {
@@ -91,19 +73,19 @@ func SendFile(file *os.File, stream network.Stream) (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	buffer := make([]byte, 1024*10)
+	buffer := make([]byte, 2*16)
 	for {
 		n, err := file.Read(buffer)
+		fmt.Println("size of n ", n)
+		if n > 0 {
+			stream.Write(buffer[:n])
+		}
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return nil, err
 		}
-		if n > 0 {
-			stream.Write(buffer[:n])
-		}
-
 	}
 	stream.CloseWrite()
 	buf2, err := ioutil.ReadAll(stream)
