@@ -3,7 +3,7 @@ package mobile
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/functionland/go-fula/common"
@@ -48,9 +48,9 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 		Iv:  encoder.EnCipher.Iv,
 		Key: encoder.EnCipher.SymKey,
 		Id:  *id}
-	log.Printf("%s\n", string(fileRef.Id))
-	log.Printf("%s\n", string(fileRef.Iv))
-	log.Printf("%s\n", string(fileRef.Key))
+	fmt.Println(string(fileRef.Id))
+	fmt.Println(string(fileRef.Iv))
+	fmt.Println(string(fileRef.Key))
 	// idB:=[]byte(*id)
 	// liv := uint8(len(encoder.EnCipher.Iv))
 	// lkey := uint8(len(encoder.EnCipher.SymKey))
@@ -77,9 +77,9 @@ func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
 	}
 	var fileRef FileRef
 	err = json.Unmarshal(jsonByte, &fileRef)
-	log.Printf("%s\n", string(fileRef.Id))
-	log.Printf("%s\n", string(fileRef.Iv))
-	log.Printf("%s\n", string(fileRef.Key))
+	fmt.Println(string(fileRef.Id))
+	fmt.Println(string(fileRef.Iv))
+	fmt.Println(string(fileRef.Key))
 	if err != nil {
 		return err
 	}
