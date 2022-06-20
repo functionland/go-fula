@@ -1,6 +1,9 @@
 package mobile
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"log"
 	"os"
 
 	"github.com/functionland/go-fula/common"
@@ -9,14 +12,14 @@ import (
 )
 
 type FileRef struct {
-	Iv  []byte
-	Key []byte
-	Id  string
+	Iv  []byte `json:"iv"`
+	Key []byte `json:"key"`
+	Id  string `json:"id"`
 }
 
-func (f *Fula) EncryptSend(filePath string) ([]byte, error) {
+func (f *Fula) EncryptSend(filePath string) (string, error) {
 	peer, err := f.getBox(filePL.Protocol)
-	var res []byte = nil
+	var res string = ""
 	if err != nil {
 		return res, err
 	}
@@ -41,18 +44,45 @@ func (f *Fula) EncryptSend(filePath string) ([]byte, error) {
 	if err != nil {
 		return res, err
 	}
-	idB:=[]byte(*id)
-	res = make([]byte, len(encoder.EnCipher.Iv)+len(encoder.EnCipher.SymKey)+len(idB))
-	res = append(res,encoder.EnCipher.Iv...)
-	res = append(res, encoder.EnCipher.SymKey...)
-	res = append(res,idB...)
+	fileRef := &FileRef{
+		Iv:  encoder.EnCipher.Iv,
+		Key: encoder.EnCipher.SymKey,
+		Id:  *id}
+	log.Printf("%s\n", string(fileRef.Id))
+	log.Printf("%s\n", string(fileRef.Iv))
+	log.Printf("%s\n", string(fileRef.Key))
+	// idB:=[]byte(*id)
+	// liv := uint8(len(encoder.EnCipher.Iv))
+	// lkey := uint8(len(encoder.EnCipher.SymKey))
+	// lid := uint8(len(idB))
+	// res = make([]byte, liv+lkey+lid)
+	// res = append(res,encoder.EnCipher.Iv...)
+	// res = append(res, encoder.EnCipher.SymKey...)
+	// res = append(res,idB...)
+	// res = append(res,byte(liv))
+	// res = append(res,byte(lkey))
+	// res = append(res,byte(lid))
 	// res.Id = *id
 	// res.Iv = encoder.EnCipher.Iv
 	// res.Key = encoder.EnCipher.SymKey
-	return res, nil
+	jsonByte, _ := json.Marshal(fileRef)
+	sEnc := base64.StdEncoding.EncodeToString(jsonByte)
+	return sEnc, nil
 }
 
-func (f *Fula) ReceiveDecryptFile(ref FileRef, filePath string) (error) {
+func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
+	jsonByte, err := base64.StdEncoding.DecodeString(ref)
+	if err != nil {
+		return err
+	}
+	var fileRef FileRef
+	err = json.Unmarshal(jsonByte, &fileRef)
+	log.Printf("%s\n", string(fileRef.Id))
+	log.Printf("%s\n", string(fileRef.Iv))
+	log.Printf("%s\n", string(fileRef.Key))
+	if err != nil {
+		return err
+	}
 	peer, err := f.getBox(filePL.Protocol)
 	if err != nil {
 		return err
@@ -62,14 +92,18 @@ func (f *Fula) ReceiveDecryptFile(ref FileRef, filePath string) (error) {
 		return err
 	}
 	defer stream.Close()
-	fReader, err := filePL.ReceiveFile(stream, ref.Id)
+	fReader, err := filePL.ReceiveFile(stream, fileRef.Id)
 	if err != nil {
 		return err
 	}
-	deReader := fCrypto.NewDecoder(fReader, ref.Iv, ref.Key)
+	deReader := fCrypto.NewDecoder(fReader, fileRef.Iv, fileRef.Key)
 	err = deReader.DycryptOnFly(filePath)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (f *Fula) TestRef() {
+
 }
