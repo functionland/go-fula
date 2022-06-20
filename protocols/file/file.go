@@ -61,7 +61,7 @@ func ReceiveMeta(stream network.Stream, cid string) ([]byte, error) {
 	return buf, nil
 }
 
-func SendFile(file io.Reader, filemeta Meta, stream network.Stream) (*string, error) {
+func SendFile(fileCh <-chan []byte, filemeta Meta, stream network.Stream) (*string, error) {
 
 	reqMsg := &Request{Type: &Request_Send{Send: &filemeta}}
 
@@ -73,19 +73,8 @@ func SendFile(file io.Reader, filemeta Meta, stream network.Stream) (*string, er
 	if err != nil {
 		return nil, err
 	}
-	buffer := make([]byte, 2*16)
-	for {
-		n, err := file.Read(buffer)
-		fmt.Println("size of n ", n)
-		if n > 0 {
-			stream.Write(buffer[:n])
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
+	for res:= range fileCh {
+		stream.Write(res)
 	}
 	stream.CloseWrite()
 	buf2, err := ioutil.ReadAll(stream)

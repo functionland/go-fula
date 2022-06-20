@@ -1,15 +1,11 @@
 package mobile
 
 import (
-	"fmt"
-	"io"
 	"os"
-	"crypto/aes"
 
 	"github.com/functionland/go-fula/common"
 	fCrypto "github.com/functionland/go-fula/crypto"
 	filePL "github.com/functionland/go-fula/protocols/file"
-	"github.com/mergermarket/go-pkcs7"
 )
 
 type FileRef struct {
@@ -18,9 +14,9 @@ type FileRef struct {
 	Id  string
 }
 
-func (f *Fula) EncryptSend(filePath string) (FileRef, error) {
+func (f *Fula) EncryptSend(filePath string) ([]byte, error) {
 	peer, err := f.getBox(filePL.Protocol)
-	res := FileRef{}
+	var res []byte = nil
 	if err != nil {
 		return res, err
 	}
@@ -34,22 +30,29 @@ func (f *Fula) EncryptSend(filePath string) (FileRef, error) {
 	if err != nil {
 		return res, err
 	}
-	encoder := fCrypto.NewEnReader(file)
+	encoder := fCrypto.NewEncoder(file)
 	meta, err := common.FromFile(file)
 	if err != nil {
 		return res, err
 	}
-	id, err := filePL.SendFile(encoder, meta.ToMetaProto(), stream)
+	fileCh := make(chan []byte)
+	go encoder.EncryptOnFly(fileCh)
+	id, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
 	if err != nil {
 		return res, err
 	}
-	res.Id = *id
-	res.Iv = encoder.EnCipher.Iv
-	res.Key = encoder.EnCipher.SymKey
+	idB:=[]byte(*id)
+	res = make([]byte, len(encoder.EnCipher.Iv)+len(encoder.EnCipher.SymKey)+len(idB))
+	res = append(res,encoder.EnCipher.Iv...)
+	res = append(res, encoder.EnCipher.SymKey...)
+	res = append(res,idB...)
+	// res.Id = *id
+	// res.Iv = encoder.EnCipher.Iv
+	// res.Key = encoder.EnCipher.SymKey
 	return res, nil
 }
 
-func (f *Fula) ReceiveDecryptFile(ref FileRef, filePath string) error {
+func (f *Fula) ReceiveDecryptFile(ref FileRef, filePath string) (error) {
 	peer, err := f.getBox(filePL.Protocol)
 	if err != nil {
 		return err
@@ -63,37 +66,8 @@ func (f *Fula) ReceiveDecryptFile(ref FileRef, filePath string) error {
 	if err != nil {
 		return err
 	}
-	deReader := fCrypto.NewDyReader(fReader, ref.Iv, ref.Key)
-	buffer := make([]byte, 16*4)
-	var buf2 []byte = nil
-	file, err := os.Create(filePath)
-	defer file.Close()
-	if err != nil {
-		return err
-	}
-	for {
-		n, err := deReader.Read(buffer)
-		fmt.Println("dec size of n ", n)
-		if n > 0 {
-			if buf2 != nil {
-				file.Write(buf2)
-			} else {
-				buf2 = make([]byte, 16*4)
-			}
-			copy(buf2, buffer)
-
-		}
-		if err == io.EOF {
-			fmt.Println("size of last input", len(buf2))
-			// unpadaed, _ := pkcs7.Unpad(buf2[:48], aes.BlockSize)
-			file.Write(buf2)
-			break
-		}
-		if err != nil {
-			return err
-		}
-	}
-	err = file.Sync()
+	deReader := fCrypto.NewDecoder(fReader, ref.Iv, ref.Key)
+	err = deReader.DycryptOnFly(filePath)
 	if err != nil {
 		return err
 	}

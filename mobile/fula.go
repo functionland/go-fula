@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -113,8 +114,22 @@ func (f *Fula) Send(filePath string) (string, error) {
 		return "", err
 	}
 	meta, err := common.FromFile(file)
-
-	res, err := filePL.SendFile(file, meta.ToMetaProto(), stream)
+	file, err = os.Open(filePath)
+	buf := make([]byte, 10*1024)
+	fileCh := make(chan []byte)
+	go func() {
+		for {
+			n, err := file.Read(buf)
+			if err == io.EOF {
+				break
+			}
+			if n > 0 {
+				fileCh <- buf[:n]
+			}
+		}
+		close(fileCh)
+	}()
+	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
 
 	return *res, nil
 }

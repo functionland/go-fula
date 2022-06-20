@@ -5,8 +5,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"fmt"
-
-	"github.com/mergermarket/go-pkcs7"
 )
 
 type IChipher interface {
@@ -49,21 +47,8 @@ func RandomKey(n int) ([]byte, error) {
 
 // Encrypt encrypts plain text string into cipher text string
 func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
-	var padded []byte
-	if n < len(unencrypted) {
-		fmt.Println("before padding", len(unencrypted))
-		var err error
-		padded, err = pkcs7.Pad(unencrypted[:n], aes.BlockSize)
-		fmt.Println("after padding", len(unencrypted))
-		if err != nil {
-			return nil, fmt.Errorf(`plainText: "%s" has error`, unencrypted)
-		}
-	}else{
-		padded = unencrypted
-	}
-
-	if len(padded)%aes.BlockSize != 0 {
-		err := fmt.Errorf(`plainText: "%s" has the wrong block size`, padded)
+	if len(unencrypted)%aes.BlockSize != 0 {
+		err := fmt.Errorf(`plainText: "%s" has the wrong block size`, unencrypted)
 		return nil, err
 	}
 
@@ -71,12 +56,12 @@ func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("when change", len(padded))
-	encData := make([]byte, len(padded))
+	fmt.Println("when change", len(unencrypted))
+	encData := make([]byte, len(unencrypted))
 
 	mode := cipher.NewCBCEncrypter(block, c.Iv)
-	mode.CryptBlocks(encData, padded)
-	fmt.Println("enc len", len(padded))
+	mode.CryptBlocks(encData, unencrypted)
+	fmt.Println("enc len", len(unencrypted))
 	return encData, nil
 }
 
@@ -86,7 +71,7 @@ func (c *Cipher) Decrypt(encrypted []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	decData := make([]byte, 4*16)
+	decData := make([]byte, len(encrypted))
 	fmt.Println("size of encrypted input", len(encrypted))
 	mode := cipher.NewCBCDecrypter(block, c.Iv)
 	mode.CryptBlocks(decData, encrypted)

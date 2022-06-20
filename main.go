@@ -17,15 +17,15 @@ func main() {
 	fula, _ := fula.NewFula()
 	fula.AddBox("/ip4/192.168.1.10/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1")
 	fmt.Println("We are know connected")
-	ref, err := fula.EncryptSend("/home/farhoud/test.txt")
+	ref, err := fula.Send("/home/farhoud/test.txt")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("cid", ref.Id)
-	buf, err := fula.ReceiveFileInfo(ref.Id)
+	fmt.Println("cid", ref)
+	buf, err := fula.ReceiveFileInfo(ref)
 	meta := &filePL.Meta{}
 	err = proto.Unmarshal(buf, meta)
-	err = fula.ReceiveDecryptFile(ref, "/home/farhoud/"+ref.Id+"-"+meta.Name)
+	err = fula.ReceiveFile(ref, "/home/farhoud/"+ref+"-"+meta.Name)
 	if err != nil {
 		panic(err)
 	}
