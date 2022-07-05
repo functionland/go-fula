@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/functionland/go-fula/common"
 	fCrypto "github.com/functionland/go-fula/crypto"
 	filePL "github.com/functionland/go-fula/protocols/file"
 )
@@ -34,7 +33,7 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 		return res, err
 	}
 	encoder := fCrypto.NewEncoder(file)
-	meta, err := common.FromFile(file)
+	meta, err := filePL.FromFile(file)
 	if err != nil {
 		return res, err
 	}

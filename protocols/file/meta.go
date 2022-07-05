@@ -1,9 +1,8 @@
-package common
+package file;
 
 import (
 	"os"
 	"github.com/gabriel-vasile/mimetype"
-	filePL "github.com/functionland/go-fula/protocols/file"
 )
 
 type IFileMeta interface{
@@ -17,8 +16,8 @@ type FileMeta struct {
 	mtype string
 }
 
-func (m *FileMeta) ToMetaProto() filePL.Meta {
-	return filePL.Meta{
+func (m *FileMeta) ToMetaProto() Meta {
+	return Meta{
 		Name:         m.name,
 		Size_:        uint64(m.size),
 		LastModified: m.lastModified,

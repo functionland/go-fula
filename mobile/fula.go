@@ -6,12 +6,11 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 
-	"github.com/functionland/go-fula/common"
 	filePL "github.com/functionland/go-fula/protocols/file"
 	graphPL "github.com/functionland/go-fula/protocols/graph"
+	logging "github.com/ipfs/go-log"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -23,6 +22,8 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
+
+var log = logging.Logger("fula:mobile")
 
 const STORE_PATH = "storePath"
 
@@ -78,7 +79,7 @@ func (f *Fula) AddBox(boxAddr string) error {
 func (f *Fula) getBox(protocol string) (peer.ID, error) {
 	ps := f.node.Peerstore()
 	allPeers := ps.PeersWithAddrs()
-	log.Println("All peer", allPeers.String())
+	log.Debug("All peer", allPeers.String())
 	boxPeers := peer.IDSlice{}
 	for _, id := range allPeers {
 		supported, err := ps.SupportsProtocols(id, protocol)
@@ -87,7 +88,7 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 		}
 
 	}
-	log.Println("All peer", boxPeers.String())
+	log.Debug("All peer", boxPeers.String())
 	for _, id := range boxPeers {
 		_, err := f.node.Network().DialPeer(f.ctx, id)
 		if err == nil {
@@ -113,7 +114,7 @@ func (f *Fula) Send(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	meta, err := common.FromFile(file)
+	meta, err := filePL.FromFile(file)
 	file, err = os.Open(filePath)
 	buf := make([]byte, 10*1024)
 	fileCh := make(chan []byte)
@@ -242,7 +243,6 @@ func create() (host.Host, error) {
 		libp2p.EnableNATService(),
 	)
 
-	log.Printf("Hello World, my second hosts ID is %s\n", node.ID())
-	filePL.RegisterFileProtocol(node)
+	log.Info("Start With", node.ID())
 	return node, err
 }

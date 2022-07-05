@@ -1,35 +1,32 @@
 package file
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 
 	proto "github.com/golang/protobuf/proto"
-	"github.com/libp2p/go-libp2p-core/host"
+	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
 )
 
 const Protocol = "fx/file/1"
 
-func RegisterFileProtocol(node host.Host) {
-	node.SetStreamHandler(Protocol, protocolHandler)
-}
-
-func protocolHandler(s network.Stream) {
-	fmt.Println("we are at the protocol")
-}
+var log = logging.Logger("fula:filePL")
 
 func ReceiveFile(stream network.Stream, cid string) (io.Reader, error) {
 	reqMsg := &Request{Type: &Request_Receive{Receive: &Chunk{Id: cid}}}
 	header, err := proto.Marshal(reqMsg)
 	if err != nil {
+		log.Error("Can not create Request message")
 		return nil, err
 	}
+	log.Debug("Request Message Created")
 	_, err = stream.Write(header)
 	if err != nil {
+		log.Debug("Sending Request Message Failed")
 		return nil, err
 	}
+	log.Debug("Request Message Sent")
 	stream.CloseWrite()
 	return stream, nil
 }
@@ -73,7 +70,7 @@ func SendFile(fileCh <-chan []byte, filemeta Meta, stream network.Stream) (*stri
 	if err != nil {
 		return nil, err
 	}
-	for res:= range fileCh {
+	for res := range fileCh {
 		stream.Write(res)
 	}
 	stream.CloseWrite()
