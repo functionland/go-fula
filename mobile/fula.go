@@ -1,10 +1,10 @@
 package mobile
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/ioutil"
 	"os"
 
@@ -122,18 +122,15 @@ func (f *Fula) Send(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	buf := make([]byte, 10*1024)
+	buf := make([]byte, meta.ToMetaProto().Size_)
 	fileCh := make(chan []byte)
+	buffer := bufio.NewReader(file)
+	_, err = buffer.Read(buf)
+	if err != nil {
+		return "", err
+	}
 	go func() {
-		for {
-			n, err := file.Read(buf)
-			if err == io.EOF {
-				break
-			}
-			if n > 0 {
-				fileCh <- buf[:n]
-			}
-		}
+		fileCh<-buf
 		close(fileCh)
 	}()
 	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
