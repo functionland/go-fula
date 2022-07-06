@@ -165,7 +165,7 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 		return err
 	}
 	fBytes, err := ioutil.ReadAll(fReader)
-	err = os.WriteFile(filePath, fBytes, 0644)
+	err = os.WriteFile(filePath, fBytes, 0755)
 	if err != nil {
 		return err
 	}
