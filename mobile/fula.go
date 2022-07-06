@@ -57,17 +57,17 @@ func (f *Fula) AddBox(boxAddr string) error {
 		return err
 	}
 	var check bool
-	check = len(peerAddr.Addrs) < 0
+	check = len(peerAddr.Addrs) == 0
 	if check {
-		return errors.New("Bad Input")
+		return errors.New("bad Input")
 	}
 	check = manet.IsIPLoopback(peerAddr.Addrs[0])
 	if check {
-		return errors.New("Cant Use loop back")
+		return errors.New("cant Use loop back")
 	}
 	check = manet.IsIPUnspecified(peerAddr.Addrs[0])
 	if check {
-		return errors.New("Not Specified")
+		return errors.New("not Specified")
 	}
 
 	ps := f.node.Peerstore()
@@ -96,7 +96,7 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 		}
 
 	}
-	return "", errors.New("No Box Available")
+	return "", errors.New("no Box Available")
 }
 
 func (f *Fula) Send(filePath string) (string, error) {
@@ -110,12 +110,18 @@ func (f *Fula) Send(filePath string) (string, error) {
 	}
 	defer file.Close()
 	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
-	defer stream.Close()
 	if err != nil {
 		return "", err
 	}
+	defer stream.Close()
 	meta, err := filePL.FromFile(file)
+	if err != nil {
+		return "", err
+	}
 	file, err = os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
 	buf := make([]byte, 10*1024)
 	fileCh := make(chan []byte)
 	go func() {
@@ -131,7 +137,9 @@ func (f *Fula) Send(filePath string) (string, error) {
 		close(fileCh)
 	}()
 	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
-
+	if err != nil {
+		return "", err
+	}
 	return *res, nil
 }
 
@@ -141,12 +149,14 @@ func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
 		return nil, err
 	}
 	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
-	defer stream.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer stream.Close()
 	meta, err := filePL.ReceiveMeta(stream, fileId)
-
+	if err != nil {
+		return nil, err
+	}
 	return meta, nil
 }
 
@@ -165,6 +175,9 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 		return err
 	}
 	fBytes, err := ioutil.ReadAll(fReader)
+	if err != nil {
+		return err
+	}
 	err = os.WriteFile(filePath, fBytes, 0755)
 	if err != nil {
 		return err

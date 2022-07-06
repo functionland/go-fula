@@ -28,10 +28,10 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 	}
 	defer file.Close()
 	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
-	defer stream.Close()
 	if err != nil {
 		return res, err
 	}
+	defer stream.Close()
 	encoder := fCrypto.NewEncoder(file)
 	meta, err := filePL.FromFile(file)
 	if err != nil {
