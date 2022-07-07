@@ -10,26 +10,33 @@ import (
 	fula "github.com/functionland/go-fula/mobile"
 	filePL "github.com/functionland/go-fula/protocols/file"
 	"github.com/golang/protobuf/proto"
+	// logging "github.com/ipfs/go-log"
+
 )
 
-func main() {
 
+
+func main() {
+	// err := logging.SetLogLevelRegex("net.*", "info")
+	// if err != nil {
+	// 	panic(err)
+	// }
 	fula, _ := fula.NewFula()
-	fula.AddBox("/ip4/127.0.0.1/tcp/4003/ws/p2p/12D3KooWDVgPHx45ZsnNPyeQooqY8VNesSR2KiX2mJwzEK5hpjpb")
+	fula.AddBox("/ip4/192.168.1.10/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1")
 	fmt.Println("We are know connected")
-	cid, err := fula.Send("/home/farhoud/test.txt")
+	ref, err := fula.Send("/home/farhoud/test.txt")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("cid", cid)
-	buf, err := fula.ReceiveFileInfo(cid)
+	fmt.Println("cid", ref)
+	buf, err := fula.ReceiveFileInfo(ref)
 	meta := &filePL.Meta{}
 	err = proto.Unmarshal(buf, meta)
-	err = fula.ReceiveFile(cid, "/home/farhoud/"+cid+"-"+meta.Name)
+	err = fula.ReceiveFile(ref, "/home/farhoud/"+ref+"-"+meta.Name)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(meta)
+	fmt.Println(meta.Name)
 	query := `
 	mutation addTodo($values:JSON){
 	  create(input:{

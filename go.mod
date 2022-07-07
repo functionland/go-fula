@@ -5,10 +5,12 @@ go 1.18
 require (
 	github.com/gabriel-vasile/mimetype v1.4.0
 	github.com/golang/protobuf v1.5.2
+	github.com/ipfs/go-log v1.0.5
 	github.com/libp2p/go-libp2p v0.19.2
 	github.com/libp2p/go-libp2p-core v0.15.1
 	github.com/libp2p/go-libp2p-mplex v0.7.0
 	github.com/libp2p/go-libp2p-noise v0.4.0
+	github.com/mergermarket/go-pkcs7 v0.0.0-20170926155232-153b18ea13c9
 	github.com/multiformats/go-multiaddr v0.5.0
 	google.golang.org/protobuf v1.28.0
 )
@@ -93,6 +95,7 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
+	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
