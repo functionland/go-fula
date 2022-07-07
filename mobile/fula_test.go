@@ -17,6 +17,7 @@ const BOX = "/ip4/172.17.0.1/tcp/4002/p2p/12D3KooWHfpaF9gBsPHW1Nv978UYsRDEz8Vt5Z
 const BOX_LOOPBACK = "/ip4/127.0.0.1/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1"
 
 func TestNew(t *testing.T) {
+
 	_, err := NewFula()
 	if err != nil {
 		t.Error(err)
@@ -61,43 +62,44 @@ func TestFileProtocol(t *testing.T) {
 	}
 	err = fula.AddBox(BOX)
 	if err != nil {
-		t.Error("Mobile Can not accept loopback")
+		t.Error("mobile Can not accept loopback")
 	}
-	tmp:="./tmp"
+	tmp := "./tmp"
 	if _, err := os.Stat(tmp); os.IsNotExist(err) {
 		err := os.Mkdir(tmp, 0755)
 		if err != nil {
-			t.Error("Wired error", err)
+			t.Error("wired error", err)
 			return
 		}
 	}
+	t.Log("fula ready")
 	files, err := ioutil.ReadDir("./test_assets")
 	if err != nil {
 		t.Error(err)
 	}
 	for _, file := range files {
-		if !file.IsDir(){
+		if !file.IsDir() {
 			upload := "./test_assets/" + file.Name()
 			cid, err := fula.Send(upload)
 			if err != nil {
-				t.Error("Send failed",err)
+				t.Error("Send failed", err)
 				return
 			}
 			bytes, err := fula.ReceiveFileInfo(cid)
-			t.Log("File with CID: ",cid)
-			if err != nil{
-				t.Error("Download Failed",err)
+			t.Log("File with CID: ", cid)
+			if err != nil {
+				t.Error("Download Failed", err)
 				return
 			}
 			meta := &filePL.Meta{}
 			err = proto.Unmarshal(bytes, meta)
-			if err != nil{
+			if err != nil {
 				t.Error("Parsing Meta failed", err)
 				return
 			}
 			download := tmp + "/" + meta.Name
 			err = fula.ReceiveFile(cid, download)
-			if err != nil{
+			if err != nil {
 				t.Error("Receive File failed", err)
 				return
 			}
@@ -105,6 +107,7 @@ func TestFileProtocol(t *testing.T) {
 				t.Error("Somthing wrong! files are not equal", err)
 				return
 			}
+			t.Logf("successfully test send and receive of %s", upload)
 		}
 
 	}
@@ -120,11 +123,11 @@ func TestEncryption(t *testing.T) {
 	if err != nil {
 		t.Error("can not add box", err)
 	}
-	tmp:="./tmp"
+	tmp := "./tmp"
 	if _, err := os.Stat(tmp); os.IsNotExist(err) {
 		err := os.Mkdir(tmp, 0755)
 		if err != nil {
-			t.Error("Wired error", err)
+			t.Error("wired error", err)
 			return
 		}
 	}
@@ -133,27 +136,27 @@ func TestEncryption(t *testing.T) {
 		t.Error(err)
 	}
 	for _, file := range files {
-		if !file.IsDir(){
+		if !file.IsDir() {
 			upload := "./test_assets/" + file.Name()
 			ref, err := fula.EncryptSend(upload)
 			if err != nil {
-				t.Error("Send failed",err)
+				t.Error("send failed", err)
 				return
 			}
 			download := tmp + "/" + ref
 			err = fula.ReceiveDecryptFile(ref, download)
-			if err != nil{
-				t.Error("Receive File failed", err)
+			if err != nil {
+				t.Error("receive File failed", err)
 				return
 			}
 			if !fileDiff(upload, download) {
-				t.Error("Somthing wrong! files are not equal", err)
+				t.Error("somthing wrong! files are not equal", err)
 				return
 			}
 		}
 
 	}
-	
+
 }
 
 func fileDiff(path1 string, path2 string) bool {

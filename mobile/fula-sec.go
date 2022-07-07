@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 
 	fCrypto "github.com/functionland/go-fula/crypto"
 	filePL "github.com/functionland/go-fula/protocols/file"
@@ -33,13 +34,14 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 	}
 	defer stream.Close()
 	encoder := fCrypto.NewEncoder(file)
-	meta, err := filePL.FromFile(file)
+	meta, err := filePL.FromFile(filePath)
 	if err != nil {
 		return res, err
 	}
+	wg := sync.WaitGroup{}
 	fileCh := make(chan []byte)
-	go encoder.EncryptOnFly(fileCh)
-	id, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
+	go encoder.EncryptOnFly(fileCh, &wg)
+	id, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream, &wg)
 	if err != nil {
 		return res, err
 	}

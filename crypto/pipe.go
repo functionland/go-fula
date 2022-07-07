@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/mergermarket/go-pkcs7"
 )
@@ -18,10 +19,10 @@ type encoder struct {
 
 func NewEncoder(reader io.Reader) *encoder {
 	encipher, _ := NewEnCipher()
-	return &encoder{reader:reader, EnCipher: encipher}
+	return &encoder{reader: reader, EnCipher: encipher}
 }
 
-func (c *encoder) EncryptOnFly(fileCh chan<- []byte) error {
+func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 	fileBuf := make([]byte, CHUNK_SIZE)
 	for {
 		n, err := c.reader.Read(fileBuf)
@@ -35,12 +36,17 @@ func (c *encoder) EncryptOnFly(fileCh chan<- []byte) error {
 			fmt.Println("befor n len", n)
 			if n < len(fileBuf) {
 				fileBuf, err = pkcs7.Pad(fileBuf[:n], aes.BlockSize)
+				if err != nil {
+					return err
+				}
 			}
 			encBuf, err := c.EnCipher.Encrypt(fileBuf, n)
 			if err != nil {
 				return err
 			}
+			wg.Add(1)
 			fileCh <- encBuf
+			wg.Wait()
 		}
 	}
 	close(fileCh)
@@ -69,7 +75,7 @@ func (c *decoder) DycryptOnFly(filePath string) error {
 
 	var cache []byte = nil
 	var cacheDec []byte = nil
-	chunkIndex:=0
+	chunkIndex := 0
 	for {
 		n, err := c.reader.Read(buffer)
 		if err == io.EOF {
@@ -108,7 +114,7 @@ func (c *decoder) DycryptOnFly(filePath string) error {
 		}
 
 	}
-	
+
 	err = file.Sync()
 	if err != nil {
 		return err

@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
 	graphPL "github.com/functionland/go-fula/protocols/graph"
@@ -42,6 +44,10 @@ type Fula struct {
 }
 
 func NewFula() (*Fula, error) {
+	err := logging.SetLogLevelRegex("fula:.*", "DEBUG")
+	if err != nil {
+		panic("logger failed")
+	}
 	node, err := create()
 	ctx := context.Background()
 	if err != nil {
@@ -79,7 +85,7 @@ func (f *Fula) AddBox(boxAddr string) error {
 func (f *Fula) getBox(protocol string) (peer.ID, error) {
 	ps := f.node.Peerstore()
 	allPeers := ps.PeersWithAddrs()
-	log.Debug("All peer", allPeers.String())
+	log.Debug("peers with address", allPeers.String())
 	boxPeers := peer.IDSlice{}
 	for _, id := range allPeers {
 		supported, err := ps.SupportsProtocols(id, protocol)
@@ -88,7 +94,7 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 		}
 
 	}
-	log.Debug("All peer", boxPeers.String())
+	log.Debug("box peers", boxPeers.String())
 	for _, id := range boxPeers {
 		_, err := f.node.Network().DialPeer(f.ctx, id)
 		if err == nil {
@@ -96,48 +102,73 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 		}
 
 	}
-	return "", errors.New("no Box Available")
+	return "", errors.New("no box available")
 }
 
 func (f *Fula) Send(filePath string) (string, error) {
 	peer, err := f.getBox(filePL.Protocol)
+	log.Debug("box found", peer)
 	if err != nil {
 		return "", err
 	}
-	file, err := os.Open(filePath)
+
+	meta, err := filePL.FromFile(filePath)
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+
 	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
 	if err != nil {
 		return "", err
 	}
 	defer stream.Close()
-	meta, err := filePL.FromFile(file)
-	if err != nil {
-		return "", err
-	}
-	file, err = os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	buf := make([]byte, meta.ToMetaProto().Size_)
+	wg := sync.WaitGroup{}
 	fileCh := make(chan []byte)
-	buffer := bufio.NewReader(file)
-	_, err = buffer.Read(buf)
-	if err != nil {
-		return "", err
-	}
-	go func() {
-		fileCh<-buf
-		close(fileCh)
-	}()
-	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
+
+	go readFile(filePath, fileCh, &wg)
+
+	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream, &wg)
 	if err != nil {
 		return "", err
 	}
 	return *res, nil
+}
+
+func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
+	defer close(fileCh)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	// fileInfo, err := os.Lstat(filePath)
+	if err != nil {
+		return err
+	}
+	buf := make([]byte, 1024*16)
+	buffer := bufio.NewReader(file)
+	// fileCh <- buf
+
+	for {
+
+		n, err := buffer.Read(buf)
+		if err == io.EOF {
+			log.Debug("EOF found")
+			break
+		}
+		if err != nil {
+			log.Error("cant read the file:", err)
+			return err
+		}
+		if n > 0 {
+			log.Debug("try to write file buffer :", buf[:10])
+			wg.Add(1)
+			fileCh <- buf[:n]
+			wg.Wait()
+			log.Debugf("writed file buffer size %d: %v", n, buf[:10])
+		}
+
+	}
+	return nil
 }
 
 func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
