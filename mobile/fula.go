@@ -1,17 +1,18 @@
 package mobile
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
+	"sync"
 
-	"github.com/functionland/go-fula/common"
 	filePL "github.com/functionland/go-fula/protocols/file"
 	graphPL "github.com/functionland/go-fula/protocols/graph"
+	logging "github.com/ipfs/go-log"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -23,6 +24,8 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 )
+
+var log = logging.Logger("fula:mobile")
 
 const STORE_PATH = "storePath"
 
@@ -41,6 +44,10 @@ type Fula struct {
 }
 
 func NewFula() (*Fula, error) {
+	err := logging.SetLogLevelRegex("fula:.*", "DEBUG")
+	if err != nil {
+		panic("logger failed")
+	}
 	node, err := create()
 	ctx := context.Background()
 	if err != nil {
@@ -56,17 +63,17 @@ func (f *Fula) AddBox(boxAddr string) error {
 		return err
 	}
 	var check bool
-	check = len(peerAddr.Addrs) < 0
+	check = len(peerAddr.Addrs) == 0
 	if check {
-		return errors.New("Bad Input")
+		return errors.New("bad Input")
 	}
 	check = manet.IsIPLoopback(peerAddr.Addrs[0])
 	if check {
-		return errors.New("Cant Use loop back")
+		return errors.New("cant Use loop back")
 	}
 	check = manet.IsIPUnspecified(peerAddr.Addrs[0])
 	if check {
-		return errors.New("Not Specified")
+		return errors.New("not Specified")
 	}
 
 	ps := f.node.Peerstore()
@@ -78,7 +85,7 @@ func (f *Fula) AddBox(boxAddr string) error {
 func (f *Fula) getBox(protocol string) (peer.ID, error) {
 	ps := f.node.Peerstore()
 	allPeers := ps.PeersWithAddrs()
-	log.Println("All peer", allPeers.String())
+	log.Debug("peers with address", allPeers.String())
 	boxPeers := peer.IDSlice{}
 	for _, id := range allPeers {
 		supported, err := ps.SupportsProtocols(id, protocol)
@@ -87,7 +94,7 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 		}
 
 	}
-	log.Println("All peer", boxPeers.String())
+	log.Debug("box peers", boxPeers.String())
 	for _, id := range boxPeers {
 		_, err := f.node.Network().DialPeer(f.ctx, id)
 		if err == nil {
@@ -95,43 +102,73 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 		}
 
 	}
-	return "", errors.New("No Box Available")
+	return "", errors.New("no box available")
 }
 
 func (f *Fula) Send(filePath string) (string, error) {
 	peer, err := f.getBox(filePL.Protocol)
+	log.Debug("box found", peer)
 	if err != nil {
 		return "", err
 	}
+
+	meta, err := filePL.FromFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+	wg := sync.WaitGroup{}
+	fileCh := make(chan []byte)
+
+	go readFile(filePath, fileCh, &wg)
+
+	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream, &wg)
+	if err != nil {
+		return "", err
+	}
+	return *res, nil
+}
+
+func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
+	defer close(fileCh)
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", err
+		return err
 	}
-	defer file.Close()
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
-	defer stream.Close()
+	// fileInfo, err := os.Lstat(filePath)
 	if err != nil {
-		return "", err
+		return err
 	}
-	meta, err := common.FromFile(file)
-	file, err = os.Open(filePath)
-	buf := make([]byte, 10*1024)
-	fileCh := make(chan []byte)
-	go func() {
-		for {
-			n, err := file.Read(buf)
-			if err == io.EOF {
-				break
-			}
-			if n > 0 {
-				fileCh <- buf[:n]
-			}
-		}
-		close(fileCh)
-	}()
-	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
+	buf := make([]byte, 1024*16)
+	buffer := bufio.NewReader(file)
+	// fileCh <- buf
 
-	return *res, nil
+	for {
+
+		n, err := buffer.Read(buf)
+		if err == io.EOF {
+			log.Debug("EOF found")
+			break
+		}
+		if err != nil {
+			log.Error("cant read the file:", err)
+			return err
+		}
+		if n > 0 {
+			log.Debug("try to write file buffer :", buf[:10])
+			wg.Add(1)
+			fileCh <- buf[:n]
+			wg.Wait()
+			log.Debugf("writed file buffer size %d: %v", n, buf[:10])
+		}
+
+	}
+	return nil
 }
 
 func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
@@ -140,12 +177,14 @@ func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
 		return nil, err
 	}
 	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
-	defer stream.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer stream.Close()
 	meta, err := filePL.ReceiveMeta(stream, fileId)
-
+	if err != nil {
+		return nil, err
+	}
 	return meta, nil
 }
 
@@ -164,7 +203,10 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 		return err
 	}
 	fBytes, err := ioutil.ReadAll(fReader)
-	err = os.WriteFile(filePath, fBytes, 0644)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(filePath, fBytes, 0755)
 	if err != nil {
 		return err
 	}
@@ -242,7 +284,6 @@ func create() (host.Host, error) {
 		libp2p.EnableNATService(),
 	)
 
-	log.Printf("Hello World, my second hosts ID is %s\n", node.ID())
-	filePL.RegisterFileProtocol(node)
+	log.Info("Start With", node.ID())
 	return node, err
 }

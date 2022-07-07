@@ -1,9 +1,8 @@
-package common
+package file;
 
 import (
 	"os"
 	"github.com/gabriel-vasile/mimetype"
-	filePL "github.com/functionland/go-fula/protocols/file"
 )
 
 type IFileMeta interface{
@@ -17,20 +16,20 @@ type FileMeta struct {
 	mtype string
 }
 
-func (m *FileMeta) ToMetaProto() filePL.Meta {
-	return filePL.Meta{
+func (m *FileMeta) ToMetaProto() Meta {
+	return Meta{
 		Name:         m.name,
 		Size_:        uint64(m.size),
 		LastModified: m.lastModified,
 		Type:         m.mtype}
 }
 
-func FromFile(file *os.File) (*FileMeta, error) {
-	fileInfo, err := os.Lstat(file.Name())
+func FromFile(path string) (*FileMeta, error) {
+	fileInfo, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
 	}
-	mtype, err := mimetype.DetectFile(file.Name())
+	mtype, err := mimetype.DetectFile(path)
 	if err != nil {
 		return nil, err
 	}

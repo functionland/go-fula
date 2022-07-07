@@ -10,10 +10,17 @@ import (
 	fula "github.com/functionland/go-fula/mobile"
 	filePL "github.com/functionland/go-fula/protocols/file"
 	"github.com/golang/protobuf/proto"
+	// logging "github.com/ipfs/go-log"
+
 )
 
-func main() {
 
+
+func main() {
+	// err := logging.SetLogLevelRegex("net.*", "info")
+	// if err != nil {
+	// 	panic(err)
+	// }
 	fula, _ := fula.NewFula()
 	fula.AddBox("/ip4/192.168.1.10/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1")
 	fmt.Println("We are know connected")

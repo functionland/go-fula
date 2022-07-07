@@ -3,10 +3,9 @@ package mobile
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
+	"sync"
 
-	"github.com/functionland/go-fula/common"
 	fCrypto "github.com/functionland/go-fula/crypto"
 	filePL "github.com/functionland/go-fula/protocols/file"
 )
@@ -18,6 +17,7 @@ type FileRef struct {
 }
 
 func (f *Fula) EncryptSend(filePath string) (string, error) {
+	log.Debug("encryptsend called")
 	peer, err := f.getBox(filePL.Protocol)
 	var res string = ""
 	if err != nil {
@@ -29,18 +29,19 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 	}
 	defer file.Close()
 	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	if err != nil {
+		return res, err
+	}
 	defer stream.Close()
-	if err != nil {
-		return res, err
-	}
 	encoder := fCrypto.NewEncoder(file)
-	meta, err := common.FromFile(file)
+	meta, err := filePL.FromFile(filePath)
 	if err != nil {
 		return res, err
 	}
+	wg := sync.WaitGroup{}
 	fileCh := make(chan []byte)
-	go encoder.EncryptOnFly(fileCh)
-	id, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream)
+	go encoder.EncryptOnFly(fileCh, &wg)
+	id, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream, &wg)
 	if err != nil {
 		return res, err
 	}
@@ -48,38 +49,19 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 		Iv:  encoder.EnCipher.Iv,
 		Key: encoder.EnCipher.SymKey,
 		Id:  *id}
-	fmt.Println(string(fileRef.Id))
-	fmt.Println(string(fileRef.Iv))
-	fmt.Println(string(fileRef.Key))
-	// idB:=[]byte(*id)
-	// liv := uint8(len(encoder.EnCipher.Iv))
-	// lkey := uint8(len(encoder.EnCipher.SymKey))
-	// lid := uint8(len(idB))
-	// res = make([]byte, liv+lkey+lid)
-	// res = append(res,encoder.EnCipher.Iv...)
-	// res = append(res, encoder.EnCipher.SymKey...)
-	// res = append(res,idB...)
-	// res = append(res,byte(liv))
-	// res = append(res,byte(lkey))
-	// res = append(res,byte(lid))
-	// res.Id = *id
-	// res.Iv = encoder.EnCipher.Iv
-	// res.Key = encoder.EnCipher.SymKey
 	jsonByte, _ := json.Marshal(fileRef)
 	sEnc := base64.StdEncoding.EncodeToString(jsonByte)
 	return sEnc, nil
 }
 
 func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
+	log.Debug("ReceiveDecryptFile called")
 	jsonByte, err := base64.StdEncoding.DecodeString(ref)
 	if err != nil {
 		return err
 	}
 	var fileRef FileRef
 	err = json.Unmarshal(jsonByte, &fileRef)
-	fmt.Println(string(fileRef.Id))
-	fmt.Println(string(fileRef.Iv))
-	fmt.Println(string(fileRef.Key))
 	if err != nil {
 		return err
 	}

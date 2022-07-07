@@ -5,7 +5,11 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"fmt"
+
+	logging "github.com/ipfs/go-log"
 )
+
+var log = logging.Logger("fula:crypto")
 
 type IChipher interface {
 	Encrypt()
@@ -20,11 +24,13 @@ type Cipher struct {
 func NewEnCipher() (Cipher, error) {
 	symKey, err := RandomKey(32)
 	if err != nil {
-		return Cipher{}, fmt.Errorf(`somthing goes worng with random generator`)
+		log.Error("somthing goes worng with random generator")
+		return Cipher{}, err
 	}
 	iv, err := RandomKey(16)
 	if err != nil {
-		return Cipher{}, fmt.Errorf(`somthing goes worng with random generator`)
+		log.Error("somthing goes worng with random generator")
+		return Cipher{}, err
 	}
 	return Cipher{Iv: iv, SymKey: symKey}, nil
 }
@@ -47,6 +53,7 @@ func RandomKey(n int) ([]byte, error) {
 
 // Encrypt encrypts plain text string into cipher text string
 func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
+	
 	if len(unencrypted)%aes.BlockSize != 0 {
 		err := fmt.Errorf(`plainText: "%s" has the wrong block size`, unencrypted)
 		return nil, err
@@ -56,12 +63,12 @@ func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("when change", len(unencrypted))
+	log.Debug("unencrypted buff size", len(unencrypted))
 	encData := make([]byte, len(unencrypted))
 
 	mode := cipher.NewCBCEncrypter(block, c.Iv)
 	mode.CryptBlocks(encData, unencrypted)
-	fmt.Println("enc len", len(unencrypted))
+	log.Debug("encypted buff size:", len(encData))
 	return encData, nil
 }
 
@@ -72,12 +79,10 @@ func (c *Cipher) Decrypt(encrypted []byte) ([]byte, error) {
 		return nil, err
 	}
 	decData := make([]byte, len(encrypted))
-	fmt.Println("size of encrypted input", len(encrypted))
+	log.Debug("size of encrypted input", len(encrypted))
 	mode := cipher.NewCBCDecrypter(block, c.Iv)
 	mode.CryptBlocks(decData, encrypted)
-	fmt.Println("size of dencrypted input", len(decData))
-	// unpadaed, _ := pkcs7.Unpad(decData, aes.BlockSize)
-	// fmt.Println("size of unpaded input", len(unpadaed))
+	log.Debug("size of dencrypted input", len(decData))
 	if err != nil {
 		return nil, err
 	}
