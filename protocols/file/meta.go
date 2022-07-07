@@ -24,12 +24,12 @@ func (m *FileMeta) ToMetaProto() Meta {
 		Type:         m.mtype}
 }
 
-func FromFile(file *os.File) (*FileMeta, error) {
-	fileInfo, err := os.Lstat(file.Name())
+func FromFile(path string) (*FileMeta, error) {
+	fileInfo, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
 	}
-	mtype, err := mimetype.DetectFile(file.Name())
+	mtype, err := mimetype.DetectFile(path)
 	if err != nil {
 		return nil, err
 	}

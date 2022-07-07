@@ -2,13 +2,15 @@ package crypto
 
 import (
 	"crypto/aes"
-	"fmt"
 	"io"
 	"os"
 	"sync"
 
 	"github.com/mergermarket/go-pkcs7"
+	// logging "github.com/ipfs/go-log"
 )
+
+// var log = logging.Logger("fula:crypto")
 
 const CHUNK_SIZE = 1024 * aes.BlockSize
 
@@ -23,6 +25,8 @@ func NewEncoder(reader io.Reader) *encoder {
 }
 
 func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
+	defer close(fileCh)
+	log.Debug("start EncryptOnFly")
 	fileBuf := make([]byte, CHUNK_SIZE)
 	for {
 		n, err := c.reader.Read(fileBuf)
@@ -33,10 +37,11 @@ func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 			return err
 		}
 		if n > 0 {
-			fmt.Println("befor n len", n)
+			log.Debugf("Size of buffer befor encoding: %d", n)
 			if n < len(fileBuf) {
 				fileBuf, err = pkcs7.Pad(fileBuf[:n], aes.BlockSize)
 				if err != nil {
+
 					return err
 				}
 			}
@@ -44,13 +49,15 @@ func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 			if err != nil {
 				return err
 			}
+			log.Debugf("Size of buffer after encoding: %d", len(encBuf))
 			wg.Add(1)
 			fileCh <- encBuf
+			log.Debug("data pushed to file channel")
 			wg.Wait()
 		}
 	}
-	close(fileCh)
-	fmt.Println("Copy done")
+	
+	log.Debug("EncryptOnFly finished")
 	return nil
 }
 
@@ -65,14 +72,12 @@ func NewDecoder(reader io.Reader, iv []byte, symKey []byte) *decoder {
 }
 
 func (c *decoder) DycryptOnFly(filePath string) error {
-	fmt.Println("Im caled")
 	buffer := make([]byte, 1)
 	file, err := os.Create(filePath)
-	defer file.Close()
 	if err != nil {
 		return err
 	}
-
+	defer file.Close()
 	var cache []byte = nil
 	var cacheDec []byte = nil
 	chunkIndex := 0

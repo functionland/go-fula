@@ -2,7 +2,6 @@ package mobile
 
 import (
 	"crypto/md5"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -161,9 +160,7 @@ func TestEncryption(t *testing.T) {
 
 func fileDiff(path1 string, path2 string) bool {
 	hash1 := md5File(path1)
-	fmt.Println(hash1)
 	hash2 := md5File(path2)
-	fmt.Println(hash2)
 	return string(hash1) == string(hash2)
 }
 
