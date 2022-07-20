@@ -6,13 +6,14 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-const BOX = "/ip4/172.17.0.1/tcp/4002/p2p/12D3KooWHfpaF9gBsPHW1Nv978UYsRDEz8Vt5Zufeo8yaLypCnSm"
+const BOX = "/p2p/12D3KooWJVDdxaWYxSEC3M8oK57swu1jc36YYMZihbLmiQjQ2B26"
 const BOX_LOOPBACK = "/ip4/127.0.0.1/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1"
 
 func TestNew(t *testing.T) {
@@ -107,6 +108,7 @@ func TestFileProtocol(t *testing.T) {
 				return
 			}
 			t.Logf("successfully test send and receive of %s", upload)
+			time.Sleep(time.Second)
 		}
 
 	}
@@ -153,7 +155,7 @@ func TestEncryption(t *testing.T) {
 				return
 			}
 		}
-
+		time.Sleep(time.Second)
 	}
 
 }

@@ -1,8 +1,10 @@
 package mobile
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"sync"
 
@@ -32,7 +34,6 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 	if err != nil {
 		return res, err
 	}
-	defer stream.Close()
 	encoder := fCrypto.NewEncoder(file)
 	meta, err := filePL.FromFile(filePath)
 	if err != nil {
@@ -73,12 +74,17 @@ func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
-	fReader, err := filePL.ReceiveFile(stream, fileRef.Id)
+	s, err := filePL.ReceiveFile(stream, fileRef.Id)
 	if err != nil {
 		return err
 	}
-	deReader := fCrypto.NewDecoder(fReader, fileRef.Iv, fileRef.Key)
+	fBytes, err := ioutil.ReadAll(s)
+	if err != nil {
+		return err
+	}
+	stream.Close()
+	breader := bytes.NewReader(fBytes)
+	deReader := fCrypto.NewDecoder(breader, fileRef.Iv, fileRef.Key)
 	err = deReader.DycryptOnFly(filePath)
 	if err != nil {
 		return err
