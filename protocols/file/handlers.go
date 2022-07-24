@@ -1,6 +1,7 @@
 package file
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"io"
@@ -10,32 +11,43 @@ import (
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/libp2p/go-libp2p-core/network"
-	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
 func RequestHandler(ctx context.Context, api coreiface.CoreAPI, stream network.Stream) {
-	buf := make([]byte, 2000)
-	n, err := io.ReadFull(stream, buf[:binary.MaxVarintLen64])
+	pref_buf := make([]byte, binary.MaxVarintLen64)
+	pref_reader := bytes.NewReader(pref_buf)
+	n, err := io.ReadFull(stream, pref_buf)
 	if err != nil {
-		log.Error("fail to read header size", err)
+		log.Error("fail to read perfix", err)
 		stream.Reset()
 		return
 	}
-	v, n := protowire.ConsumeVarint(buf[:binary.MaxVarintLen64])
-	if n < 0{
-		log.Error("fail to decode header size", protowire.ParseError(n))
+	log.Debug("read %d byte from stream", n)
+	msg_size, err := binary.ReadUvarint(pref_reader)
+	if err != nil {
+		log.Error("fail to pars perfix", err)
 		stream.Reset()
 		return
 	}
-	req := &Request{}
-	n, err = io.ReadFull(stream, buf[binary.MaxVarintLen64:v-uint64(binary.MaxVarintLen64-n)])
+	log.Debug("readed message size from perfix ", msg_size)
+	header, err := io.ReadAll(pref_reader)
+	msg_buf := make([]byte, int(msg_size)-len(header))
 	if err != nil {
 		log.Error("fail to read header", err)
 		stream.Reset()
 		return
 	}
-	err = proto.Unmarshal(buf[n:v], req)
+	req := &Request{}
+	n, err = io.ReadFull(stream, msg_buf)
+	if err != nil {
+		log.Error("fail to read header", err)
+		stream.Reset()
+		return
+	}
+	log.Debug("readed message with size ", n)
+	header = append(header, msg_buf...)
+	err = proto.Unmarshal(header, req)
 	if err != nil {
 		log.Error("can't unmarshal header bytes ", err)
 		stream.Reset()
