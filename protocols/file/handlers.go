@@ -2,38 +2,44 @@ package file
 
 import (
 	"context"
+	"encoding/binary"
+	"io"
 	"io/ioutil"
 
-	proto "github.com/golang/protobuf/proto"
 	files "github.com/ipfs/go-ipfs-files"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/libp2p/go-libp2p-core/network"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
-func RequestHandler(ctx context.Context,api coreiface.CoreAPI, stream network.Stream){
-	defer func() {
-		// defer s.Close()
-		// s.Close()
-	}()
-	buf := make([]byte, 2048*10)
+func RequestHandler(ctx context.Context, api coreiface.CoreAPI, stream network.Stream) {
+	buf := make([]byte, 2000)
+	n, err := io.ReadFull(stream, buf[:binary.MaxVarintLen64])
+	if err != nil {
+		log.Error("fail to read header size", err)
+		stream.Reset()
+		return
+	}
+	v, n := protowire.ConsumeVarint(buf[:binary.MaxVarintLen64])
+	if n < 0{
+		log.Error("fail to decode header size", protowire.ParseError(n))
+		stream.Reset()
+		return
+	}
 	req := &Request{}
-	for {
-		n, err := stream.Read(buf)
-		if err != nil {
-			log.Error("can't read header bytes ", err)
-			stream.Reset()
-			return
-		}
-		if n > 0 {
-			err = proto.Unmarshal(buf[:n], req)
-			if err != nil {
-				log.Error("can't unmarshal header bytes ", err)
-				stream.Reset()
-				return
-			}
-			break
-		}
+	n, err = io.ReadFull(stream, buf[binary.MaxVarintLen64:v-uint64(binary.MaxVarintLen64-n)])
+	if err != nil {
+		log.Error("fail to read header", err)
+		stream.Reset()
+		return
+	}
+	err = proto.Unmarshal(buf[n:v], req)
+	if err != nil {
+		log.Error("can't unmarshal header bytes ", err)
+		stream.Reset()
+		return
 	}
 	switch v := req.Type.(type) {
 	case *Request_Receive:
@@ -41,7 +47,7 @@ func RequestHandler(ctx context.Context,api coreiface.CoreAPI, stream network.St
 	case *Request_Meta:
 		ReceiveMetaHandler(v, api, stream, ctx)
 	case *Request_Send:
-		SendFileHandler(v, api, stream, ctx)	
+		SendFileHandler(v, api, stream, ctx)
 	default:
 		log.Error("message not supported")
 	}
@@ -117,7 +123,6 @@ func ReceiveFileHandler(req *Request_Receive, api coreiface.CoreAPI, stream netw
 		stream.Reset()
 		return
 	}
-	return
 }
 
 func ReceiveMetaHandler(req *Request_Meta, api coreiface.CoreAPI, stream network.Stream, ctx context.Context) {
@@ -171,7 +176,6 @@ func ReceiveMetaHandler(req *Request_Meta, api coreiface.CoreAPI, stream network
 		stream.Reset()
 		return
 	}
-	return
 }
 
 func SendFileHandler(req *Request_Send, api coreiface.CoreAPI, stream network.Stream, ctx context.Context) {
@@ -216,5 +220,4 @@ func SendFileHandler(req *Request_Send, api coreiface.CoreAPI, stream network.St
 		log.Error("failed to write cid to stream", err)
 		stream.Reset()
 	}
-	return
 }

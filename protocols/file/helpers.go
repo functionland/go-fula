@@ -16,10 +16,10 @@ type FileMeta struct {
 	mtype string
 }
 
-func (m *FileMeta) ToMetaProto() Meta {
-	return Meta{
+func (m *FileMeta) ToMetaProto() *Meta {
+	return &Meta{
 		Name:         m.name,
-		Size_:        uint64(m.size),
+		Size:        uint64(m.size),
 		LastModified: m.lastModified,
 		Type:         m.mtype}
 }

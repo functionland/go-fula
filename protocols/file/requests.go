@@ -4,11 +4,11 @@ import (
 	"io"
 	"io/ioutil"
 	"sync"
-	"time"
 
-	proto "github.com/golang/protobuf/proto"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 const Protocol = "fx/file/1"
@@ -23,8 +23,8 @@ func ReceiveFile(stream network.Stream, cid string) (io.Reader, error) {
 		return nil, err
 	}
 	log.Debug("request message created")
+	header = protowire.AppendVarint(header, uint64(proto.Size(reqMsg)))
 	_, err = stream.Write(header)
-	time.Sleep(time.Second)
 	if err != nil {
 		log.Error("sending Request Message failed", err)
 		return nil, err
@@ -43,12 +43,12 @@ func ReceiveMeta(stream network.Stream, cid string) ([]byte, error) {
 		log.Error("marshaling Meta Message failed", err)
 		return nil, err
 	}
+	header = protowire.AppendVarint(header, uint64(proto.Size(reqMsg)))
 	n, err := stream.Write(header)
 	if err != nil {
 		log.Error("write header faild", err)
 		return nil, err
 	}
-	time.Sleep(time.Second)
 
 	log.Debugf("wrote meta header with size of %d on stream", n)
 	err = stream.CloseWrite()
@@ -71,14 +71,15 @@ func ReceiveMeta(stream network.Stream, cid string) ([]byte, error) {
 	return buf, nil
 }
 
-func SendFile(fileCh <-chan []byte, filemeta Meta, stream network.Stream, wg *sync.WaitGroup) (*string, error) {
+func SendFile(fileCh <-chan []byte, filemeta *Meta, stream network.Stream, wg *sync.WaitGroup) (*string, error) {
 	//create header message
-	reqMsg := &Request{Type: &Request_Send{Send: &filemeta}}
+	reqMsg := &Request{Type: &Request_Send{Send: filemeta}}
 	header, err := proto.Marshal(reqMsg)
 	if err != nil {
 		return nil, err
 	}
 	log.Debug("request message created")
+	header = protowire.AppendVarint(header, uint64(proto.Size(reqMsg)))
 	//wtite the message to stream
 	n, err := stream.Write(header)
 	log.Debugf("header of size %d wrote on stream", n)
@@ -88,7 +89,6 @@ func SendFile(fileCh <-chan []byte, filemeta Meta, stream network.Stream, wg *sy
 		return nil, err
 	}
 	log.Debug("request message send")
-	time.Sleep(time.Second)
 
 	//write file channel to stream
 	for res := range fileCh {

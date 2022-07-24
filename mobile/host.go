@@ -7,8 +7,6 @@ import (
 	dsync "github.com/ipfs/go-datastore/sync"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p/p2p/muxer/mplex"
-	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -47,12 +45,7 @@ func create(ctx context.Context) (*rhost.RoutedHost, error) {
 		// Let's prevent our peer from having too many
 		// connections by attaching a connection manager.
 		libp2p.ConnectionManager(con),
-
-		libp2p.ChainOptions(
-			libp2p.Muxer("/yamux/1.0.0", yamux.DefaultTransport),
-			libp2p.Muxer("/mplex/6.7.0", mplex.DefaultTransport),
-		),
-
+		libp2p.DefaultMuxers,
 		// Let this host use relays and advertise itself on relays if
 		// it finds it is behind NAT. Use libp2p.Relay(options...) to
 		// enable active relays and more.
