@@ -43,7 +43,7 @@ func NewFula() (*Fula, error) {
 		panic("logger failed")
 	}
 	ctx := context.Background()
-	node, err := create(ctx)
+	node, err := create(ctx, "./repo")
 	if err != nil {
 		return nil, err
 	}
