@@ -29,6 +29,7 @@ func TestAddBox(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	time.Sleep(5 * time.Second)
 	err = fula.AddBox(BOX)
 	if err != nil {
 		t.Error("Fail to adding peer: \n", err)

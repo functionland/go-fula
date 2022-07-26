@@ -82,12 +82,15 @@ func (f *Fula) AddBox(boxAddr string) error {
 }
 
 func (f *Fula) NewStream() (network.Stream, error) {
+
 	peer, err := f.getBox()
 	if err != nil {
 		return nil, err
 	}
 	log.Debug("box found", peer)
-	s, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
+	ctx := context.Background()
+	ctx = network.WithForceDirectDial(ctx, "transiant wont do it")
+	s, err := f.node.NewStream(ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		return nil, err
 	}
