@@ -3,7 +3,6 @@ package mobile
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -11,17 +10,20 @@ import (
 	"sync"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
-	graphPL "github.com/functionland/go-fula/protocols/graph"
 	logging "github.com/ipfs/go-log"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	manet "github.com/multiformats/go-multiaddr/net"
-	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 var log = logging.Logger("fula:mobile")
 
-const STORE_PATH = "storePath"
+const (
+	STORE_PATH = "storePath"
+	//I will cheet until i can add threadsafe datastore
+	MY_BOX = "/mybox/cheat"
+)
 
 type IFula interface {
 	AddBox()
@@ -33,12 +35,13 @@ type IFula interface {
 }
 
 type Fula struct {
-	node rhost.RoutedHost
-	ctx  context.Context
+	node  rhost.RoutedHost
+	ctx   context.Context
+	mybox []peer.AddrInfo
 }
 
 func NewFula(repoPath string) (*Fula, error) {
-	err := logging.SetLogLevelRegex(".*", "DEBUG")
+	err := logging.SetLogLevelRegex("fula.*", "DEBUG")
 	if err != nil {
 		panic("logger failed")
 	}
@@ -69,49 +72,41 @@ func (f *Fula) AddBox(boxAddr string) error {
 			return errors.New("not Specified")
 		}
 	}
-
-	ps := f.node.Peerstore()
 	err = f.node.Connect(f.ctx, *peerAddr)
 	if err != nil {
 		log.Error("peer router failed ", err)
 		return err
 	}
-	// ps.AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
-	ps.AddProtocols(peerAddr.ID, filePL.PROTOCOL, graphPL.Protocol)
+	f.mybox = append(f.mybox, *peerAddr)
 	return nil
 }
 
-func (f *Fula) getBox(protocol string) (peer.ID, error) {
-	ps := f.node.Peerstore()
-	allPeers := ps.PeersWithAddrs()
-	boxPeers := peer.IDSlice{}
-	for _, id := range allPeers {
-		supported, err := ps.SupportsProtocols(id, protocol)
-		if err == nil && len(supported) > 0 {
-			boxPeers = append(boxPeers, id)
-		}
-
+func (f *Fula) NewStream() (network.Stream, error) {
+	peer, err := f.getBox()
+	if err != nil {
+		return nil, err
 	}
-	log.Debug("box peers", boxPeers.String())
-	if len(boxPeers) > 0 {
-		return boxPeers[0], nil
+	log.Debug("box found", peer)
+	s, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func (f *Fula) getBox() (peer.ID, error) {
+	if len(f.mybox) > 0 {
+		return f.mybox[0].ID, nil
 	}
 	return "", errors.New("no box available")
 }
 
 func (f *Fula) Send(filePath string) (string, error) {
-	peer, err := f.getBox(filePL.PROTOCOL)
-	log.Debug("box found", peer)
+	stream, err := f.NewStream()
 	if err != nil {
 		return "", err
 	}
-
 	meta, err := filePL.FromFile(filePath)
-	if err != nil {
-		return "", err
-	}
-
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		return "", err
 	}
@@ -165,12 +160,10 @@ func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
 }
 
 func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
-	peer, err := f.getBox(filePL.PROTOCOL)
+	stream, err := f.NewStream()
 	if err != nil {
-		log.Error("cant get box", err)
 		return nil, err
 	}
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		log.Error("failed to open new sream", err)
 		return nil, err
@@ -184,11 +177,7 @@ func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
 }
 
 func (f *Fula) ReceiveFile(fileId string, filePath string) error {
-	peer, err := f.getBox(filePL.PROTOCOL)
-	if err != nil {
-		return err
-	}
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
+	stream, err := f.NewStream()
 	if err != nil {
 		return err
 	}
@@ -206,28 +195,4 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 		return err
 	}
 	return nil
-}
-
-func (f *Fula) GraphQL(query string, values string) ([]byte, error) {
-	peer, err := f.getBox(filePL.PROTOCOL)
-	if err != nil {
-		return nil, err
-	}
-	stream, err := f.node.NewStream(f.ctx, peer, graphPL.Protocol)
-	if err != nil {
-		return nil, err
-	}
-	defer stream.Close()
-
-	val, err := structpb.NewValue(map[string]interface{}{})
-	if err != nil {
-		return nil, err
-	}
-	json.Unmarshal([]byte(values), &val)
-	res, err := graphPL.GraphQL(query, val, stream)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }

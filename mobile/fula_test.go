@@ -35,11 +35,12 @@ func TestAddBox(t *testing.T) {
 		return
 	}
 	want, _ := peer.AddrInfoFromString(BOX)
-	peers := fula.node.Peerstore().PeersWithAddrs()
-	for _, id := range peers {
-		if id == want.ID {
-			return
-		}
+	peer, err := fula.getBox()
+	if err != nil {
+		t.Error(err)
+	}
+	if want.ID == peer {
+		return
 	}
 	t.Error("Peer Was Not added")
 }
@@ -62,7 +63,7 @@ func TestFileProtocol(t *testing.T) {
 	}
 	err = fula.AddBox(BOX)
 	if err != nil {
-		t.Error("mobile Can not accept loopback")
+		t.Error("add error")
 	}
 	tmp := "./tmp"
 	if _, err := os.Stat(tmp); os.IsNotExist(err) {
@@ -82,19 +83,19 @@ func TestFileProtocol(t *testing.T) {
 			upload := "./test_assets/" + file.Name()
 			cid, err := fula.Send(upload)
 			if err != nil {
-				t.Error("Send failed", err)
+				t.Error("send failed", err)
 				return
 			}
 			bytes, err := fula.ReceiveFileInfo(cid)
 			t.Log("File with CID: ", cid)
 			if err != nil {
-				t.Error("Download Failed", err)
+				t.Error("download Failed", err)
 				return
 			}
 			meta := &filePL.Meta{}
 			err = proto.Unmarshal(bytes, meta)
 			if err != nil {
-				t.Error("Parsing Meta failed", err)
+				t.Error("parsing Meta failed", err)
 				return
 			}
 			download := tmp + "/" + meta.Name
