@@ -20,7 +20,7 @@ type FileRef struct {
 
 func (f *Fula) EncryptSend(filePath string) (string, error) {
 	log.Debug("encryptsend called")
-	peer, err := f.getBox(filePL.Protocol)
+	peer, err := f.getBox(filePL.PROTOCOL)
 	var res string = ""
 	if err != nil {
 		return res, err
@@ -30,9 +30,9 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 		return res, err
 	}
 	defer file.Close()
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
-		return res, err
+		return "", err
 	}
 	encoder := fCrypto.NewEncoder(file)
 	meta, err := filePL.FromFile(filePath)
@@ -66,11 +66,11 @@ func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
 	if err != nil {
 		return err
 	}
-	peer, err := f.getBox(filePL.Protocol)
+	peer, err := f.getBox(filePL.PROTOCOL)
 	if err != nil {
 		return err
 	}
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		return err
 	}

@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	config "github.com/ipfs/go-ipfs/config"
-	serialize "github.com/ipfs/go-ipfs/config/serialize"
+	config "github.com/ipfs/kubo/config"
+	serialize "github.com/ipfs/kubo/config/serialize"
 )
 
 
@@ -64,18 +64,14 @@ func configIsInitialized(path string) bool {
 		return false
 	}
 	if fileExists(configFilename) {
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
-	if err != nil {
-		// path/to/whatever does not exist
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func openConfig(path string) (*config.Config, error) {

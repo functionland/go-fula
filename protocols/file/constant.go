@@ -1,3 +1,3 @@
 package file
 
-var PROTOCOL = "fx/file/1"
+const PROTOCOL = "/fx/file/0.1.1"

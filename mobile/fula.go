@@ -37,13 +37,13 @@ type Fula struct {
 	ctx  context.Context
 }
 
-func NewFula() (*Fula, error) {
-	err := logging.SetLogLevelRegex("fula:.*", "DEBUG")
+func NewFula(repoPath string) (*Fula, error) {
+	err := logging.SetLogLevelRegex(".*", "DEBUG")
 	if err != nil {
 		panic("logger failed")
 	}
 	ctx := context.Background()
-	node, err := create(ctx, "./repo")
+	node, err := create(ctx, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -77,14 +77,13 @@ func (f *Fula) AddBox(boxAddr string) error {
 		return err
 	}
 	// ps.AddAddrs(peerAddr.ID, peerAddr.Addrs, peerstore.PermanentAddrTTL)
-	ps.AddProtocols(peerAddr.ID, filePL.Protocol, graphPL.Protocol)
+	ps.AddProtocols(peerAddr.ID, filePL.PROTOCOL, graphPL.Protocol)
 	return nil
 }
 
 func (f *Fula) getBox(protocol string) (peer.ID, error) {
 	ps := f.node.Peerstore()
 	allPeers := ps.PeersWithAddrs()
-	log.Debug("peers with address", allPeers.String())
 	boxPeers := peer.IDSlice{}
 	for _, id := range allPeers {
 		supported, err := ps.SupportsProtocols(id, protocol)
@@ -101,7 +100,7 @@ func (f *Fula) getBox(protocol string) (peer.ID, error) {
 }
 
 func (f *Fula) Send(filePath string) (string, error) {
-	peer, err := f.getBox(filePL.Protocol)
+	peer, err := f.getBox(filePL.PROTOCOL)
 	log.Debug("box found", peer)
 	if err != nil {
 		return "", err
@@ -112,7 +111,7 @@ func (f *Fula) Send(filePath string) (string, error) {
 		return "", err
 	}
 
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		return "", err
 	}
@@ -166,12 +165,12 @@ func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
 }
 
 func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
-	peer, err := f.getBox(filePL.Protocol)
+	peer, err := f.getBox(filePL.PROTOCOL)
 	if err != nil {
 		log.Error("cant get box", err)
 		return nil, err
 	}
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		log.Error("failed to open new sream", err)
 		return nil, err
@@ -185,11 +184,11 @@ func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
 }
 
 func (f *Fula) ReceiveFile(fileId string, filePath string) error {
-	peer, err := f.getBox(filePL.Protocol)
+	peer, err := f.getBox(filePL.PROTOCOL)
 	if err != nil {
 		return err
 	}
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	stream, err := f.node.NewStream(f.ctx, peer, filePL.PROTOCOL)
 	if err != nil {
 		return err
 	}
@@ -210,7 +209,7 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 }
 
 func (f *Fula) GraphQL(query string, values string) ([]byte, error) {
-	peer, err := f.getBox(filePL.Protocol)
+	peer, err := f.getBox(filePL.PROTOCOL)
 	if err != nil {
 		return nil, err
 	}

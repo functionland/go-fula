@@ -11,8 +11,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const Protocol = "fx/file/1"
-
 var log = logging.Logger("fula:filePL")
 
 func encodPerfixLenth(b []byte) []byte {
@@ -85,7 +83,7 @@ func SendFile(fileCh <-chan []byte, filemeta *Meta, stream network.Stream, wg *s
 	if err != nil {
 		return nil, err
 	}
-	header:=encodPerfixLenth(msg)
+	header := encodPerfixLenth(msg)
 	n, err := stream.Write(header)
 	log.Debugf("header of size %d wrote on stream", n)
 	if err != nil {

@@ -18,14 +18,14 @@ const BOX_LOOPBACK = "/ip4/127.0.0.1/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgo
 
 func TestNew(t *testing.T) {
 
-	_, err := NewFula()
+	_, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestAddBox(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -45,7 +45,7 @@ func TestAddBox(t *testing.T) {
 }
 
 func TestAddBoxLoopBack(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +56,7 @@ func TestAddBoxLoopBack(t *testing.T) {
 }
 
 func TestFileProtocol(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -116,7 +116,7 @@ func TestFileProtocol(t *testing.T) {
 }
 
 func TestEncryption(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}

@@ -4,9 +4,9 @@ import (
 	"context"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
-	"github.com/ipfs/go-ipfs/core"
-	"github.com/ipfs/go-ipfs/core/coreapi"
-	"github.com/ipfs/go-ipfs/plugin"
+	"github.com/ipfs/kubo/core"
+	"github.com/ipfs/kubo/core/coreapi"
+	"github.com/ipfs/kubo/plugin"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
 )
@@ -18,6 +18,7 @@ func check(err error) {
 }
 
 type BeastPlugin struct {
+	plugin.PluginDaemonInternal
 }
 
 var _ plugin.PluginDaemonInternal = (*BeastPlugin)(nil)
@@ -45,7 +46,7 @@ func (*BeastPlugin) Start(core *core.IpfsNode) error {
 		log.Panic("cant create core API ", err)
 	}
 
-	core.PeerHost.SetStreamHandler(filePL.Protocol, func(s network.Stream) {
+	core.PeerHost.SetStreamHandler(filePL.PROTOCOL, func(s network.Stream) {
 		defer func() {
 			// defer s.Close()
 			// s.Close()

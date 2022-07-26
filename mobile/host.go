@@ -15,8 +15,8 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 
-	config "github.com/ipfs/go-ipfs/config"
-	"github.com/ipfs/go-ipfs/core/bootstrap"
+	config "github.com/ipfs/kubo/config"
+	"github.com/ipfs/kubo/core/bootstrap"
 	options "github.com/ipfs/interface-go-ipfs-core/options"
 )
 
@@ -38,7 +38,7 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 		panic(err)
 	}
 
-	if configIsInitialized(configRoot) {
+	if !configIsInitialized(configRoot) {
 		var conf *config.Config
 
 		if conf == nil {
@@ -75,14 +75,12 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 		libp2p.Identity(sk),
 		// Multiple listen addresses
 		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/9000",      // regular tcp connections
-			"/ip4/0.0.0.0/udp/9000/quic", // a UDP endpoint for the QUIC transport
+			cfg.Addresses.Swarm...
 		),
-
 		// Let's prevent our peer from having too many
 		// connections by attaching a connection manager.
 		libp2p.ConnectionManager(con),
-		libp2p.DefaultMuxers,
+		// libp2p.DefaultMuxers,
 		// Let this host use relays and advertise itself on relays if
 		// it finds it is behind NAT. Use libp2p.Relay(options...) to
 		// enable active relays and more.
@@ -95,6 +93,7 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 		// This service is highly rate-limited and should not cause any
 		// performance issues.
 		libp2p.EnableNATService(),
+		libp2p.EnableHolePunching(),
 	}
 
 	basicHost, err := libp2p.New(opt...)
@@ -115,7 +114,6 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 		log.Error("bootstrap failed. ", err)
 		return nil, err
 	}
-
 	// Make the routed host
 	routedHost := rhost.Wrap(basicHost, kDht)
 
