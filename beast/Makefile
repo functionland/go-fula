@@ -3,13 +3,14 @@ GO111MODULE = on
 
 GOCC ?= go
 GOFLAGS ?=
+GOTAGS ?= 
 
 # If set, override the install location for plugins
 IPFS_PATH ?= $(HOME)/.ipfs
 
 # If set, override the IPFS version to build against. This _modifies_ the local
 # go.mod/go.sum files and permanently sets this version.
-IPFS_VERSION ?= $(lastword $(shell $(GOCC) list -m github.com/ipfs/go-ipfs))
+IPFS_VERSION ?= $(lastword $(shell $(GOCC) list -m github.com/ipfs/kubo))
 
 # make reproducible
 ifneq ($(findstring /,$(IPFS_VERSION)),)
@@ -22,18 +23,17 @@ endif
 
 .PHONY: install build
 
-go.mod: FORCE
-	./set-target.sh $(IPFS_VERSION)
 
 FORCE:
 
-example-plugin.so: main/main.go go.mod
-	$(GOCC) build $(GOFLAGS) -buildmode=plugin -o "$@" "$<"
+beast.so: main/main.go ../go.mod
+	$(GOCC) build  $(GOFLAGS) -buildmode=plugin -o "$@" "$<"
 	chmod +x "$@"
 
-build: example-plugin.so
+build: beast.so
+	@echo "add tags" $(GOTAGS)
 	@echo "Built against" $(IPFS_VERSION)
 
 install: build
 	mkdir -p "$(IPFS_PATH)/plugins/"
-	cp -f example-plugin.so "$(IPFS_PATH)/plugins/example-plugin.so"
+	cp -f beast.so "$(IPFS_PATH)/plugins/beast.so"
