@@ -30,6 +30,50 @@ To update the go-ipfs, run:
 > make go.mod IPFS_VERSION=version
 ```
 
+## Running a Kubo instance
+In order to run a Kubo instance with the beast plugin installed, you can use the Dockerfile provided in `/docker` directory.
+
+Since the beast plugin imports File Protocol for handling the stream, you need to build the docker image in a context that includes both beast and file protocol.
+
+First create your `go.mod` file. Inside the `go-fula/beast` directory:
+```
+go mod tidy
+```
+
+Next, you need to make the beast plugin. If you look at the Make instructions, you can see that it needs to put make results in a directory named `kubo` which is a sibling to `go-fula` directory:
+```bash
+cd ../../ #parent directory for go-fula
+git clone https://github.com/ipfs/kubo.git
+cd go-fula/beast
+make install
+```
+
+Now that you have the plugin compiled, you can proceed and build a docker image containing Kubo and the beast plugin:
+```bash
+cd ../ #go-fula directory
+docker build -t go-fula -f beast/docker/Dockerfile .
+```
+
+If everything goes right, you can verify your image being built by looking into docker images list:
+```bash
+docker images
+```
+you should see a line indicating that you have a `go-fula` image on your host. Something like this:
+```
+go-fula                        latest    efec5df92839   About an hour ago   94.8MB
+```
+The final step is to run your recently built Kubo image, go ahead and do that with docker command:
+```bash
+docker run -p 4001:4001 go-fula
+```
+
+You should see Kubo getting started and listening on port 4001. Also, it outputs you peer identity which you can use to connect to this IPFS instance.
+
+If you want to debug your Kubo instance, you can set the log level using environment variables:
+```
+docker run -p 4001:4001 -e GOLOG_LOG_LEVEL="error,fula:filePL=debug,plugin/beast=debug,p2p-holepunch=debug" go-fula
+```
+
 ## License
 
 MIT
