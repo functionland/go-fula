@@ -19,7 +19,7 @@ jobs:
       uses: docker/metadata-action@v4
       with:
         images: |
-          ${{ secrets.DOCKERHUB_USER }}/box
+          ${{ secrets.DOCKERHUB_USERNAME }}/box
         tags: |
           type=ref,event=branch
           type=semver,pattern={{version}}
@@ -27,8 +27,8 @@ jobs:
       name: Login to DockerHub
       uses: docker/login-action@v1
       with:
-        username: ${{ secrets.DOCKERHUB_USER }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_ORG_TOKEN }}
     -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
