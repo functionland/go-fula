@@ -1,8 +1,10 @@
 package mobile
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"sync"
 
@@ -18,8 +20,8 @@ type FileRef struct {
 
 func (f *Fula) EncryptSend(filePath string) (string, error) {
 	log.Debug("encryptsend called")
-	peer, err := f.getBox(filePL.Protocol)
-	var res string = ""
+	res := ""
+	stream, err := f.NewStream()
 	if err != nil {
 		return res, err
 	}
@@ -28,11 +30,9 @@ func (f *Fula) EncryptSend(filePath string) (string, error) {
 		return res, err
 	}
 	defer file.Close()
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
 	if err != nil {
-		return res, err
+		return "", err
 	}
-	defer stream.Close()
 	encoder := fCrypto.NewEncoder(file)
 	meta, err := filePL.FromFile(filePath)
 	if err != nil {
@@ -65,20 +65,21 @@ func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
 	if err != nil {
 		return err
 	}
-	peer, err := f.getBox(filePL.Protocol)
+	stream, err := f.NewStream()
 	if err != nil {
 		return err
 	}
-	stream, err := f.node.NewStream(f.ctx, peer, filePL.Protocol)
+	s, err := filePL.ReceiveFile(stream, fileRef.Id)
 	if err != nil {
 		return err
 	}
-	defer stream.Close()
-	fReader, err := filePL.ReceiveFile(stream, fileRef.Id)
+	fBytes, err := ioutil.ReadAll(s)
 	if err != nil {
 		return err
 	}
-	deReader := fCrypto.NewDecoder(fReader, fileRef.Iv, fileRef.Key)
+	stream.Close()
+	breader := bytes.NewReader(fBytes)
+	deReader := fCrypto.NewDecoder(breader, fileRef.Iv, fileRef.Key)
 	err = deReader.DycryptOnFly(filePath)
 	if err != nil {
 		return err
@@ -86,6 +87,3 @@ func (f *Fula) ReceiveDecryptFile(ref string, filePath string) error {
 	return nil
 }
 
-func (f *Fula) TestRef() {
-
-}

@@ -1,5 +1,5 @@
 syntax = "proto3";
-option go_package = "./file";
+option go_package = "github.com/functionland/go-fula/protocols/file";
 package file;
 
 message Meta {

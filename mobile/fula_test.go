@@ -6,45 +6,48 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-const BOX = "/ip4/172.17.0.1/tcp/4002/p2p/12D3KooWHfpaF9gBsPHW1Nv978UYsRDEz8Vt5Zufeo8yaLypCnSm"
+const BOX = "/p2p/12D3KooWJVDdxaWYxSEC3M8oK57swu1jc36YYMZihbLmiQjQ2B26"
 const BOX_LOOPBACK = "/ip4/127.0.0.1/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1"
 
 func TestNew(t *testing.T) {
 
-	_, err := NewFula()
+	_, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestAddBox(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
+	time.Sleep(5 * time.Second)
 	err = fula.AddBox(BOX)
 	if err != nil {
 		t.Error("Fail to adding peer: \n", err)
 		return
 	}
 	want, _ := peer.AddrInfoFromString(BOX)
-	peers := fula.node.Peerstore().PeersWithAddrs()
-	for _, id := range peers {
-		if id == want.ID {
-			return
-		}
+	peer, err := fula.getBox()
+	if err != nil {
+		t.Error(err)
+	}
+	if want.ID == peer {
+		return
 	}
 	t.Error("Peer Was Not added")
 }
 
 func TestAddBoxLoopBack(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,13 +58,13 @@ func TestAddBoxLoopBack(t *testing.T) {
 }
 
 func TestFileProtocol(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
 	err = fula.AddBox(BOX)
 	if err != nil {
-		t.Error("mobile Can not accept loopback")
+		t.Error("add error")
 	}
 	tmp := "./tmp"
 	if _, err := os.Stat(tmp); os.IsNotExist(err) {
@@ -81,19 +84,19 @@ func TestFileProtocol(t *testing.T) {
 			upload := "./test_assets/" + file.Name()
 			cid, err := fula.Send(upload)
 			if err != nil {
-				t.Error("Send failed", err)
+				t.Error("send failed", err)
 				return
 			}
 			bytes, err := fula.ReceiveFileInfo(cid)
 			t.Log("File with CID: ", cid)
 			if err != nil {
-				t.Error("Download Failed", err)
+				t.Error("download Failed", err)
 				return
 			}
 			meta := &filePL.Meta{}
 			err = proto.Unmarshal(bytes, meta)
 			if err != nil {
-				t.Error("Parsing Meta failed", err)
+				t.Error("parsing Meta failed", err)
 				return
 			}
 			download := tmp + "/" + meta.Name
@@ -107,6 +110,7 @@ func TestFileProtocol(t *testing.T) {
 				return
 			}
 			t.Logf("successfully test send and receive of %s", upload)
+			time.Sleep(time.Second)
 		}
 
 	}
@@ -114,7 +118,7 @@ func TestFileProtocol(t *testing.T) {
 }
 
 func TestEncryption(t *testing.T) {
-	fula, err := NewFula()
+	fula, err := NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -153,7 +157,7 @@ func TestEncryption(t *testing.T) {
 				return
 			}
 		}
-
+		time.Sleep(time.Second)
 	}
 
 }

@@ -37,7 +37,7 @@ func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 			return err
 		}
 		if n > 0 {
-			log.Debugf("Size of buffer befor encoding: %d", n)
+			log.Debugf("size of buffer befor encoding: %d", n)
 			if n < len(fileBuf) {
 				fileBuf, err = pkcs7.Pad(fileBuf[:n], aes.BlockSize)
 				if err != nil {
@@ -56,7 +56,7 @@ func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 			wg.Wait()
 		}
 	}
-	
+
 	log.Debug("EncryptOnFly finished")
 	return nil
 }
@@ -72,7 +72,8 @@ func NewDecoder(reader io.Reader, iv []byte, symKey []byte) *decoder {
 }
 
 func (c *decoder) DycryptOnFly(filePath string) error {
-	buffer := make([]byte, 1)
+	size:=16
+	buffer := make([]byte, size)
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err
@@ -102,7 +103,7 @@ func (c *decoder) DycryptOnFly(filePath string) error {
 		}
 		if n > 0 {
 			cache = append(cache, buffer...)
-			chunkIndex += 1
+			chunkIndex += 1 * size
 			if chunkIndex >= CHUNK_SIZE {
 				dec, err := c.DeCipher.Decrypt(cache)
 				if err != nil {

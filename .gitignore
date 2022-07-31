@@ -18,3 +18,7 @@ out
 
 # VS-code
 .vscode/
+
+test_assets/
+tmp/
+mobile/repo
