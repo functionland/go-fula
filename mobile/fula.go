@@ -3,18 +3,24 @@ package mobile
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"errors"
+
 	"io"
 	"io/ioutil"
+
 	"os"
 	"sync"
 
+
 	filePL "github.com/functionland/go-fula/protocols/file"
+	"github.com/golang/protobuf/proto"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var log = logging.Logger("fula:mobile")
@@ -41,7 +47,8 @@ type Fula struct {
 }
 
 func NewFula(repoPath string) (*Fula, error) {
-	err := logging.SetLogLevelRegex("fula.*", "DEBUG")
+	err := logging.SetLogLevelRegex(".*", "DEBUG")
+
 	if err != nil {
 		panic("logger failed")
 	}
@@ -162,7 +169,7 @@ func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
+func (f *Fula) receiveFileInfo(fileId string) (*filePL.Meta, error) {
 	stream, err := f.NewStream()
 	if err != nil {
 		return nil, err
@@ -171,12 +178,34 @@ func (f *Fula) ReceiveFileInfo(fileId string) ([]byte, error) {
 		log.Error("failed to open new sream", err)
 		return nil, err
 	}
-	meta, err := filePL.ReceiveMeta(stream, fileId)
+
+	buf, err := filePL.ReceiveMeta(stream, fileId)
 	if err != nil {
 		log.Error("protocol failed to receive meta", err)
 		return nil, err
 	}
+	meta := &filePL.Meta{}
+	err = proto.Unmarshal(buf, meta)
+	if err != nil {
+		log.Error("failed to unmarshal meta", err)
+		return nil, err
+	}
 	return meta, nil
+}
+
+func (f *Fula) ReceiveFileInfo(fileId string) (string, error) {
+	meta, err := f.receiveFileInfo(fileId)
+	if err != nil {
+		log.Error("failed to fetch meta", err)
+		return "", err
+	}
+	r, err := protojson.Marshal(meta)
+	if err != nil {
+		log.Error("failed to json marshal meta", err)
+		return "", err
+	}
+	sEnc := base64.StdEncoding.EncodeToString(r)
+	return sEnc, nil
 }
 
 func (f *Fula) ReceiveFile(fileId string, filePath string) error {
