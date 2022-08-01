@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	filePL "github.com/functionland/go-fula/protocols/file"
-	proto "github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
+
 )
 
 const BOX = "/p2p/12D3KooWJVDdxaWYxSEC3M8oK57swu1jc36YYMZihbLmiQjQ2B26"
@@ -87,16 +86,10 @@ func TestFileProtocol(t *testing.T) {
 				t.Error("send failed", err)
 				return
 			}
-			bytes, err := fula.ReceiveFileInfo(cid)
+			meta, err := fula.receiveFileInfo(cid)
 			t.Log("File with CID: ", cid)
 			if err != nil {
 				t.Error("download Failed", err)
-				return
-			}
-			meta := &filePL.Meta{}
-			err = proto.Unmarshal(bytes, meta)
-			if err != nil {
-				t.Error("parsing Meta failed", err)
 				return
 			}
 			download := tmp + "/" + meta.Name
