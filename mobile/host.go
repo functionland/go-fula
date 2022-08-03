@@ -15,9 +15,9 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 
+	options "github.com/ipfs/interface-go-ipfs-core/options"
 	config "github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/core/bootstrap"
-	options "github.com/ipfs/interface-go-ipfs-core/options"
 )
 
 const (
@@ -106,10 +106,17 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 
 	// Make the DHT
 	kDht := dht.NewDHT(ctx, basicHost, dstore)
+	cfg.Bootstrap = append(cfg.Bootstrap,
+		"/ip4/34.224.40.105/udp/4001/quic/p2p/12D3KooWEftKAarKSc1bhQfgn5aoW5UnaSqCr9UMhRoqhsBA6MmX",
+		"/ip4/54.235.11.104/udp/4001/quic/p2p/12D3KooWEHmZunko2dupAR9J3Ydo3yN8aW7oZWkAxv5zsNL7UPRH",
+	)
+
 	bootstrapPeers, _ := cfg.BootstrapPeers()
+	btconf := bootstrap.BootstrapConfigWithPeers(bootstrapPeers)
+	btconf.MinPeerThreshold = 2
 
 	// connect to the chosen ipfs nodes
-	_, err = bootstrap.Bootstrap(peer.ID(cfg.Identity.PeerID), basicHost, kDht, bootstrap.BootstrapConfigWithPeers(bootstrapPeers))
+	_, err = bootstrap.Bootstrap(peer.ID(cfg.Identity.PeerID), basicHost, kDht, btconf)
 	if err != nil {
 		log.Error("bootstrap failed. ", err)
 		return nil, err
