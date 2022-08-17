@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	fxfscore "github.com/functionland/go-fula/fxfs/core/api"
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
+	pfs "github.com/functionland/go-fula/fxfs/core/pfs"
 	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	"github.com/ipfs/go-filestore"
 	files "github.com/ipfs/go-ipfs-files"
 	keystore "github.com/ipfs/go-ipfs-keystore"
+	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/bootstrap"
@@ -152,7 +155,7 @@ func TestAPI(t *testing.T) {
 		"DID": files.NewBytesFile([]byte("some data")),
 	})
 	prDir := files.NewMapDirectory(map[string]files.Node{
-		"DID": files.NewBytesFile([]byte("some other data")),
+		"DID": pfs.NewEncodedFileFromNode(files.NewBytesFile([]byte("some other data")), []byte("JWEEEEEEE")),
 	})
 
 	rootDir := files.NewMapDirectory(map[string]files.Node{
@@ -175,7 +178,21 @@ func TestAPI(t *testing.T) {
 		t.Fatal("error in adding rootDir", err)
 	}
 
+	pn, err := fapi.PublicFS().Get(context.Background(), path.New("/ipfs/"+puResolved.Cid().String()+"/DID"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rn, err := fapi.PrivateFS().Get(context.Background(), path.New("/ipfs/"+prResolved.Cid().String()+"/DID"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt := rn.(pfs.EncodedFile)
+	bpt, err := io.ReadAll(pt)
+	pnn, err := io.ReadAll(pn.(files.File))
 	fmt.Println(puResolved)
 	fmt.Println(prResolved)
 	fmt.Println(rootResolved)
+	fmt.Println(pt.JWE())
+	fmt.Println(pnn)
+	fmt.Println(bpt)
 }
