@@ -16,11 +16,13 @@ import (
 	dagtest "github.com/ipfs/go-merkledag/test"
 	"github.com/ipfs/go-mfs"
 	ft "github.com/ipfs/go-unixfs"
+	unixfile "github.com/ipfs/go-unixfs/file"
 	"github.com/ipfs/interface-go-ipfs-core/options"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/tracing"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type PrivateAPI CoreAPI
@@ -168,9 +170,21 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 	return path.IpfsPath(nd.Cid()), nil
 }
 
-// func (api *PrivateAPI) Get(context.Context, path.Path) (files.Node, error) {
+func (api *PrivateAPI) Get(ctx context.Context, p path.Path) (files.Node, error) {
+	ctx, span := tracing.Span(ctx, "CoreAPI.UnixfsAPI", "Get", trace.WithAttributes(attribute.String("path", p.String())))
+	defer span.End()
 
-// }
+	nd, err := api.nc.ResolveNode(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	return unixfile.NewUnixfsFile(ctx, api.core().getSession(ctx).dag, nd)
+}
+
+func (api *PrivateAPI) core() *CoreAPI {
+	return (*CoreAPI)(api)
+}
 
 var nilNode *core.IpfsNode
 var once sync.Once

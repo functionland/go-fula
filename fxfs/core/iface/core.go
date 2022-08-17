@@ -19,7 +19,7 @@ type CoreAPI interface {
 type PrivateFS interface {
 	Add(context.Context, files.Node, ...options.UnixfsAddOption) (path.Resolved, error)
 
-	// Get(context.Context, path.Path) (files.Node, error)
+	Get(context.Context, path.Path) (files.Node, error)
 
 	// Ls()
 
