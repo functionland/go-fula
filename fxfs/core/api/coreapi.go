@@ -163,7 +163,7 @@ func (api *CoreAPI) WithOptions(opts ...options.ApiOption) (fxfsiface.CoreAPI, e
 			cs = node.DefaultIpnsCacheSize
 		}
 		if cs < 0 {
-			return nil, fmt.Errorf("cannot specify negative resolve cache size")
+			return nil, errors.New("cannot specify negative resolve cache size")
 		}
 
 		subApi.routing = offlineroute.NewOfflineRouter(subApi.repo.Datastore(), subApi.recordValidator)
@@ -173,7 +173,7 @@ func (api *CoreAPI) WithOptions(opts ...options.ApiOption) (fxfsiface.CoreAPI, e
 			namesys.WithDNSResolver(subApi.dnsResolver),
 			namesys.WithCache(cs))
 		if err != nil {
-			return nil, fmt.Errorf("error constructing namesys: %w", err)
+			return nil, errors.New(fmt.Sprintf("error constructing namesys: %v", err))
 		}
 
 		subApi.provider = provider.NewOfflineProvider()

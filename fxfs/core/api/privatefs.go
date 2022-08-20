@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -66,7 +67,7 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 	//}
 
 	if settings.NoCopy && !(cfg.Experimental.FilestoreEnabled || cfg.Experimental.UrlstoreEnabled) {
-		return nil, fmt.Errorf("either the filestore or the urlstore must be enabled to use nocopy, see: https://github.com/ipfs/kubo/blob/master/docs/experimental-features.md#ipfs-filestore")
+		return nil, errors.New("either the filestore or the urlstore must be enabled to use nocopy, see: https://github.com/ipfs/kubo/blob/master/docs/experimental-features.md#ipfs-filestore")
 	}
 
 	addblockstore := api.blockstore
@@ -133,7 +134,7 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 	case options.TrickleLayout:
 		fileAdder.Trickle = true
 	default:
-		return nil, fmt.Errorf("unknown layout: %d", settings.Layout)
+		return nil, errors.New(fmt.Sprintf("unknown layout: %d", settings.Layout))
 	}
 
 	if settings.Inline {

@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"errors"
 	"fmt"
 
 	logging "github.com/ipfs/go-log"
@@ -53,9 +54,9 @@ func RandomKey(n int) ([]byte, error) {
 
 // Encrypt encrypts plain text string into cipher text string
 func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
-	
+
 	if len(unencrypted)%aes.BlockSize != 0 {
-		err := fmt.Errorf(`plainText: "%s" has the wrong block size`, unencrypted)
+		err := errors.New(fmt.Sprintf(`plainText: "%s" has the wrong block size`, unencrypted))
 		return nil, err
 	}
 

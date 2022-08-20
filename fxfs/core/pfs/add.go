@@ -269,7 +269,7 @@ func (adder *Adder) outputDirs(path string, fsn mfs.FSNode) error {
 
 		return outputDagnode(adder.Out, path, nd)
 	default:
-		return fmt.Errorf("unrecognized fsn type: %#v", fsn)
+		return errors.New(fmt.Sprintf("unrecognized fsn type: %#v", fsn))
 	}
 }
 
@@ -352,7 +352,7 @@ func (adder *Adder) AddAllAndPin(ctx context.Context, file files.Node) (ipld.Nod
 		}
 
 		if len(children) == 0 {
-			return nil, fmt.Errorf("expected at least one child dir, got none")
+			return nil, errors.New("expected at least one child dir, got none")
 		}
 
 		// Replace root with the first child
