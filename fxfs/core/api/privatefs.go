@@ -18,6 +18,7 @@ import (
 	"github.com/ipfs/go-mfs"
 	ft "github.com/ipfs/go-unixfs"
 	unixfile "github.com/ipfs/go-unixfs/file"
+	iface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/options"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/ipfs/kubo/core"
@@ -181,6 +182,10 @@ func (api *PrivateAPI) Get(ctx context.Context, p path.Path) (files.Node, error)
 	}
 
 	return unixfile.NewUnixfsFile(ctx, api.core().getSession(ctx).dag, nd)
+}
+
+func (api *PrivateAPI) Ls(ctx context.Context, p path.Path, opts ...options.UnixfsLsOption) (<-chan iface.DirEntry, error) {
+	return api.nc.Unixfs().Ls(ctx, p, opts...)
 }
 
 func (api *PrivateAPI) core() *CoreAPI {
