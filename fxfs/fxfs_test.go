@@ -17,6 +17,7 @@ import (
 	"github.com/ipfs/go-filestore"
 	files "github.com/ipfs/go-ipfs-files"
 	keystore "github.com/ipfs/go-ipfs-keystore"
+	iface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/core"
@@ -136,7 +137,10 @@ func TestAPI(t *testing.T) {
 		},
 		D: syncds.MutexWrap(datastore.NewMapDatastore()),
 	}
-	node, err := core.NewNode(context.Background(), &core.BuildCfg{Repo: r})
+
+	ctx := context.Background()
+
+	node, err := core.NewNode(ctx, &core.BuildCfg{Repo: r})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +159,7 @@ func TestAPI(t *testing.T) {
 		"DID": files.NewBytesFile([]byte("some data")),
 	})
 	prDir := files.NewMapDirectory(map[string]files.Node{
-		"DID": pfs.NewEncodedFileFromNode(files.NewBytesFile([]byte("some other data")), []byte("JWEEEEEEE")),
+		"DIDP": pfs.NewEncodedFileFromNode(files.NewBytesFile([]byte("some other data")), []byte("JWEEEEEEE")),
 	})
 
 	rootDir := files.NewMapDirectory(map[string]files.Node{
@@ -163,26 +167,29 @@ func TestAPI(t *testing.T) {
 		"private": prDir,
 	})
 
-	puResolved, err := fapi.PublicFS().Add(context.Background(), puDir)
+	puResolved, err := fapi.PublicFS().Add(ctx, puDir)
 	if err != nil {
 		t.Fatal("error in adding puDir", err)
 	}
 
-	prResolved, err := fapi.PrivateFS().Add(context.Background(), prDir)
+	prResolved, err := fapi.PrivateFS().Add(ctx, prDir)
 	if err != nil {
 		t.Fatal("error in adding prDir", err)
 	}
 
-	rootResolved, err := fapi.PublicFS().Add(context.Background(), rootDir)
+	rootResolved, err := fapi.PublicFS().Add(ctx, rootDir)
 	if err != nil {
 		t.Fatal("error in adding rootDir", err)
 	}
 
-	pn, err := fapi.PublicFS().Get(context.Background(), path.New("/ipfs/"+puResolved.Cid().String()+"/DID"))
+	didp := path.New("/ipfs/" + puResolved.Cid().String() + "/DID")
+	didpp := path.New("/ipfs/" + prResolved.Cid().String() + "/DIDP")
+
+	pn, err := fapi.PublicFS().Get(ctx, didp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rn, err := fapi.PrivateFS().Get(context.Background(), path.New("/ipfs/"+prResolved.Cid().String()+"/DID"))
+	rn, err := fapi.PrivateFS().Get(ctx, didpp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,4 +202,37 @@ func TestAPI(t *testing.T) {
 	fmt.Println(pt.JWE())
 	fmt.Println(pnn)
 	fmt.Println(bpt)
+
+	// "Testing PublicFS Ls
+	pudirp := path.New("/ipfs/" + puResolved.Cid().String())
+	lsres, err := fapi.PublicFS().Ls(ctx, pudirp)
+	did := <-lsres
+
+	if did.Name != "DID" || did.Size != 9 {
+		fmt.Println("The file inside public directory is not what expected")
+		t.Fail()
+	}
+
+	x := <-lsres
+	if x.Cid.Defined() || x.Name != "" || x.Size != 0 || x.Type != iface.TUnknown {
+		fmt.Println("More files in directory than expected")
+		t.Fail()
+	}
+
+	// Testing PrivateFS Ls
+	prdirp := path.New("/ipfs/" + prResolved.Cid().String())
+	plsres, err := fapi.PrivateFS().Ls(ctx, prdirp)
+	pdid := <-plsres
+
+	//@TODO add size check for pdid
+	if pdid.Name != "DIDP" {
+		fmt.Println("The file inside private directory is not what expected")
+		t.Fail()
+	}
+
+	x = <-lsres
+	if x.Cid.Defined() || x.Name != "" || x.Size != 0 || x.Type != iface.TUnknown {
+		fmt.Println("More files in directory than expected")
+		t.Fail()
+	}
 }
