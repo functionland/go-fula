@@ -32,10 +32,6 @@ type AddOpts struct {
 	parents bool
 }
 
-type MkDirOpts struct {
-	recursive bool
-}
-
 func NewDrive(userDID string) *UserDrive {
 	return &UserDrive{UserDID: userDID, PrivateSpaceCid: "", PublicSpaceCid: "", Dirs: nil}
 }

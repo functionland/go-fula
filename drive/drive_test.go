@@ -3,12 +3,15 @@ package drive
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 
 	fxfscore "github.com/functionland/go-fula/fxfs/core/api"
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
 	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
+	files "github.com/ipfs/go-ipfs-files"
+	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/coreapi"
@@ -134,22 +137,62 @@ func TestMkDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	x, err := ps.MkDir(ctx, fapi, "/photos/summer", MkDirOpts{recursive: false})
+	x, err := ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("new root /photos/summer", x)
 
-	xxx, err := ps.MkDir(ctx, fapi, "/photos/winter", MkDirOpts{recursive: false})
+	xxx, err := ps.MkDir("/photos/winter", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("new root /photos/winter", xxx)
 
-	xx, err := ps.MkDir(ctx, fapi, "/photos/summer/q1", MkDirOpts{recursive: false})
+	xx, err := ps.MkDir("/photos/summer/q1", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("new root /photos/summer/q1", xx)
 
+}
+
+func TestWriteFile(t *testing.T) {
+	fapi := newFxFsCoreAPI()
+	ctx := context.Background()
+	testUserDID := "did:fula:resolves-to-mehdi-2"
+
+	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ud.Publish(ctx, fapi)
+
+	ps, err := ud.PublicSpace(ctx, fapi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ps.MkDir("/photos/mehdi", MkDirOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := files.NewBytesFile([]byte("some data for the test file"))
+	_, err = ps.WriteFile("/photos/mehdi/data.txt", f, WriteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn, err := ps.api.PublicFS().Get(ps.ctx, path.New("/ipfs/"+ps.rootCid+"/photos/mehdi/data.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fb, err := io.ReadAll(fn.(files.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(fb))
 }
