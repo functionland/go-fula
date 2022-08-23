@@ -17,25 +17,27 @@ const (
 )
 
 type DriveSpace struct {
+	ctx       context.Context
+	api       fxiface.CoreAPI
 	SpaceType DRIVE_SPACE_TYPE
 	rootCid   string
 	RootDir   files.Directory
 }
 
 // MkDir creates a new directory inside a DriveSpace given a path
-func (ds *DriveSpace) MkDir(ctx context.Context, api fxiface.CoreAPI, p string, options MkDirOpts) (string, error) {
+func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	newRoot, err := mkdirDAG(ds.RootDir, p)
 	if err != nil {
 		return "", err
 	}
 
-	n, err := api.PublicFS().Add(ctx, newRoot)
+	n, err := ds.api.PublicFS().Add(ds.ctx, newRoot)
 	if err != nil {
 		return "", err
 	}
 
 	ds.rootCid = n.Cid().String()
-	nRoot, err := api.PublicFS().Get(ctx, path.New("/ipfs/"+ds.rootCid))
+	nRoot, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
 	if err != nil {
 		return "", err
 	}
