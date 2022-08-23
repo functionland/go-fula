@@ -276,3 +276,74 @@ func TestDeleteFile(t *testing.T) {
 		t.Fatal("file must not exist after deletion", err)
 	}
 }
+
+func TestListEntries(t *testing.T) {
+	fapi := newFxFsCoreAPI()
+	ctx := context.Background()
+	testUserDID := "did:fula:resolves-to-mehdi-2"
+
+	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ud.Publish(ctx, fapi)
+
+	ps, err := ud.PublicSpace(ctx, fapi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := files.NewBytesFile([]byte("some data to test ListEntries method"))
+	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ls, err := ps.ListEntries("/", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("ls for /")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
+
+	ls, err = ps.ListEntries("/photos", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("ls for /photos")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
+
+	_, err = ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ps.MkDir("/photos/winter", MkDirOpts{recursive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ls, err = ps.ListEntries("/photos", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("ls for /photos")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
+
+}

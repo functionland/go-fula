@@ -7,6 +7,7 @@ import (
 
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
 	files "github.com/ipfs/go-ipfs-files"
+	ipfsifsce "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 )
 
@@ -30,6 +31,13 @@ type ReadFileOpts struct {
 }
 
 type DeleteFileOpts struct {
+}
+
+type ListEntriesOpts struct {
+}
+
+type ListEntry struct {
+	ipfsifsce.DirEntry
 }
 
 type DriveSpace struct {
@@ -100,6 +108,7 @@ func (ds *DriveSpace) ReadFile(p string, options ReadFileOpts) (files.File, erro
 	return file.(files.File), nil
 }
 
+// Deletes a file at a given location on the drive
 func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, error) {
 	newRoot, err := deletefileDAG(ds.RootDir, p)
 	if err != nil {
@@ -119,6 +128,15 @@ func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, erro
 	ds.RootDir = nRoot.(files.Directory)
 
 	return ds.rootCid, nil
+}
+
+func (ds *DriveSpace) ListEntries(p string, options ListEntriesOpts) (<-chan ipfsifsce.DirEntry, error) {
+	ls, err := ds.api.PublicFS().Ls(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
+	if err != nil {
+		return nil, err
+	}
+
+	return ls, nil
 }
 
 func mkdirDAG(node files.Node, path string) (files.Node, error) {
