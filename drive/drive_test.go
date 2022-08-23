@@ -231,3 +231,48 @@ func TestReadFile(t *testing.T) {
 	}
 	fmt.Println(string(fb))
 }
+
+func TestDeleteFile(t *testing.T) {
+	fapi := newFxFsCoreAPI()
+	ctx := context.Background()
+	testUserDID := "did:fula:resolves-to-mehdi-2"
+
+	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ud.Publish(ctx, fapi)
+
+	ps, err := ud.PublicSpace(ctx, fapi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := files.NewBytesFile([]byte("some data to test DeleteFile method"))
+	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn, err := ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fb, err := io.ReadAll(fn.(files.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(fb))
+
+	_, err = ps.DeleteFile("/photos/data.txt", DeleteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn, err = ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	if err == nil {
+		t.Fatal("file must not exist after deletion", err)
+	}
+}

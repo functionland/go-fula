@@ -3,7 +3,6 @@ package drive
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
@@ -28,6 +27,9 @@ type WriteFileOpts struct {
 }
 
 type ReadFileOpts struct {
+}
+
+type DeleteFileOpts struct {
 }
 
 type DriveSpace struct {
@@ -98,6 +100,27 @@ func (ds *DriveSpace) ReadFile(p string, options ReadFileOpts) (files.File, erro
 	return file.(files.File), nil
 }
 
+func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, error) {
+	newRoot, err := deletefileDAG(ds.RootDir, p)
+	if err != nil {
+		return "", err
+	}
+
+	n, err := ds.api.PublicFS().Add(ds.ctx, newRoot)
+	if err != nil {
+		return "", err
+	}
+
+	ds.rootCid = n.Cid().String()
+	nRoot, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	if err != nil {
+		return "", err
+	}
+	ds.RootDir = nRoot.(files.Directory)
+
+	return ds.rootCid, nil
+}
+
 func mkdirDAG(node files.Node, path string) (files.Node, error) {
 	if files.ToFile(node) != nil {
 		return node, nil
@@ -135,7 +158,8 @@ func mkdirDAG(node files.Node, path string) (files.Node, error) {
 
 func writefileDAG(node files.Node, path string, file files.File) (files.Node, error) {
 	if files.ToFile(node) != nil {
-		fmt.Println("here")
+		// @TODO this edge case needs more consideration. is it even possible for this to happen?
+		return node, nil
 	}
 
 	if files.ToDir(node) != nil {
@@ -167,6 +191,55 @@ func writefileDAG(node files.Node, path string, file files.File) (files.Node, er
 		for dit.Next() {
 			if dit.Name() == dirname {
 				d, err := writefileDAG(dit.Node(), strings.Join(ps, "/"), file)
+				if err != nil {
+					return nil, err
+				}
+				entries = append(entries, files.FileEntry(dit.Name(), d))
+			} else {
+				entries = append(entries, files.FileEntry(dit.Name(), dit.Node()))
+			}
+		}
+		return files.NewSliceDirectory(entries), nil
+	}
+
+	return node, nil
+}
+
+func deletefileDAG(node files.Node, path string) (files.Node, error) {
+	if files.ToFile(node) != nil {
+		// @TODO this edge case needs more consideration. is it even possible for this to happen?
+		return node, nil
+	}
+
+	if files.ToDir(node) != nil {
+		ps := PathSlice(path)
+		dirname := ps[0]
+		ps = ps[1:]
+
+		if len(ps) == 0 {
+			entries := make([]files.DirEntry, 0)
+			dit := node.(files.Directory).Entries()
+			exists := false
+			for dit.Next() {
+				if dit.Name() == dirname {
+					exists = true
+				} else {
+					entries = append(entries, files.FileEntry(dit.Name(), dit.Node()))
+				}
+			}
+
+			if !exists {
+				return nil, errors.New("file not found")
+			}
+
+			return files.NewSliceDirectory(entries), nil
+		}
+
+		entries := make([]files.DirEntry, 0)
+		dit := node.(files.Directory).Entries()
+		for dit.Next() {
+			if dit.Name() == dirname {
+				d, err := deletefileDAG(dit.Node(), strings.Join(ps, "/"))
 				if err != nil {
 					return nil, err
 				}
