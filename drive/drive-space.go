@@ -2,6 +2,7 @@ package drive
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
@@ -16,6 +17,14 @@ const (
 	PRIVATE_DRIVE_SPACE_TYPE DRIVE_SPACE_TYPE = "private"
 )
 
+type MkDirOpts struct {
+	recursive bool
+}
+
+type WriteFileOpts struct {
+	parents bool
+}
+
 type DriveSpace struct {
 	ctx       context.Context
 	api       fxiface.CoreAPI
@@ -27,6 +36,30 @@ type DriveSpace struct {
 // MkDir creates a new directory inside a DriveSpace given a path
 func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	newRoot, err := mkdirDAG(ds.RootDir, p)
+	if err != nil {
+		return "", err
+	}
+
+	n, err := ds.api.PublicFS().Add(ds.ctx, newRoot)
+	if err != nil {
+		return "", err
+	}
+
+	ds.rootCid = n.Cid().String()
+	nRoot, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	if err != nil {
+		return "", err
+	}
+	ds.RootDir = nRoot.(files.Directory)
+
+	return ds.rootCid, nil
+}
+
+// Writes a file into drive at a given location.
+func (ds *DriveSpace) WriteFile(p string, file files.File, options WriteFileOpts) (string, error) {
+	// @TODO handle options.parents = true (create the directories in the path)
+
+	newRoot, err := writefileDAG(ds.RootDir, p, file)
 	if err != nil {
 		return "", err
 	}
@@ -75,6 +108,54 @@ func mkdirDAG(node files.Node, path string) (files.Node, error) {
 			entries = append(entries, files.FileEntry(dirname, files.NewMapDirectory(map[string]files.Node{})))
 		}
 
+		return files.NewSliceDirectory(entries), nil
+	}
+
+	return node, nil
+}
+
+func writefileDAG(node files.Node, path string, file files.File) (files.Node, error) {
+	if files.ToFile(node) != nil {
+		fmt.Println("here")
+	}
+
+	if files.ToDir(node) != nil {
+		ps := PathSlice(path)
+		dirname := ps[0]
+		ps = ps[1:]
+
+		if len(ps) == 0 {
+			entries := make([]files.DirEntry, 0)
+			dit := node.(files.Directory).Entries()
+			for dit.Next() {
+				if dit.Name() == dirname {
+					// the file already exists
+					// @TODO handle options.overwrite (whether replace the existing file or not)
+					//
+
+				} else {
+					entries = append(entries, files.FileEntry(dit.Name(), dit.Node()))
+				}
+			}
+
+			entries = append(entries, files.FileEntry(dirname, file))
+
+			return files.NewSliceDirectory(entries), nil
+		}
+
+		entries := make([]files.DirEntry, 0)
+		dit := node.(files.Directory).Entries()
+		for dit.Next() {
+			if dit.Name() == dirname {
+				d, err := writefileDAG(dit.Node(), strings.Join(ps, "/"), file)
+				if err != nil {
+					return nil, err
+				}
+				entries = append(entries, files.FileEntry(dit.Name(), d))
+			} else {
+				entries = append(entries, files.FileEntry(dit.Name(), dit.Node()))
+			}
+		}
 		return files.NewSliceDirectory(entries), nil
 	}
 
