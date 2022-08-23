@@ -2,6 +2,7 @@ package drive
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -22,7 +23,11 @@ type MkDirOpts struct {
 }
 
 type WriteFileOpts struct {
-	parents bool
+	parents   bool
+	overwrite bool
+}
+
+type ReadFileOpts struct {
 }
 
 type DriveSpace struct {
@@ -77,6 +82,20 @@ func (ds *DriveSpace) WriteFile(p string, file files.File, options WriteFileOpts
 	ds.RootDir = nRoot.(files.Directory)
 
 	return ds.rootCid, nil
+}
+
+// Reads a file from the drive at a given location
+func (ds *DriveSpace) ReadFile(p string, options ReadFileOpts) (files.File, error) {
+	file, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
+	if err != nil {
+		return nil, err
+	}
+
+	if files.ToFile(file) == nil {
+		return nil, errors.New("specified path does not point to a file")
+	}
+
+	return file.(files.File), nil
 }
 
 func mkdirDAG(node files.Node, path string) (files.Node, error) {

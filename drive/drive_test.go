@@ -179,13 +179,48 @@ func TestWriteFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f := files.NewBytesFile([]byte("some data for the test file"))
+	f := files.NewBytesFile([]byte("some data to test WriteFile method"))
 	_, err = ps.WriteFile("/photos/mehdi/data.txt", f, WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fn, err := ps.api.PublicFS().Get(ps.ctx, path.New("/ipfs/"+ps.rootCid+"/photos/mehdi/data.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fb, err := io.ReadAll(fn.(files.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(fb))
+}
+
+func TestReadFile(t *testing.T) {
+	fapi := newFxFsCoreAPI()
+	ctx := context.Background()
+	testUserDID := "did:fula:resolves-to-mehdi-2"
+
+	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ud.Publish(ctx, fapi)
+
+	ps, err := ud.PublicSpace(ctx, fapi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := files.NewBytesFile([]byte("some data to test ReadFile method"))
+	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn, err := ps.ReadFile("/photos/data.txt", ReadFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
