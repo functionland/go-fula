@@ -2,7 +2,6 @@ package drive
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	logging "github.com/ipfs/go-log"
@@ -25,10 +24,6 @@ type UserDrive struct {
 	PublicSpaceCid  string
 	Dirs            map[string]string
 	ds              DriveStore
-}
-
-type AddOpts struct {
-	parents bool
 }
 
 func NewDrive(userDID string, ds DriveStore) UserDrive {
@@ -76,17 +71,6 @@ func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*Dr
 		RootDir:   rootDir.(files.Directory)}, err
 }
 
-func (ud *UserDrive) SpaceDirCid(space DRIVE_SPACE_TYPE) (string, error) {
-	switch space {
-	case PUBLIC_DRIVE_SPACE_TYPE:
-		return ud.PublicSpaceCid, nil
-	case PRIVATE_DRIVE_SPACE_TYPE:
-		return ud.PrivateSpaceCid, nil
-	default:
-		return "", errors.New("invalid space type provided")
-	}
-}
-
 func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 	if ud.IsNull() {
 		puDir := files.NewMapDirectory(map[string]files.Node{
@@ -100,13 +84,13 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 
 		puResolved, err := api.PublicFS().Add(ctx, puDir)
 		if err != nil {
-			fmt.Println("error in adding puDir", err)
+			log.Error("error in adding puDir", err)
 			return err
 		}
 
 		prResolved, err := api.PrivateFS().Add(ctx, prDir)
 		if err != nil {
-			fmt.Println("error in adding prDir", err)
+			log.Error("error in adding prDir", err)
 
 			// @TODO remove pin for puDir
 			return err
@@ -119,13 +103,13 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 
 		err = ud.ds.Update(*ud)
 		if err != nil {
-			fmt.Println("error in putting drive into store", err)
+			log.Error("error in putting drive into store", err)
 			return err
 		}
 	} else {
 		err := ud.ds.Put(*ud)
 		if err != nil {
-			fmt.Println("error in publishing drive", err)
+			log.Error("error in publishing drive", err)
 			return err
 		}
 	}
