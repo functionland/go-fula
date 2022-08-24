@@ -50,11 +50,12 @@ func newFxFsCoreAPI() fxiface.CoreAPI {
 	return fapi
 }
 
-func newDrive(userDID string) (*UserDrive, fxiface.CoreAPI) {
+func newDrive(userDID string) (UserDrive, fxiface.CoreAPI) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, userDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
 		panic(err)
 	}
@@ -64,33 +65,13 @@ func newDrive(userDID string) (*UserDrive, fxiface.CoreAPI) {
 	return ud, fapi
 }
 
-func TestLoadDrive(t *testing.T) {
-
-	fapi := newFxFsCoreAPI()
-	ctx := context.Background()
-	testUserDID := "did:fula:resolves-to-mehdi"
-
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if ud.IsNull() {
-		t.Fatal("LoadDrive returned an empty drive")
-	}
-
-	if ud.UserDID != testUserDID {
-		t.Fatal("LoadDrive returned a drive with wrong UserDID")
-	}
-
-}
-
 func TestPublishDrive(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,8 +85,9 @@ func TestDriveSpace(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-4"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,8 +106,9 @@ func TestMkDir(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,8 +144,9 @@ func TestWriteFile(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,8 +185,9 @@ func TestReadFile(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,8 +221,9 @@ func TestDeleteFile(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,8 +267,9 @@ func TestListEntries(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
 
-	ud, err := LoadDrive(ctx, testUserDID, fapi, map[string]interface{}{})
+	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
 		t.Fatal(err)
 	}

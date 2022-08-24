@@ -26,14 +26,20 @@ type UserDrive struct {
 	PrivateSpaceCid string
 	PublicSpaceCid  string
 	Dirs            map[string]string
+	ds              DriveStore
 }
 
 type AddOpts struct {
 	parents bool
 }
 
-func NewDrive(userDID string) *UserDrive {
-	return &UserDrive{UserDID: userDID, PrivateSpaceCid: "", PublicSpaceCid: "", Dirs: nil}
+func NewDrive(userDID string, ds DriveStore) UserDrive {
+	return UserDrive{UserDID: userDID,
+		PrivateSpaceCid: "",
+		PublicSpaceCid:  "",
+		Dirs:            nil,
+		ds:              ds,
+	}
 }
 
 func (ud *UserDrive) IsNull() bool {
@@ -94,11 +100,6 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 			"DIDP": pfs.NewEncodedFileFromNode(files.NewBytesFile([]byte(ud.UserDID)), []byte("JWE FOR FILE")),
 		})
 
-		rootDir := files.NewMapDirectory(map[string]files.Node{
-			"public":  puDir,
-			"private": prDir,
-		})
-
 		puResolved, err := api.PublicFS().Add(ctx, puDir)
 		if err != nil {
 			fmt.Println("error in adding puDir", err)
@@ -113,28 +114,18 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 			return err
 		}
 
-		rootResolved, err := api.PublicFS().Add(ctx, rootDir)
-		if err != nil {
-			fmt.Println("error in adding rootDir", err)
-
-			// @TODO remove pin for puDir
-			return err
-		}
-
 		ud.PrivateSpaceCid = prResolved.Cid().String()
 		ud.PublicSpaceCid = puResolved.Cid().String()
-
-		fmt.Println("rootResolved", rootResolved.Cid().String())
 		fmt.Println("puResolved", puResolved.Cid().String())
 		fmt.Println("prResolved", prResolved.Cid().String())
 
-		err = PutDrive(*ud)
+		err = ud.ds.Update(*ud)
 		if err != nil {
 			fmt.Println("error in putting drive into store", err)
 			return err
 		}
 	} else {
-		err := PutDrive(*ud)
+		err := ud.ds.Put(*ud)
 		if err != nil {
 			fmt.Println("error in publishing drive", err)
 			return err
@@ -178,24 +169,4 @@ func (ud *UserDrive) AddFile(ctx context.Context, space DRIVE_SPACE_TYPE, writeP
 
 	return nil
 
-}
-
-func LoadDrive(ctx context.Context, userDID string, api fxiface.CoreAPI, options map[string]interface{}) (*UserDrive, error) {
-
-	userDrive, err := ResolveDrive(userDID)
-	if err != nil {
-		if userDrive == nil {
-			fmt.Println("error in drive resolution", err)
-			return nil, err
-		}
-
-		// drive not found creating a new one
-		err := userDrive.Publish(ctx, api)
-		if err != nil {
-			fmt.Println("error in publishing newly created drive", err)
-			return nil, err
-		}
-	}
-
-	return userDrive, nil
 }
