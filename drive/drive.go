@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	logging "github.com/ipfs/go-log"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/functionland/go-fula/fxfs/core/pfs"
 	files "github.com/ipfs/go-ipfs-files"
 	"github.com/ipfs/interface-go-ipfs-core/path"
-	"github.com/ipfs/kubo/core/coreapi"
 )
 
 var log = logging.Logger("fula-drive")
@@ -133,40 +131,4 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 	}
 
 	return nil
-}
-
-func (ud *UserDrive) AddFile(ctx context.Context, space DRIVE_SPACE_TYPE, writePath path.Path, reader io.Reader, api *coreapi.CoreAPI, opts ...AddOpts) error {
-	spaceDirCid, err := ud.SpaceDirCid(space)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	spaceDirPath := path.New("/ipfs/" + spaceDirCid)
-
-	spaceDirNode, err := api.Unixfs().Get(ctx, spaceDirPath)
-	if err != nil {
-		fmt.Println("error in getting space dir", err)
-		return err
-	}
-
-	switch spaceDirNode.(type) {
-	case files.Directory:
-		fmt.Println(fmt.Sprintf("found %s directory for user %s", space, ud.UserDID))
-		fmt.Println(fmt.Sprintf("dir cid: %s", spaceDirCid))
-	case files.File:
-		fmt.Println("error: expected directory found file")
-		return err
-	default:
-		fmt.Println("error: spaceDir node is neither directory nor file")
-		return err
-	}
-
-	it := spaceDirNode.(files.Directory).Entries()
-	for it.Next() {
-		fmt.Println(fmt.Sprintf("Name: %s \nNode: %+v", it.Name(), it.Node()))
-	}
-
-	return nil
-
 }
