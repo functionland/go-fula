@@ -84,7 +84,7 @@ func TestPublishDrive(t *testing.T) {
 func TestDriveSpace(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
-	testUserDID := "did:fula:resolves-to-mehdi-4"
+	testUserDID := "did:fula:resolves-to-mehdi-2"
 	ds := NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
@@ -99,7 +99,74 @@ func TestDriveSpace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("%+v", ps)
+	_, err = ps.MkDir("/data", MkDirOpts{recursive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := files.NewBytesFile([]byte("some data to test ListEntries method"))
+	_, err = ps.WriteFile("/data/test.txt", f, WriteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ls, err := ps.ListEntries("/", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("ls for /")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
+
+	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("\n\nls for /data")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
+
+	_, err = ps.MkDir("/data/summer", MkDirOpts{recursive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("\n\nls for /data")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
+
+	_, err = ps.DeleteFile("/data/test.txt", DeleteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("\n\nls for /data")
+	for entry := range ls {
+		if entry.Err != nil {
+			t.Fatal(entry.Err)
+		}
+		fmt.Printf("%+v \n", entry)
+	}
 }
 
 func TestMkDir(t *testing.T) {
@@ -236,12 +303,12 @@ func TestDeleteFile(t *testing.T) {
 	}
 
 	f := files.NewBytesFile([]byte("some data to test DeleteFile method"))
-	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/data.txt", f, WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err := ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	fn, err := ps.ReadFile("/data.txt", ReadFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,12 +319,12 @@ func TestDeleteFile(t *testing.T) {
 	}
 	fmt.Println(string(fb))
 
-	_, err = ps.DeleteFile("/photos/data.txt", DeleteFileOpts{})
+	_, err = ps.DeleteFile("/data.txt", DeleteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err = ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	fn, err = ps.ReadFile("/data.txt", ReadFileOpts{})
 	if err == nil {
 		t.Fatal("file must not exist after deletion", err)
 	}
@@ -277,6 +344,11 @@ func TestListEntries(t *testing.T) {
 	ud.Publish(ctx, fapi)
 
 	ps, err := ud.PublicSpace(ctx, fapi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ps.MkDir("/photos", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
