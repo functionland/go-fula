@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
+	"github.com/functionland/go-fula/fxfs/core/pfs"
 	files "github.com/ipfs/go-ipfs-files"
 	ipfsifsce "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
@@ -48,6 +49,14 @@ type DriveSpace struct {
 	RootDir   files.Directory
 }
 
+type DrivePublicSpace struct {
+	DriveSpace
+}
+
+type DrivePrivateSpace struct {
+	DriveSpace
+}
+
 // MkDir creates a new directory inside a DriveSpace given a path
 func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	newRoot, err := mkdirDAG(ds.RootDir, p)
@@ -70,8 +79,8 @@ func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	return ds.rootCid, nil
 }
 
-// Writes a file into drive at a given location.
-func (ds *DriveSpace) WriteFile(p string, file files.File, options WriteFileOpts) (string, error) {
+// Writes a file into drive at a given location (in public space).
+func (ds *DrivePublicSpace) WriteFile(p string, file files.File, options WriteFileOpts) (string, error) {
 	// @TODO handle options.parents = true (create the directories in the path)
 
 	newRoot, err := writefileDAG(ds.RootDir, p, file)
@@ -94,8 +103,34 @@ func (ds *DriveSpace) WriteFile(p string, file files.File, options WriteFileOpts
 	return ds.rootCid, nil
 }
 
+// Writes a file into private space in a drive at a given location, it takes a byte array called JWE in addition to DrivePublicSpace.WriteFile
+func (ds *DrivePrivateSpace) WriteFile(p string, file files.File, jwe []byte, options WriteFileOpts) (string, error) {
+	// @TODO handle options.parents = true (create the not-existing directories in the path)
+
+	encFile := pfs.NewEncodedFileFromNode(file, jwe)
+
+	newRoot, err := writefileDAG(ds.RootDir, p, encFile)
+	if err != nil {
+		return "", err
+	}
+
+	n, err := ds.api.PrivateFS().Add(ds.ctx, newRoot)
+	if err != nil {
+		return "", err
+	}
+
+	ds.rootCid = n.Cid().String()
+	nRoot, err := ds.api.PrivateFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	if err != nil {
+		return "", err
+	}
+	ds.RootDir = nRoot.(files.Directory)
+
+	return ds.rootCid, nil
+}
+
 // Reads a file from the drive at a given location
-func (ds *DriveSpace) ReadFile(p string, options ReadFileOpts) (files.File, error) {
+func (ds *DrivePublicSpace) ReadFile(p string, options ReadFileOpts) (files.File, error) {
 	file, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
 	if err != nil {
 		return nil, err
@@ -106,6 +141,20 @@ func (ds *DriveSpace) ReadFile(p string, options ReadFileOpts) (files.File, erro
 	}
 
 	return file.(files.File), nil
+}
+
+// Reads a file from private space in a drive at a give location, it returns and additional JWE byte array
+func (ds *DrivePrivateSpace) ReadFile(p string, options ReadFileOpts) (pfs.EncodedFile, error) {
+	file, err := ds.api.PrivateFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
+	if err != nil {
+		return nil, err
+	}
+
+	if files.ToFile(file) == nil {
+		return nil, errors.New("specified path does not point to a file")
+	}
+
+	return file.(pfs.EncodedFile), nil
 }
 
 // Deletes a file at a given location on the drive
@@ -130,6 +179,7 @@ func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, erro
 	return ds.rootCid, nil
 }
 
+// List all of entries in a path
 func (ds *DriveSpace) ListEntries(p string, options ListEntriesOpts) (<-chan ipfsifsce.DirEntry, error) {
 	ls, err := ds.api.PublicFS().Ls(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
 	if err != nil {
