@@ -2,7 +2,6 @@ package drive
 
 import (
 	"context"
-	"fmt"
 
 	logging "github.com/ipfs/go-log"
 
@@ -74,9 +73,7 @@ func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*Dr
 func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 	if ud.IsNull() {
 		puDir := files.NewMapDirectory(map[string]files.Node{
-			"photos": files.NewMapDirectory(map[string]files.Node{
-				"DID": files.NewBytesFile([]byte(ud.UserDID)),
-			}),
+			"DID": files.NewBytesFile([]byte(ud.UserDID)),
 		})
 		prDir := files.NewMapDirectory(map[string]files.Node{
 			"DIDP": pfs.NewEncodedFileFromNode(files.NewBytesFile([]byte(ud.UserDID)), []byte("JWE FOR FILE")),
@@ -98,8 +95,6 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 
 		ud.PrivateSpaceCid = prResolved.Cid().String()
 		ud.PublicSpaceCid = puResolved.Cid().String()
-		fmt.Println("puResolved", puResolved.Cid().String())
-		fmt.Println("prResolved", prResolved.Cid().String())
 
 		err = ud.ds.Update(*ud)
 		if err != nil {
