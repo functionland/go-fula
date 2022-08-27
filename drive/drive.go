@@ -38,7 +38,7 @@ func (ud *UserDrive) IsNull() bool {
 	return ud.PrivateSpaceCid == "" && ud.PublicSpaceCid == "" && ud.Dirs == nil
 }
 
-func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*DriveSpace, error) {
+func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePublicSpace, error) {
 	rpath := path.New("/ipfs/" + ud.PublicSpaceCid)
 	rootDir, err := api.PublicFS().Get(ctx, rpath)
 	if err != nil {
@@ -46,15 +46,15 @@ func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*Dri
 		return nil, err
 	}
 
-	return &DriveSpace{
+	return &DrivePublicSpace{DriveSpace: DriveSpace{
 		ctx:       ctx,
 		api:       api,
 		SpaceType: PUBLIC_DRIVE_SPACE_TYPE,
 		rootCid:   ud.PublicSpaceCid,
-		RootDir:   rootDir.(files.Directory)}, err
+		RootDir:   rootDir.(files.Directory)}}, err
 }
 
-func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*DriveSpace, error) {
+func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePrivateSpace, error) {
 	rpath := path.New("/ipfs/" + ud.PrivateSpaceCid)
 	rootDir, err := api.PrivateFS().Get(ctx, rpath)
 	if err != nil {
@@ -62,12 +62,12 @@ func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*Dr
 		return nil, err
 	}
 
-	return &DriveSpace{
+	return &DrivePrivateSpace{DriveSpace: DriveSpace{
 		ctx:       ctx,
 		api:       api,
 		SpaceType: PRIVATE_DRIVE_SPACE_TYPE,
 		rootCid:   ud.PrivateSpaceCid,
-		RootDir:   rootDir.(files.Directory)}, err
+		RootDir:   rootDir.(files.Directory)}}, err
 }
 
 func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {

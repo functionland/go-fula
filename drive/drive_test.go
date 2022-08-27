@@ -8,6 +8,7 @@ import (
 
 	fxfscore "github.com/functionland/go-fula/fxfs/core/api"
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
+	"github.com/functionland/go-fula/fxfs/core/pfs"
 	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	files "github.com/ipfs/go-ipfs-files"
@@ -405,4 +406,54 @@ func TestListEntries(t *testing.T) {
 		fmt.Printf("%+v \n", entry)
 	}
 
+}
+
+func TestDrivePrivateSpace(t *testing.T) {
+	fapi := newFxFsCoreAPI()
+	ctx := context.Background()
+	testUserDID := "did:fula:resolves-to-mehdi-2"
+	ds := NewDriveStore()
+
+	ud, err := ds.ResolveCreate(testUserDID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ud.Publish(ctx, fapi)
+
+	ps, err := ud.PrivateSpace(ctx, fapi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ps.MkDir("/photos", MkDirOpts{recursive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFileContent := "some data to test DrivePrivateSpace"
+	testJWEContent := "JWE FOR DrivePrivateSpace"
+	f := files.NewBytesFile([]byte(testFileContent))
+	_, err = ps.WriteFile("/photos/data.txt", f, []byte(testJWEContent), WriteFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ef, err := ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fb, err := io.ReadAll(ef.(pfs.EncodedFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(fb) != testFileContent {
+		t.Fatal("ReadFile returned wrong content for file")
+	}
+
+	if string(ef.JWE()) != testJWEContent {
+		t.Fatal("ReadFile JWE() returned wrong content for file's jwe")
+	}
 }
