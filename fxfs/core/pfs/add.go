@@ -269,7 +269,7 @@ func (adder *Adder) outputDirs(path string, fsn mfs.FSNode) error {
 
 		return outputDagnode(adder.Out, path, nd)
 	default:
-		return errors.New(fmt.Sprintf("unrecognized fsn type: %#v", fsn))
+		return fmt.Errorf("unrecognized fsn type: %#v", fsn)
 	}
 }
 

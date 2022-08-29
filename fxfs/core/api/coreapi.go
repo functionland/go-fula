@@ -173,7 +173,7 @@ func (api *CoreAPI) WithIPFSOptions(opts ...options.ApiOption) (fxfsiface.CoreAP
 			namesys.WithDNSResolver(subApi.dnsResolver),
 			namesys.WithCache(cs))
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error constructing namesys: %v", err))
+			return nil, fmt.Errorf("error constructing namesys: %v", err)
 		}
 
 		subApi.provider = provider.NewOfflineProvider()

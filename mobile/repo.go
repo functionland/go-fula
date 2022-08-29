@@ -1,7 +1,6 @@
 package mobile
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,9 +35,9 @@ func checkWritable(dir string) error {
 		fi, err := os.Create(testfile)
 		if err != nil {
 			if os.IsPermission(err) {
-				return errors.New(fmt.Sprintf("%s is not writeable by the current user", dir))
+				return fmt.Errorf("%s is not writeable by the current user", dir)
 			}
-			return errors.New(fmt.Sprintf("unexpected error while checking writeablility of repo root: %s", err))
+			return fmt.Errorf("unexpected error while checking writeablility of repo root: %s", err)
 		}
 		fi.Close()
 		return os.Remove(testfile)
@@ -50,7 +49,7 @@ func checkWritable(dir string) error {
 	}
 
 	if os.IsPermission(err) {
-		return errors.New(fmt.Sprintf("cannot write to %s, incorrect permissions", err))
+		return fmt.Errorf("cannot write to %s, incorrect permissions", err)
 	}
 
 	return err

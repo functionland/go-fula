@@ -135,7 +135,7 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 	case options.TrickleLayout:
 		fileAdder.Trickle = true
 	default:
-		return nil, errors.New(fmt.Sprintf("unknown layout: %d", settings.Layout))
+		return nil, fmt.Errorf("unknown layout: %d", settings.Layout)
 	}
 
 	if settings.Inline {
