@@ -9,8 +9,6 @@ import (
 	serialize "github.com/ipfs/kubo/config/serialize"
 )
 
-
-
 func initConfig(path string, conf *config.Config) error {
 	if configIsInitialized(path) {
 		return nil
@@ -56,7 +54,6 @@ func checkWritable(dir string) error {
 
 	return err
 }
-
 
 func configIsInitialized(path string) bool {
 	configFilename, err := config.Filename(path, "")
