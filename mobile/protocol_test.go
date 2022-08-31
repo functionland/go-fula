@@ -125,12 +125,10 @@ func MakeAPISwarm(ctx context.Context, fullIdentity bool, n int) ([]fxiface.Core
 	return apis, nodes, nil
 }
 
-func TestNewFileProtocol(t *testing.T) {
-
-	// Initialize IPFS node, register newFile protocol handler
+func initNodes() (network.Stream, error) {
 	apis, nodes, err := MakeAPISwarm(context.Background(), true, 2)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	fapi := apis[0]
 	node1 := nodes[0]
@@ -146,18 +144,28 @@ func TestNewFileProtocol(t *testing.T) {
 	bs2 := []peer.AddrInfo{node2.Peerstore.PeerInfo(node2.Identity)}
 
 	if err := node2.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs1)); err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	if err := node1.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs2)); err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 
 	s, err := node2.PeerHost.NewStream(ctx, node1.PeerHost.ID(), newFile.PROTOCOL)
 	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func TestNewFileProtocol(t *testing.T) {
+
+	s, err := initNodes()
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := newFile.ReadFile(ctx, s, "/DID", "MEHDI_DID")
+	res, err := newFile.RequestRead(context.Background(), s, "/DID", "MEHDI_DID")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,4 +179,19 @@ func TestNewFileProtocol(t *testing.T) {
 	if string(file) != "MEHDI_DID" {
 		t.Fatal("result is not as expected")
 	}
+}
+
+func TestMkDirAction(t *testing.T) {
+	s, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dcid, err := newFile.RequestMkDir(context.Background(), s, "/photos", "MEHDI_DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("RES:", dcid)
+
 }
