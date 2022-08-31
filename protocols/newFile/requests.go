@@ -11,7 +11,8 @@ import (
 
 var log = logging.Logger("newFilePL")
 
-func ReadFile(ctx context.Context, s network.Stream, path string, userDID string) (io.Reader, error) {
+// Send an FSRequest for Read action, return a io.Reader to read file from the stream
+func RequestRead(ctx context.Context, s network.Stream, path string, userDID string) (io.Reader, error) {
 
 	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_READ}
 
@@ -38,6 +39,7 @@ func ReadFile(ctx context.Context, s network.Stream, path string, userDID string
 
 	go func() {
 		defer pw.Close()
+		defer s.Close()
 
 		if _, err := io.Copy(pw, s); err != nil {
 			log.Error("error in reading file from stream", err)
@@ -45,21 +47,37 @@ func ReadFile(ctx context.Context, s network.Stream, path string, userDID string
 	}()
 
 	return pr, nil
-	//Read file from the stream
-	// buf, err := io.ReadAll(s)
-	// if err != nil {
-	// 	log.Error("can't read result from stream")
-	// 	s.Reset()
-	// 	return nil, err
-	// }
-	// id := string(buf)
-	// log.Debugf("received cid: %s", id)
-	// err = s.CloseRead()
-	// if err != nil {
-	// 	log.Error("failed to close read stream. ", err)
-	// 	s.Reset()
-	// 	return nil, err
-	// }
-	// s.Close()
-	// return id, nil
+}
+
+// Send an FSRequest for MkDir action, wait until receiving a cid for the directory
+func RequestMkDir(ctx context.Context, s network.Stream, path string, userDID string) (string, error) {
+	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_MKDIR}
+
+	reqMsg, err := proto.Marshal(fsReq)
+	if err != nil {
+		return "", err
+	}
+
+	n, err := s.Write(reqMsg)
+	if err != nil {
+		return "", err
+	}
+	log.Debugf("readFile req sent, wrote %d bytes on stream", n)
+
+	err = s.CloseWrite()
+	if err != nil {
+		log.Error("can't close write stream. ", err)
+		s.Reset()
+		return "", err
+	}
+	log.Debug("stream write closed successfuly")
+
+	bcid, err := io.ReadAll(s)
+	if err != nil {
+		log.Error("coudn't receive the cid ", err)
+		s.Reset()
+		return "", err
+	}
+
+	return string(bcid), nil
 }
