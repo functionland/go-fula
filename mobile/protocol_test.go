@@ -1,6 +1,7 @@
 package mobile
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -194,4 +195,19 @@ func TestMkDirAction(t *testing.T) {
 
 	fmt.Println("RES:", dcid)
 
+}
+
+func TestWriteAction(t *testing.T) {
+	s, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := bytes.NewReader([]byte("some test content for file"))
+	fcid, err := newFile.RequestWrite(context.Background(), s, "/data.txt", "MEHDI_DID", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("RES: ", fcid)
 }
