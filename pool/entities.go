@@ -13,17 +13,20 @@ type ReplicationFactor int8
 type Requirement struct {
 	Latency   string `json:"latency"`
 	Bandwidth string `json:"bandwidth"`
-	ReplicationFactor ReplicationFactor `json:"rep_factor"`
 }
 
 // ResourceRequest object (it is much more complicated for simplicity we think as file).
-type Resource struct {
+type ResourceRequest struct {
 	ID  ID `json:"id"`
-	FileName  Name
-	Owner     Peer
-	Size      string
-	ReplicationFactor ReplicationFactor
-	Allocation []Peer
+	FileName  Name `json:"filename"`
+	Owner     Peer  `json:"owner"`
+	Size      string `json:"size"`
+	ReplicationFactor ReplicationFactor `json:"rp"`
+}
+
+type Resource struct{
+	ResourceRequest
+	Allocation []Peer 
 }
 
 
@@ -50,7 +53,7 @@ type PoolCreated struct {
 // ResourceRequested Event
 type ResourceRequested struct {
 	ID               ID               `json:"id"`
-	ResourceRequest  Resource         `json:"new_resource"`
+	ResourceRequest  ResourceRequest         `json:"new_resource"`
 }
 
 // ResourceAllocated Event
@@ -98,27 +101,27 @@ func NewFromEvents(events []Event) *Pool {
 	return p
 }
 
-func (p Pool) ID() ID {
+func (p *Pool) ID() ID {
 	return p.id
 }
 
-func (p Pool) Name() Name {
+func (p *Pool) Name() Name {
 	return p.name
 }
 
-func (p Pool) Creator() Peer {
+func (p *Pool) Creator() Peer {
 	return p.creator
 }
 
-func (p Pool) Members() []Peer {
+func (p *Pool) Members() []Peer {
 	return p.members
 }
 
-func (p Pool) Requirement() Requirement {
+func (p *Pool) Requirement() Requirement {
 	return p.requirement
 }
 
-func (p Pool) Allocated() []Resource {
+func (p *Pool) Allocated() []Resource {
 	//TODO: have to go through resources and check if the replication factor is the same as len allocation
 	return p.resources
 }
@@ -144,7 +147,7 @@ func New(id ID, name Name, creator Peer, members []Peer, requirement Requirement
 }
 
 // request network for new resource allocation
-func (p Pool) RequestResource(r Resource) error {
+func (p *Pool) RequestResource(r ResourceRequest) error {
 	//TODO check if the resource is already exist and allocation already satisfied
 	
 	p.raise(&ResourceRequested{
@@ -156,9 +159,9 @@ func (p Pool) RequestResource(r Resource) error {
 }
 
 // Allocated the resource to specific peer.
-func (p Pool) AllocateResource(resource ID, peer Peer) error {
+func (p *Pool) AllocateResource(resource ID, peer Peer) error {
 	//TODO check if resource did not over allocated
-	// Should i bring peer selection inside the model model?
+	// Should i bring peer selection inside the model or just interface that it need?
 
 	p.raise(&ResourceAllocated{
 		ID: p.id,
@@ -167,4 +170,87 @@ func (p Pool) AllocateResource(resource ID, peer Peer) error {
 	})
 	
 	return nil
+}
+
+// Add peer to pool
+func (p *Pool) Join(candidate Peer) error {
+	// TODO: 
+	// Should i bring peer condition and voting inside the model or just interface that it need?
+
+	p.raise(&MemberJoined{
+		Member: candidate,
+		ID: p.id,
+	})
+
+	return nil
+}
+
+// Leave peer to pool
+func (p *Pool) Leave(member Peer) error {
+	// TODO: have to check all allocation the peer handled. Maybe create a specific Event for it .
+
+	p.raise(&MemberLeaved{
+		Member: member,
+		ID: p.id,
+	})
+
+	return nil
+}
+
+
+// On handle pool event on pool aggregate.
+func (p *Pool) On(event Event, new bool) {
+	switch e := event.(type) {
+	case *PoolCreated:
+		p.id = e.ID
+		p.creator = e.Creator
+		p.members = e.Members
+		p.name = e.Name
+		p.requirement = e.Requirement
+		p.resources = make([]Resource, 0)
+
+	case *ResourceAllocated:
+		for i,r := range p.resources {
+			if r.ID == e.Resource {
+				resource := p.resources[i]
+				resource.Allocation = append(resource.Allocation, e.Allocation)
+				p.resources[i] = resource
+			}
+		}
+
+	case *ResourceRequested:
+		r := &Resource{
+			ResourceRequest: e.ResourceRequest,
+			Allocation: make([]Peer, 0),
+
+		}
+		p.resources = append(p.resources, *r) 
+
+	case *MemberJoined:
+		p.members = append(p.members, e.Member)
+
+	case *MemberLeaved:	
+		fm := make([]Peer,0)
+		for _,m := range p.members{
+			if m != e.Member{
+				fm = append(fm, m)
+			}
+		}
+		p.members = fm
+	}
+	if !new {
+		p.version++
+	}
+	
+		 
+}
+
+// Events returns the uncommitted events from the pool aggregate.
+func (p *Pool) Events() []Event {
+	return p.changes
+}
+
+func (p *Pool) raise(event Event) {
+	p.changes = append(p.changes, event)
+	p.On(event, true)
 }
