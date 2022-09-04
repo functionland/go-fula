@@ -2,15 +2,6 @@ syntax = "proto3";
 option go_package = "github.com/functionland/go-fula/protocols/newFile";
 package newFile;
 
-// message Request {
-//     What what = 1;
-//     Where where = 2;
-// }
-
-// message What {
-//     Payload payload = 2;
-// }
-
 message FSRequest {
     string DID = 1;
     string path = 2;
