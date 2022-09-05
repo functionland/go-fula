@@ -46,10 +46,10 @@ func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*Dri
 	}
 
 	return &DrivePublicSpace{DriveSpace: DriveSpace{
-		ctx:       ctx,
-		api:       api,
+		Ctx:       ctx,
+		Api:       api,
 		SpaceType: PublicDriveSpaceType,
-		rootCid:   ud.PublicSpaceCid,
+		RootCid:   ud.PublicSpaceCid,
 		RootDir:   rootDir.(files.Directory)}}, err
 }
 
@@ -62,10 +62,10 @@ func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*Dr
 	}
 
 	return &DrivePrivateSpace{DriveSpace: DriveSpace{
-		ctx:       ctx,
-		api:       api,
+		Ctx:       ctx,
+		Api:       api,
 		SpaceType: PrivateDriveSpaceType,
-		rootCid:   ud.PrivateSpaceCid,
+		RootCid:   ud.PrivateSpaceCid,
 		RootDir:   rootDir.(files.Directory)}}, err
 }
 

@@ -1,13 +1,14 @@
-package drive
+package drive_test
 
 import (
 	"context"
 	"io"
 	"testing"
 
+	fdrive "github.com/functionland/go-fula/drive"
 	fxfscore "github.com/functionland/go-fula/fxfs/core/api"
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
-	"github.com/functionland/go-fula/fxfs/core/pfs"
+	pfs "github.com/functionland/go-fula/fxfs/core/pfs"
 	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	files "github.com/ipfs/go-ipfs-files"
@@ -50,10 +51,10 @@ func newFxFsCoreAPI() fxiface.CoreAPI {
 	return fapi
 }
 
-func newDrive(userDID string) (UserDrive, fxiface.CoreAPI) {
+func newDrive(userDID string) (fdrive.UserDrive, fxiface.CoreAPI) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
@@ -69,7 +70,7 @@ func TestPublishDrive(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -85,7 +86,7 @@ func TestDriveSpace(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -99,18 +100,18 @@ func TestDriveSpace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ps.MkDir("/data", MkDirOpts{recursive: false})
+	_, err = ps.MkDir("/data", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	f := files.NewBytesFile([]byte("some data to test ListEntries method"))
-	_, err = ps.WriteFile("/data/test.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/data/test.txt", f, fdrive.WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ls, err := ps.ListEntries("/", ListEntriesOpts{})
+	ls, err := ps.ListEntries("/", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +123,7 @@ func TestDriveSpace(t *testing.T) {
 		t.Logf("%+v \n", entry)
 	}
 
-	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
+	ls, err = ps.ListEntries("/data", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,12 +135,12 @@ func TestDriveSpace(t *testing.T) {
 		t.Logf("%+v \n", entry)
 	}
 
-	_, err = ps.MkDir("/data/summer", MkDirOpts{recursive: false})
+	_, err = ps.MkDir("/data/summer", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
+	ls, err = ps.ListEntries("/data", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,12 +152,12 @@ func TestDriveSpace(t *testing.T) {
 		t.Logf("%+v \n", entry)
 	}
 
-	_, err = ps.DeleteFile("/data/test.txt", DeleteFileOpts{})
+	_, err = ps.DeleteFile("/data/test.txt", fdrive.DeleteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
+	ls, err = ps.ListEntries("/data", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +174,7 @@ func TestMkDir(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -187,25 +188,25 @@ func TestMkDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	y, err := ps.MkDir("/photos", MkDirOpts{recursive: false})
+	y, err := ps.MkDir("/photos", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("new root /photos", y)
 
-	x, err := ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
+	x, err := ps.MkDir("/photos/summer", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("new root /photos/summer", x)
 
-	xxx, err := ps.MkDir("/photos/winter", MkDirOpts{recursive: false})
+	xxx, err := ps.MkDir("/photos/winter", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("new root /photos/winter", xxx)
 
-	xx, err := ps.MkDir("/photos/summer/q1", MkDirOpts{recursive: false})
+	xx, err := ps.MkDir("/photos/summer/q1", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +218,7 @@ func TestWriteFile(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -231,18 +232,18 @@ func TestWriteFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ps.MkDir("/photos", MkDirOpts{})
+	_, err = ps.MkDir("/photos", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	f := files.NewBytesFile([]byte("some data to test WriteFile method"))
-	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/photos/data.txt", f, fdrive.WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err := ps.api.PublicFS().Get(ps.ctx, path.New("/ipfs/"+ps.rootCid+"/photos/data.txt"))
+	fn, err := ps.Api.PublicFS().Get(ps.Ctx, path.New("/ipfs/"+ps.RootCid+"/photos/data.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +259,7 @@ func TestReadFile(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -273,12 +274,12 @@ func TestReadFile(t *testing.T) {
 	}
 
 	f := files.NewBytesFile([]byte("some data to test ReadFile method"))
-	_, err = ps.WriteFile("/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/data.txt", f, fdrive.WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err := ps.ReadFile("/data.txt", ReadFileOpts{})
+	fn, err := ps.ReadFile("/data.txt", fdrive.ReadFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +295,7 @@ func TestDeleteFile(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -309,12 +310,12 @@ func TestDeleteFile(t *testing.T) {
 	}
 
 	f := files.NewBytesFile([]byte("some data to test DeleteFile method"))
-	_, err = ps.WriteFile("/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/data.txt", f, fdrive.WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err := ps.ReadFile("/data.txt", ReadFileOpts{})
+	fn, err := ps.ReadFile("/data.txt", fdrive.ReadFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,12 +326,12 @@ func TestDeleteFile(t *testing.T) {
 	}
 	t.Log(string(fb))
 
-	_, err = ps.DeleteFile("/data.txt", DeleteFileOpts{})
+	_, err = ps.DeleteFile("/data.txt", fdrive.DeleteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err = ps.ReadFile("/data.txt", ReadFileOpts{})
+	fn, err = ps.ReadFile("/data.txt", fdrive.ReadFileOpts{})
 	if err == nil {
 		t.Fatal("file must not exist after deletion", err)
 	}
@@ -340,7 +341,7 @@ func TestListEntries(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -354,18 +355,18 @@ func TestListEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ps.MkDir("/photos", MkDirOpts{recursive: false})
+	_, err = ps.MkDir("/photos", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	f := files.NewBytesFile([]byte("some data to test ListEntries method"))
-	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/photos/data.txt", f, fdrive.WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ls, err := ps.ListEntries("/", ListEntriesOpts{})
+	ls, err := ps.ListEntries("/", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +378,7 @@ func TestListEntries(t *testing.T) {
 		t.Logf("%+v \n", entry)
 	}
 
-	ls, err = ps.ListEntries("/photos", ListEntriesOpts{})
+	ls, err = ps.ListEntries("/photos", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,17 +390,17 @@ func TestListEntries(t *testing.T) {
 		t.Logf("%+v \n", entry)
 	}
 
-	_, err = ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
+	_, err = ps.MkDir("/photos/summer", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = ps.MkDir("/photos/winter", MkDirOpts{recursive: false})
+	_, err = ps.MkDir("/photos/winter", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ls, err = ps.ListEntries("/photos", ListEntriesOpts{})
+	ls, err = ps.ListEntries("/photos", fdrive.ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +418,7 @@ func TestDrivePrivateSpace(t *testing.T) {
 	fapi := newFxFsCoreAPI()
 	ctx := context.Background()
 	testUserDID := "did:fula:resolves-to-mehdi-2"
-	ds := NewDriveStore()
+	ds := fdrive.NewDriveStore()
 
 	ud, err := ds.ResolveCreate(testUserDID)
 	if err != nil {
@@ -431,7 +432,7 @@ func TestDrivePrivateSpace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ps.MkDir("/photos", MkDirOpts{recursive: false})
+	_, err = ps.MkDir("/photos", fdrive.MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,12 +440,12 @@ func TestDrivePrivateSpace(t *testing.T) {
 	testFileContent := "some data to test DrivePrivateSpace"
 	testJWEContent := "JWE FOR DrivePrivateSpace"
 	f := files.NewBytesFile([]byte(testFileContent))
-	_, err = ps.WriteFile("/photos/data.txt", f, []byte(testJWEContent), WriteFileOpts{})
+	_, err = ps.WriteFile("/photos/data.txt", f, []byte(testJWEContent), fdrive.WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ef, err := ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	ef, err := ps.ReadFile("/photos/data.txt", fdrive.ReadFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}

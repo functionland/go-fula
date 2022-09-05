@@ -42,10 +42,10 @@ type ListEntry struct {
 }
 
 type DriveSpace struct {
-	ctx       context.Context
-	api       fxiface.CoreAPI
+	Ctx       context.Context
+	Api       fxiface.CoreAPI
 	SpaceType DriveSpaceType
-	rootCid   string
+	RootCid   string
 	RootDir   files.Directory
 }
 
@@ -68,19 +68,19 @@ func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 		return "", err
 	}
 
-	n, err := ds.api.PublicFS().Add(ds.ctx, newRoot)
+	n, err := ds.Api.PublicFS().Add(ds.Ctx, newRoot)
 	if err != nil {
 		return "", err
 	}
 
-	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid))
+	ds.RootCid = n.Cid().String()
+	nRoot, err := ds.Api.PublicFS().Get(ds.Ctx, makePath(ds.RootCid))
 	if err != nil {
 		return "", err
 	}
 	ds.RootDir = nRoot.(files.Directory)
 
-	return ds.rootCid, nil
+	return ds.RootCid, nil
 }
 
 // Writes a file into drive at a given location (in public space).
@@ -92,19 +92,19 @@ func (ds *DrivePublicSpace) WriteFile(p string, file files.File, options WriteFi
 		return "", err
 	}
 
-	n, err := ds.api.PublicFS().Add(ds.ctx, newRoot)
+	n, err := ds.Api.PublicFS().Add(ds.Ctx, newRoot)
 	if err != nil {
 		return "", err
 	}
 
-	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid))
+	ds.RootCid = n.Cid().String()
+	nRoot, err := ds.Api.PublicFS().Get(ds.Ctx, makePath(ds.RootCid))
 	if err != nil {
 		return "", err
 	}
 	ds.RootDir = nRoot.(files.Directory)
 
-	return ds.rootCid, nil
+	return ds.RootCid, nil
 }
 
 // Writes a file into private space in a drive at a given location, it takes a byte array called JWE in addition to DrivePublicSpace.WriteFile
@@ -118,24 +118,24 @@ func (ds *DrivePrivateSpace) WriteFile(p string, file files.File, jwe []byte, op
 		return "", err
 	}
 
-	n, err := ds.api.PrivateFS().Add(ds.ctx, newRoot)
+	n, err := ds.Api.PrivateFS().Add(ds.Ctx, newRoot)
 	if err != nil {
 		return "", err
 	}
 
-	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PrivateFS().Get(ds.ctx, makePath(ds.rootCid))
+	ds.RootCid = n.Cid().String()
+	nRoot, err := ds.Api.PrivateFS().Get(ds.Ctx, makePath(ds.RootCid))
 	if err != nil {
 		return "", err
 	}
 	ds.RootDir = nRoot.(files.Directory)
 
-	return ds.rootCid, nil
+	return ds.RootCid, nil
 }
 
 // Reads a file from the drive at a given location
 func (ds *DrivePublicSpace) ReadFile(p string, options ReadFileOpts) (files.File, error) {
-	file, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid, p))
+	file, err := ds.Api.PublicFS().Get(ds.Ctx, makePath(ds.RootCid, p))
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (ds *DrivePublicSpace) ReadFile(p string, options ReadFileOpts) (files.File
 
 // Reads a file from private space in a drive at a give location, it returns and additional JWE byte array
 func (ds *DrivePrivateSpace) ReadFile(p string, options ReadFileOpts) (pfs.EncodedFile, error) {
-	file, err := ds.api.PrivateFS().Get(ds.ctx, makePath(ds.rootCid, p))
+	file, err := ds.Api.PrivateFS().Get(ds.Ctx, makePath(ds.RootCid, p))
 	if err != nil {
 		return nil, err
 	}
@@ -168,24 +168,24 @@ func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, erro
 		return "", err
 	}
 
-	n, err := ds.api.PublicFS().Add(ds.ctx, newRoot)
+	n, err := ds.Api.PublicFS().Add(ds.Ctx, newRoot)
 	if err != nil {
 		return "", err
 	}
 
-	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid))
+	ds.RootCid = n.Cid().String()
+	nRoot, err := ds.Api.PublicFS().Get(ds.Ctx, makePath(ds.RootCid))
 	if err != nil {
 		return "", err
 	}
 	ds.RootDir = nRoot.(files.Directory)
 
-	return ds.rootCid, nil
+	return ds.RootCid, nil
 }
 
 // List all of entries in a path
 func (ds *DriveSpace) ListEntries(p string, options ListEntriesOpts) (<-chan ipfsifsce.DirEntry, error) {
-	ls, err := ds.api.PublicFS().Ls(ds.ctx, makePath(ds.rootCid, p))
+	ls, err := ds.Api.PublicFS().Ls(ds.Ctx, makePath(ds.RootCid, p))
 	if err != nil {
 		return nil, err
 	}
