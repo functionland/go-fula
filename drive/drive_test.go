@@ -2,7 +2,6 @@ package drive
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"testing"
 
@@ -79,7 +78,7 @@ func TestPublishDrive(t *testing.T) {
 
 	ud.Publish(ctx, fapi)
 
-	fmt.Printf("%+v", ud)
+	t.Logf("%+v", ud)
 }
 
 func TestDriveSpace(t *testing.T) {
@@ -115,24 +114,24 @@ func TestDriveSpace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("ls for /")
+	t.Log("ls for /")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 
 	ls, err = ps.ListEntries("/data", ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("\n\nls for /data")
+	t.Log("\n\nls for /data")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 
 	_, err = ps.MkDir("/data/summer", MkDirOpts{recursive: false})
@@ -144,12 +143,12 @@ func TestDriveSpace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("\n\nls for /data")
+	t.Log("\n\nls for /data")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 
 	_, err = ps.DeleteFile("/data/test.txt", DeleteFileOpts{})
@@ -161,12 +160,12 @@ func TestDriveSpace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("\n\nls for /data")
+	t.Log("\n\nls for /data")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 }
 
@@ -192,25 +191,25 @@ func TestMkDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("new root /photos", y)
+	t.Log("new root /photos", y)
 
 	x, err := ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("new root /photos/summer", x)
+	t.Log("new root /photos/summer", x)
 
 	xxx, err := ps.MkDir("/photos/winter", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("new root /photos/winter", xxx)
+	t.Log("new root /photos/winter", xxx)
 
 	xx, err := ps.MkDir("/photos/summer/q1", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("new root /photos/summer/q1", xx)
+	t.Log("new root /photos/summer/q1", xx)
 
 }
 
@@ -252,7 +251,7 @@ func TestWriteFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(string(fb))
+	t.Log(string(fb))
 }
 
 func TestReadFile(t *testing.T) {
@@ -288,7 +287,7 @@ func TestReadFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(string(fb))
+	t.Log(string(fb))
 }
 
 func TestDeleteFile(t *testing.T) {
@@ -324,7 +323,7 @@ func TestDeleteFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(string(fb))
+	t.Log(string(fb))
 
 	_, err = ps.DeleteFile("/data.txt", DeleteFileOpts{})
 	if err != nil {
@@ -370,24 +369,24 @@ func TestListEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("ls for /")
+	t.Log("ls for /")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 
 	ls, err = ps.ListEntries("/photos", ListEntriesOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("ls for /photos")
+	t.Log("ls for /photos")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 
 	_, err = ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
@@ -404,12 +403,12 @@ func TestListEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("ls for /photos")
+	t.Log("ls for /photos")
 	for entry := range ls {
 		if entry.Err != nil {
 			t.Fatal(entry.Err)
 		}
-		fmt.Printf("%+v \n", entry)
+		t.Logf("%+v \n", entry)
 	}
 
 }
