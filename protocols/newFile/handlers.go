@@ -39,6 +39,10 @@ func Handle(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, s net
 		return HandleMkDir(ctx, api, ds, req.Path, req.DID, s)
 	case ActionType_WRITE:
 		return HandleWrite(ctx, api, ds, req.Path, req.DID, s)
+	case ActionType_DELETE:
+		return HandleDelete(ctx, api, ds, req.Path, req.DID, s)
+	case ActionType_LS:
+		return HandleLs(ctx, api, ds, req.Path, req.DID, s)
 	default:
 		s.Reset()
 		return fmt.Errorf("Action Type not supported: %s", req.Action)
@@ -107,6 +111,80 @@ func HandleMkDir(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 
 		if _, err := s.Write([]byte(dcid)); err != nil {
 			log.Error("error in writing directory cid on the stream", err)
+		}
+	}()
+
+	return nil
+}
+
+// Handle FSRequest with Delete action, delete a Node at a given location in the user's drive
+func HandleDelete(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
+	ud, err := ds.ResolveCreate(userDID)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	ud.Publish(ctx, api)
+
+	ps, err := ud.PublicSpace(ctx, api)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	_, err = ps.DeleteFile(path, drive.DeleteFileOpts{})
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	go func() {
+		defer s.CloseWrite()
+
+		if _, err := s.Write([]byte{1}); err != nil {
+			log.Error("error in writing delete ack on the stream", err)
+		}
+	}()
+
+	return nil
+}
+
+// Handle FSRequest with Ls action, list entries existing in a given path in a user's drive
+func HandleLs(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
+	ud, err := ds.ResolveCreate(userDID)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	ud.Publish(ctx, api)
+
+	ps, err := ud.PublicSpace(ctx, api)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	de, err := ps.ListEntries(path, drive.ListEntriesOpts{})
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	items := make([]*DirEntry, 0)
+	for d := range de {
+		items = append(items, &DirEntry{Name: d.Name, Type: EntryType(d.Type), Cid: d.Cid.String(), Size: int32(d.Size)})
+	}
+	dents := &DirEntries{Items: items}
+
+	go func() {
+		defer s.CloseWrite()
+
+		dbuf, err := proto.Marshal(dents)
+		if err != nil {
+			log.Error("error in encoding the DirEntries")
+		}
+		if _, err := s.Write(dbuf); err != nil {
+			log.Error("error in writing directory entries on the stream", err)
 		}
 	}()
 
