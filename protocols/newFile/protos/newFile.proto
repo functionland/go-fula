@@ -41,7 +41,7 @@ message File {
 }
 
 message DirEntries {
-    repeated DirEntries items = 1;
+    repeated DirEntry items = 1;
 }
 
 message DirEntry {
