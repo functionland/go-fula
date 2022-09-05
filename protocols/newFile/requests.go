@@ -66,7 +66,7 @@ func RequestMkDir(ctx context.Context, s network.Stream, path string, userDID st
 
 	err := sendRequest(fsReq, s)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	bcid, err := io.ReadAll(s)
@@ -85,7 +85,7 @@ func RequestWrite(ctx context.Context, s network.Stream, path string, userDID st
 
 	err := sendRequest(fsReq, s)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	if _, err := io.Copy(s, f); err != nil {
@@ -104,4 +104,45 @@ func RequestWrite(ctx context.Context, s network.Stream, path string, userDID st
 	s.CloseRead()
 
 	return string(bcid), nil
+}
+
+// Send and FSRequest for Delete action, wait until receiving an ack (a one byte)
+func RequestDelete(ctx context.Context, s network.Stream, path string, userDID string) error {
+	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_DELETE}
+
+	err := sendRequest(fsReq, s)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.ReadAll(s)
+	if err != nil {
+		log.Error("couldn't receive the cid ", err)
+		s.Reset()
+		return err
+	}
+
+	return nil
+}
+
+// Send and FSRequest for Ls action, wait until receiving a list of DirEntries
+func RequestLs(ctx context.Context, s network.Stream, path string, userDID string) (*DirEntries, error) {
+	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_LS}
+
+	err := sendRequest(fsReq, s)
+	if err != nil {
+		return nil, err
+	}
+
+	dbuf, err := io.ReadAll(s)
+	if err != nil {
+		log.Error("couldn't receive the cid ", err)
+		s.Reset()
+		return nil, err
+	}
+
+	dentries := &DirEntries{}
+	proto.Unmarshal(dbuf, dentries)
+
+	return dentries, nil
 }

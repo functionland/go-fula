@@ -211,3 +211,36 @@ func TestWriteAction(t *testing.T) {
 
 	fmt.Println("RES: ", fcid)
 }
+
+func TestDeleteAction(t *testing.T) {
+	s, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	de, err := newFile.RequestLs(context.Background(), s, "/", "MEHDI_DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(de)
+
+	err = newFile.RequestDelete(context.Background(), s, "/DID", "MEHDI_DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("deleted file")
+}
+
+func TestLsAction(t *testing.T) {
+	s, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	de, err := newFile.RequestLs(context.Background(), s, "/", "MEHDI_DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(de)
+
+}
