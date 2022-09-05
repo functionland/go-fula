@@ -20,12 +20,9 @@ const (
 )
 
 type MkDirOpts struct {
-	recursive bool
 }
 
 type WriteFileOpts struct {
-	parents   bool
-	overwrite bool
 }
 
 type ReadFileOpts struct {
@@ -41,6 +38,8 @@ type ListEntry struct {
 	ipfsifsce.DirEntry
 }
 
+// DriveSpace holds information about a space inside a user's drive
+// A drive space can be either Private or Public, SpactType indicates this
 type DriveSpace struct {
 	Ctx       context.Context
 	Api       fxiface.CoreAPI
@@ -49,10 +48,12 @@ type DriveSpace struct {
 	RootDir   files.Directory
 }
 
+// Public space inside a Drive
 type DrivePublicSpace struct {
 	DriveSpace
 }
 
+// Private space inside a Drive
 type DrivePrivateSpace struct {
 	DriveSpace
 }

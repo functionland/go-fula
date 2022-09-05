@@ -2,6 +2,7 @@ package drive
 
 import "strings"
 
+// Convert a path into a slice containing segments of the path
 func PathSlice(path string) []string {
 	sp := strings.Split(path, "/")
 

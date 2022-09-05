@@ -12,10 +12,8 @@ import (
 
 var log = logging.Logger("fula-drive")
 
-type Drives struct {
-	Drives []UserDrive `json:"drives"`
-}
-
+// UserDrive holds necessary info to identify a user's drive on the network
+// It holds info about user's ID, root cids for each space and a DriveStore instance
 type UserDrive struct {
 	UserDID         string
 	PrivateSpaceCid string
@@ -24,6 +22,7 @@ type UserDrive struct {
 	ds              DriveStore
 }
 
+// Create a new null Drive, the only field set is the UserDID, other fields are initialized by first call to Publish
 func NewDrive(userDID string, ds DriveStore) UserDrive {
 	return UserDrive{UserDID: userDID,
 		PrivateSpaceCid: "",
@@ -33,10 +32,12 @@ func NewDrive(userDID string, ds DriveStore) UserDrive {
 	}
 }
 
+// Check if a drive is null
 func (ud *UserDrive) IsNull() bool {
 	return ud.PrivateSpaceCid == "" && ud.PublicSpaceCid == "" && ud.Dirs == nil
 }
 
+// Create a DrivePublicSpace struct. PublicSpace creates a Directory instance by getting the root cid of the drive using FS API
 func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePublicSpace, error) {
 	rpath := makePath(ud.PublicSpaceCid)
 	rootDir, err := api.PublicFS().Get(ctx, rpath)
@@ -53,6 +54,7 @@ func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*Dri
 		RootDir:   rootDir.(files.Directory)}}, err
 }
 
+// Create a DrivePrivateSpace struct. PrivateSpace creates a Directory instance by getting the root cid of the drive using FS API
 func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePrivateSpace, error) {
 	rpath := makePath(ud.PrivateSpaceCid)
 	rootDir, err := api.PrivateFS().Get(ctx, rpath)
@@ -69,6 +71,9 @@ func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*Dr
 		RootDir:   rootDir.(files.Directory)}}, err
 }
 
+// Publish a Drive
+// If the drive is null, it will create two directories for Private and Public space, stores a file containing UserDID in them
+// Publish uses DriveStore to update the drive reference
 func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 	if ud.IsNull() {
 		puDir := files.NewMapDirectory(map[string]files.Node{
