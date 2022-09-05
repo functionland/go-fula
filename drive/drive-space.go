@@ -12,11 +12,11 @@ import (
 	"github.com/ipfs/interface-go-ipfs-core/path"
 )
 
-type DRIVE_SPACE_TYPE string
+type DriveSpaceType string
 
 const (
-	PUBLIC_DRIVE_SPACE_TYPE  DRIVE_SPACE_TYPE = "public"
-	PRIVATE_DRIVE_SPACE_TYPE DRIVE_SPACE_TYPE = "private"
+	PublicDriveSpaceType  DriveSpaceType = "public"
+	PrivateDriveSpaceType DriveSpaceType = "private"
 )
 
 type MkDirOpts struct {
@@ -44,7 +44,7 @@ type ListEntry struct {
 type DriveSpace struct {
 	ctx       context.Context
 	api       fxiface.CoreAPI
-	SpaceType DRIVE_SPACE_TYPE
+	SpaceType DriveSpaceType
 	rootCid   string
 	RootDir   files.Directory
 }
