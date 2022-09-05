@@ -188,6 +188,12 @@ func TestMkDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	y, err := ps.MkDir("/photos", MkDirOpts{recursive: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("new root /photos", y)
+
 	x, err := ps.MkDir("/photos/summer", MkDirOpts{recursive: false})
 	if err != nil {
 		t.Fatal(err)
@@ -226,18 +232,18 @@ func TestWriteFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ps.MkDir("/photos/mehdi", MkDirOpts{})
+	_, err = ps.MkDir("/photos", MkDirOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	f := files.NewBytesFile([]byte("some data to test WriteFile method"))
-	_, err = ps.WriteFile("/photos/mehdi/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err := ps.api.PublicFS().Get(ps.ctx, path.New("/ipfs/"+ps.rootCid+"/photos/mehdi/data.txt"))
+	fn, err := ps.api.PublicFS().Get(ps.ctx, path.New("/ipfs/"+ps.rootCid+"/photos/data.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,12 +274,12 @@ func TestReadFile(t *testing.T) {
 	}
 
 	f := files.NewBytesFile([]byte("some data to test ReadFile method"))
-	_, err = ps.WriteFile("/photos/data.txt", f, WriteFileOpts{})
+	_, err = ps.WriteFile("/data.txt", f, WriteFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fn, err := ps.ReadFile("/photos/data.txt", ReadFileOpts{})
+	fn, err := ps.ReadFile("/data.txt", ReadFileOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
