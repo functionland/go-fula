@@ -57,6 +57,10 @@ type DrivePrivateSpace struct {
 	DriveSpace
 }
 
+func makePath(dirs ...string) path.Path {
+	return path.Join(path.New("/ipfs"), dirs...)
+}
+
 // MkDir creates a new directory inside a DriveSpace given a path
 func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	newRoot, err := mkdirDAG(ds.RootDir, p)
@@ -70,7 +74,7 @@ func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	}
 
 	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	nRoot, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid))
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +98,7 @@ func (ds *DrivePublicSpace) WriteFile(p string, file files.File, options WriteFi
 	}
 
 	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	nRoot, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid))
 	if err != nil {
 		return "", err
 	}
@@ -120,7 +124,7 @@ func (ds *DrivePrivateSpace) WriteFile(p string, file files.File, jwe []byte, op
 	}
 
 	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PrivateFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	nRoot, err := ds.api.PrivateFS().Get(ds.ctx, makePath(ds.rootCid))
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +135,7 @@ func (ds *DrivePrivateSpace) WriteFile(p string, file files.File, jwe []byte, op
 
 // Reads a file from the drive at a given location
 func (ds *DrivePublicSpace) ReadFile(p string, options ReadFileOpts) (files.File, error) {
-	file, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
+	file, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid, p))
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +149,7 @@ func (ds *DrivePublicSpace) ReadFile(p string, options ReadFileOpts) (files.File
 
 // Reads a file from private space in a drive at a give location, it returns and additional JWE byte array
 func (ds *DrivePrivateSpace) ReadFile(p string, options ReadFileOpts) (pfs.EncodedFile, error) {
-	file, err := ds.api.PrivateFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
+	file, err := ds.api.PrivateFS().Get(ds.ctx, makePath(ds.rootCid, p))
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +174,7 @@ func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, erro
 	}
 
 	ds.rootCid = n.Cid().String()
-	nRoot, err := ds.api.PublicFS().Get(ds.ctx, path.New("/ipfs/"+ds.rootCid))
+	nRoot, err := ds.api.PublicFS().Get(ds.ctx, makePath(ds.rootCid))
 	if err != nil {
 		return "", err
 	}
@@ -181,7 +185,7 @@ func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, erro
 
 // List all of entries in a path
 func (ds *DriveSpace) ListEntries(p string, options ListEntriesOpts) (<-chan ipfsifsce.DirEntry, error) {
-	ls, err := ds.api.PublicFS().Ls(ds.ctx, path.New("/ipfs/"+ds.rootCid+p))
+	ls, err := ds.api.PublicFS().Ls(ds.ctx, makePath(ds.rootCid, p))
 	if err != nil {
 		return nil, err
 	}

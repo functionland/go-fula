@@ -8,7 +8,6 @@ import (
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
 	"github.com/functionland/go-fula/fxfs/core/pfs"
 	files "github.com/ipfs/go-ipfs-files"
-	"github.com/ipfs/interface-go-ipfs-core/path"
 )
 
 var log = logging.Logger("fula-drive")
@@ -39,7 +38,7 @@ func (ud *UserDrive) IsNull() bool {
 }
 
 func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePublicSpace, error) {
-	rpath := path.New("/ipfs/" + ud.PublicSpaceCid)
+	rpath := makePath(ud.PublicSpaceCid)
 	rootDir, err := api.PublicFS().Get(ctx, rpath)
 	if err != nil {
 		log.Error("error in getting root dir for private space")
@@ -55,7 +54,7 @@ func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*Dri
 }
 
 func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePrivateSpace, error) {
-	rpath := path.New("/ipfs/" + ud.PrivateSpaceCid)
+	rpath := makePath(ud.PrivateSpaceCid)
 	rootDir, err := api.PrivateFS().Get(ctx, rpath)
 	if err != nil {
 		log.Error("error in getting root dir for private space")
