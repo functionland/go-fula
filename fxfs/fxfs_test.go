@@ -196,12 +196,12 @@ func TestAPI(t *testing.T) {
 	pt := rn.(pfs.EncodedFile)
 	bpt, err := io.ReadAll(pt)
 	pnn, err := io.ReadAll(pn.(files.File))
-	fmt.Println(puResolved)
-	fmt.Println(prResolved)
-	fmt.Println(rootResolved)
-	fmt.Println(pt.JWE())
-	fmt.Println(pnn)
-	fmt.Println(bpt)
+	t.Log(puResolved)
+	t.Log(prResolved)
+	t.Log(rootResolved)
+	t.Log(pt.JWE())
+	t.Log(pnn)
+	t.Log(bpt)
 
 	// "Testing PublicFS Ls
 	pudirp := path.New("/ipfs/" + puResolved.Cid().String())
@@ -209,13 +209,13 @@ func TestAPI(t *testing.T) {
 	did := <-lsres
 
 	if did.Name != "DID" || did.Size != 9 {
-		fmt.Println("The file inside public directory is not what expected")
+		t.Log("The file inside public directory is not what expected")
 		t.Fail()
 	}
 
 	x := <-lsres
 	if x.Cid.Defined() || x.Name != "" || x.Size != 0 || x.Type != iface.TUnknown {
-		fmt.Println("More files in directory than expected")
+		t.Log("More files in directory than expected")
 		t.Fail()
 	}
 
@@ -226,13 +226,13 @@ func TestAPI(t *testing.T) {
 
 	//@TODO add size check for pdid
 	if pdid.Name != "DIDP" {
-		fmt.Println("The file inside private directory is not what expected")
+		t.Log("The file inside private directory is not what expected")
 		t.Fail()
 	}
 
 	x = <-lsres
 	if x.Cid.Defined() || x.Name != "" || x.Size != 0 || x.Type != iface.TUnknown {
-		fmt.Println("More files in directory than expected")
+		t.Log("More files in directory than expected")
 		t.Fail()
 	}
 }

@@ -75,7 +75,7 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 		libp2p.Identity(sk),
 		// Multiple listen addresses
 		libp2p.ListenAddrStrings(
-			cfg.Addresses.Swarm...
+			cfg.Addresses.Swarm...,
 		),
 		// Let's prevent our peer from having too many
 		// connections by attaching a connection manager.
@@ -106,6 +106,8 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 
 	// Make the DHT
 	kDht := dht.NewDHT(ctx, basicHost, dstore)
+	// This is a temrary fix for issue 43 (also ipfs suggest to have your own bootstrap node), this multi addresses point to Functionland own bootstrap nodes.
+	// TODO: change ip4 to dns4 addresses
 	cfg.Bootstrap = append(cfg.Bootstrap,
 		"/ip4/34.224.40.105/udp/4001/quic/p2p/12D3KooWEftKAarKSc1bhQfgn5aoW5UnaSqCr9UMhRoqhsBA6MmX",
 		"/ip4/54.235.11.104/udp/4001/quic/p2p/12D3KooWEHmZunko2dupAR9J3Ydo3yN8aW7oZWkAxv5zsNL7UPRH",
