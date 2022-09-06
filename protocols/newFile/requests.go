@@ -18,7 +18,6 @@ func sendRequest(req *FSRequest, s network.Stream) error {
 		return err
 	}
 
-	// @TODO define the maximum bytes needed for sending the length of the req
 	sbuf := make([]byte, 2)
 	binary.LittleEndian.PutUint16(sbuf, uint16(len(reqMsg)))
 	n, err := s.Write(sbuf)
