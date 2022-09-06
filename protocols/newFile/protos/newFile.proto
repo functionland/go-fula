@@ -1,0 +1,52 @@
+syntax = "proto3";
+option go_package = "github.com/functionland/go-fula/protocols/newFile";
+package newFile;
+
+message FSRequest {
+    string DID = 1;
+    string path = 2;
+    bytes signature = 3;
+    ActionType action = 4;
+}
+
+enum ActionType {
+    READ = 0;
+    WRITE = 1;
+    MKDIR = 2;
+    LS = 3;
+    DELETE = 4;
+}
+
+message Payload {
+    repeated int32 d = 1;
+}
+
+message Response {
+    ActionType action = 1;
+    oneof body {
+        File file = 2;
+        string cid = 3;
+        DirEntries entries = 4;
+    }
+}
+
+enum EntryType {
+    FILE = 0;
+    DIRECTORY = 1;
+}
+
+message File {
+    string name = 1;
+    repeated int32 d = 2;
+}
+
+message DirEntries {
+    repeated DirEntry items = 1;
+}
+
+message DirEntry {
+    string name = 1;
+    EntryType type = 2;
+    int32 size = 3;
+    string cid = 4;
+}
