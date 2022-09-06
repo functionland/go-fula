@@ -175,7 +175,7 @@ func TestNewFileProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("RES:", string(file))
+	t.Log("RES:", string(file))
 
 	if string(file) != "MEHDI_DID" {
 		t.Fatal("result is not as expected")
@@ -193,7 +193,7 @@ func TestMkDirAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println("RES:", dcid)
+	t.Log("RES:", dcid)
 
 }
 
@@ -209,7 +209,7 @@ func TestWriteAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println("RES: ", fcid)
+	t.Log("RES: ", fcid)
 }
 
 func TestDeleteAction(t *testing.T) {
