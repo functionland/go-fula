@@ -18,7 +18,7 @@ import (
 // It reads 2 bytes from the stream which determines the size of the request messeage
 // It then reads the request message and passes the stream to the appropriate handler
 func Handle(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, s network.Stream) error {
-	fmt.Println("handling")
+	log.Debug("handling")
 
 	sizebuf := make([]byte, 2)
 	_, err := io.ReadFull(s, sizebuf)
