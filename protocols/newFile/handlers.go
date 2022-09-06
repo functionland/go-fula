@@ -14,6 +14,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 )
 
+// Root handler for newFile protocol
+// It reads 2 bytes from the stream which determines the size of the request messeage
+// It then reads the request message and passes the stream to the appropriate handler
 func Handle(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, s network.Stream) error {
 	fmt.Println("handling")
 
