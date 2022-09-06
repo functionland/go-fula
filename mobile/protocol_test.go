@@ -137,7 +137,7 @@ func initNodes() (network.Stream, error) {
 	ctx := context.Background()
 	ds := drive.NewDriveStore()
 
-	node1.PeerHost.SetStreamHandler(newFile.PROTOCOL, func(s network.Stream) {
+	node1.PeerHost.SetStreamHandler(newFile.ProtocolId, func(s network.Stream) {
 		newFile.Handle(ctx, fapi, ds, s)
 	})
 
@@ -151,7 +151,7 @@ func initNodes() (network.Stream, error) {
 		return nil, err
 	}
 
-	s, err := node2.PeerHost.NewStream(ctx, node1.PeerHost.ID(), newFile.PROTOCOL)
+	s, err := node2.PeerHost.NewStream(ctx, node1.PeerHost.ID(), newFile.ProtocolId)
 	if err != nil {
 		return nil, err
 	}
