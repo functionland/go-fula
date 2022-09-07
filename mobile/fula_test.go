@@ -7,7 +7,7 @@ import (
 
 	"github.com/functionland/go-fula/drive"
 	"github.com/functionland/go-fula/mobile"
-	fileP "github.com/functionland/go-fula/protocols/newFile"
+	fileP "github.com/functionland/go-fula/protocols/file"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/bootstrap"
 	"github.com/libp2p/go-libp2p-core/network"
