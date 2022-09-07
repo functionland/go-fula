@@ -2,12 +2,8 @@ package mobile_test
 
 import (
 	"context"
-	"crypto/md5"
-	"io"
-	"io/ioutil"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/functionland/go-fula/drive"
 	"github.com/functionland/go-fula/mobile"
@@ -90,116 +86,6 @@ func TestAddBox(t *testing.T) {
 	t.Error("Peer Was Not added")
 }
 
-// func TestAddBoxLoopBack(t *testing.T) {
-// 	fula, err := mobile.NewFula("./repo")
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
-// 	err = fula.AddBox(BOX)
-// 	if err != nil {
-// 		t.Error("Mobile Can not accept loopback")
-// 	}
-// }
-
-func TestFileProtocol(t *testing.T) {
-	fula, err := mobile.NewFula("./repo")
-	if err != nil {
-		t.Error(err)
-	}
-	err = fula.AddBox(BOX)
-	if err != nil {
-		t.Error("add error")
-	}
-	tmp := "./tmp"
-	if _, err := os.Stat(tmp); os.IsNotExist(err) {
-		err := os.Mkdir(tmp, 0755)
-		if err != nil {
-			t.Error("wired error", err)
-			return
-		}
-	}
-	t.Log("fula ready")
-	files, err := ioutil.ReadDir("./test_assets")
-	if err != nil {
-		t.Error(err)
-	}
-	for _, file := range files {
-		if !file.IsDir() {
-			upload := "./test_assets/" + file.Name()
-			cid, err := fula.Send(upload)
-			if err != nil {
-				t.Error("send failed", err)
-				return
-			}
-			meta, err := fula.RecieveFileMetaInfo(cid)
-			t.Log("File with CID: ", cid)
-			if err != nil {
-				t.Error("download Failed", err)
-				return
-			}
-			download := tmp + "/" + meta.Name
-			err = fula.ReceiveFile(cid, download)
-			if err != nil {
-				t.Error("Receive File failed", err)
-				return
-			}
-			if !fileDiff(upload, download) {
-				t.Error("Somthing wrong! files are not equal", err)
-				return
-			}
-			t.Logf("successfully test send and receive of %s", upload)
-			time.Sleep(time.Second)
-		}
-
-	}
-
-}
-
-func TestEncryption(t *testing.T) {
-	fula, err := mobile.NewFula("./repo")
-	if err != nil {
-		t.Error(err)
-	}
-	err = fula.AddBox(BOX)
-	if err != nil {
-		t.Error("can not add box", err)
-	}
-	tmp := "./tmp"
-	if _, err := os.Stat(tmp); os.IsNotExist(err) {
-		err := os.Mkdir(tmp, 0755)
-		if err != nil {
-			t.Error("wired error", err)
-			return
-		}
-	}
-	files, err := ioutil.ReadDir("./test_assets")
-	if err != nil {
-		t.Error(err)
-	}
-	for _, file := range files {
-		if !file.IsDir() {
-			upload := "./test_assets/" + file.Name()
-			ref, err := fula.EncryptSend(upload)
-			if err != nil {
-				t.Error("send failed", err)
-				return
-			}
-			download := tmp + "/" + ref
-			err = fula.ReceiveDecryptFile(ref, download)
-			if err != nil {
-				t.Error("receive File failed", err)
-				return
-			}
-			if !fileDiff(upload, download) {
-				t.Error("somthing wrong! files are not equal", err)
-				return
-			}
-		}
-		time.Sleep(time.Second)
-	}
-
-}
-
 func TestFulaRead(t *testing.T) {
 	_, fula, err := initNodes()
 	if err != nil {
@@ -253,26 +139,95 @@ func TestFulaWrite(t *testing.T) {
 
 }
 
-func fileDiff(path1 string, path2 string) bool {
-	hash1 := md5File(path1)
-	hash2 := md5File(path2)
-	return string(hash1) == string(hash2)
+func TestFulaLs(t *testing.T) {
+	_, fula, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	es, err := fula.Ls("Mehdi-DID", "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(es) != 1 {
+		t.Fatal("Recieved list has wrong len")
+	}
+
+	e := es[0]
+	exp := mobile.DirEntry{Name: "DID", Type: mobile.File, Size: 9, Cid: "QmaHLcFdVDqcVEvS9LdurpApHuenXwjhRY1tSHykCzbC91"}
+	if e != exp {
+		t.Fatal("Recieved item in the list is not what expected")
+	}
 }
 
-func md5File(path string) []byte {
-	file, err := os.Open(path)
-
+func TestFulaMkDir(t *testing.T) {
+	_, fula, err := initNodes()
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	defer file.Close()
-
-	hash := md5.New()
-	_, err = io.Copy(hash, file)
-
+	err = fula.MkDir("Mehdi-DID", "/photos")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-	return hash.Sum(nil)
+
+	es, err := fula.Ls("Mehdi-DID", "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(es) != 2 {
+		t.Fatal("Recieved list has wrong len")
+	}
+
+	foundDID := false
+	foundPhotos := false
+	eDID := mobile.DirEntry{Name: "DID", Type: mobile.File, Size: 9, Cid: "QmaHLcFdVDqcVEvS9LdurpApHuenXwjhRY1tSHykCzbC91"}
+	ePhotos := mobile.DirEntry{Name: "photos", Type: mobile.Directory, Size: 0, Cid: "QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"}
+	for _, d := range es {
+		if d == eDID {
+			foundDID = true
+		}
+		if d == ePhotos {
+			foundPhotos = true
+		}
+	}
+
+	if !foundDID || !foundPhotos {
+		t.Fatal("Recieved items in the list are not what expected")
+	}
+}
+
+func TestFulaDelete(t *testing.T) {
+	_, fula, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = fula.MkDir("Mehdi-DID", "/photos")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = fula.Delete("Mehdi-DID", "/DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	es, err := fula.Ls("Mehdi-DID", "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(es) != 1 {
+		t.Fatal("Recieved list has wrong len")
+	}
+
+	ePhotos := mobile.DirEntry{Name: "photos", Type: mobile.Directory, Size: 0, Cid: "QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"}
+	p := es[0]
+
+	if p != ePhotos {
+		t.Fatal("Recieved items in the list are not what expected")
+	}
 }

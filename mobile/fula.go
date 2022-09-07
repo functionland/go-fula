@@ -1,26 +1,19 @@
 package mobile
 
 import (
-	"bufio"
 	"context"
-	"encoding/base64"
 	"errors"
 
 	"io"
-	"io/ioutil"
 
 	"os"
-	"sync"
 
-	filePL "github.com/functionland/go-fula/protocols/file"
 	fileP "github.com/functionland/go-fula/protocols/newFile"
-	"github.com/golang/protobuf/proto"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	manet "github.com/multiformats/go-multiaddr/net"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var log = logging.Logger("fula:mobile")
@@ -32,14 +25,26 @@ const (
 )
 
 type IFula interface {
-	AddBox()
-	Send()
-	ReceiveFileInfo()
-	ReceiveFile()
-	EncryptSend()
-	ReceiveDecryptFile()
+	AddBox(string) error
 	Read(string, string, string) error
 	Write(string, string, string) error
+	MkDir(string, string) error
+	Ls(string, string) ([]DirEntry, error)
+	Delete(string, string) error
+}
+
+type EntryType int
+
+const (
+	File      EntryType = 1
+	Directory EntryType = 2
+)
+
+type DirEntry struct {
+	Name string
+	Type EntryType
+	Size int
+	Cid  string
 }
 
 type Fula struct {
@@ -113,124 +118,6 @@ func (f *Fula) GetBox() (peer.ID, error) {
 	return "", errors.New("no box available")
 }
 
-func (f *Fula) Send(filePath string) (string, error) {
-	stream, err := f.NewStream()
-	if err != nil {
-		return "", err
-	}
-	meta, err := filePL.FromFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	wg := sync.WaitGroup{}
-	fileCh := make(chan []byte)
-
-	go readFile(filePath, fileCh, &wg)
-
-	res, err := filePL.SendFile(fileCh, meta.ToMetaProto(), stream, &wg)
-	if err != nil {
-		return "", err
-	}
-	return *res, nil
-}
-
-func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
-	defer close(fileCh)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	// fileInfo, err := os.Lstat(filePath)
-	if err != nil {
-		return err
-	}
-	buf := make([]byte, 1024*16)
-	buffer := bufio.NewReader(file)
-	// fileCh <- buf
-
-	for {
-
-		n, err := buffer.Read(buf)
-		if err == io.EOF {
-			log.Debug("EOF found")
-			break
-		}
-		if err != nil {
-			log.Error("cant read the file:", err)
-			return err
-		}
-		if n > 0 {
-			log.Debug("try to write file buffer :", buf[:10])
-			wg.Add(1)
-			fileCh <- buf[:n]
-			wg.Wait()
-			log.Debugf("writed file buffer size %d: %v", n, buf[:10])
-		}
-
-	}
-	return nil
-}
-
-func (f *Fula) RecieveFileMetaInfo(fileId string) (*filePL.Meta, error) {
-	stream, err := f.NewStream()
-	if err != nil {
-		return nil, err
-	}
-	if err != nil {
-		log.Error("failed to open new sream", err)
-		return nil, err
-	}
-
-	buf, err := filePL.ReceiveMeta(stream, fileId)
-	if err != nil {
-		log.Error("protocol failed to receive meta", err)
-		return nil, err
-	}
-	meta := &filePL.Meta{}
-	err = proto.Unmarshal(buf, meta)
-	if err != nil {
-		log.Error("failed to unmarshal meta", err)
-		return nil, err
-	}
-	return meta, nil
-}
-
-func (f *Fula) ReceiveFileInfo(fileId string) (string, error) {
-	meta, err := f.RecieveFileMetaInfo(fileId)
-	if err != nil {
-		log.Error("failed to fetch meta", err)
-		return "", err
-	}
-	r, err := protojson.Marshal(meta)
-	if err != nil {
-		log.Error("failed to json marshal meta", err)
-		return "", err
-	}
-	sEnc := base64.StdEncoding.EncodeToString(r)
-	return sEnc, nil
-}
-
-func (f *Fula) ReceiveFile(fileId string, filePath string) error {
-	stream, err := f.NewStream()
-	if err != nil {
-		return err
-	}
-	fReader, err := filePL.ReceiveFile(stream, fileId)
-	if err != nil {
-		return err
-	}
-	fBytes, err := ioutil.ReadAll(fReader)
-	if err != nil {
-		return err
-	}
-	stream.Close()
-	err = os.WriteFile(filePath, fBytes, 0755)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // Reads a file from a user's drive
 // Calls a ReadRequest on the file protocol
 // It writes the recieved file into a specified path on local storage
@@ -292,6 +179,68 @@ func (f *Fula) Write(userDID string, srcPath string, destPath string) error {
 		return err
 	}
 	log.Info("Wrote file, CID: ", cid)
+
+	return nil
+}
+
+// Makes a new directory on user's drive
+// Calls a RequsetMkDir on the file protocol
+func (f *Fula) MkDir(userDID string, path string) error {
+	s, err := f.NewStream()
+	if err != nil {
+		log.Error("Could not create a file protocol stream", err)
+		return err
+	}
+
+	ctx := context.Background()
+	_, err = fileP.RequestMkDir(ctx, s, path, userDID)
+	if err != nil {
+		log.Error("RequestMkDir failed on the stream")
+		return err
+	}
+
+	return nil
+}
+
+// Lists entries in a path on a user's drive
+// Calls a RequestLs on the file protocol
+func (f *Fula) Ls(userDID string, path string) ([]DirEntry, error) {
+	s, err := f.NewStream()
+	if err != nil {
+		log.Error("Could not create a file protocol stream", err)
+		return nil, err
+	}
+
+	ctx := context.Background()
+	ds, err := fileP.RequestLs(ctx, s, path, userDID)
+	if err != nil {
+		log.Error("RequestLs failed on the stream", err)
+		return nil, err
+	}
+
+	dentires := make([]DirEntry, 0)
+	for _, de := range ds.Items {
+		dentires = append(dentires, DirEntry{Name: de.Name, Size: int(de.Size), Type: EntryType(de.Type), Cid: de.Cid})
+	}
+
+	return dentires, nil
+}
+
+// Deletes an entry in a path on a user's drive
+// Calls a RequestDelete on the file protocol
+func (f *Fula) Delete(userDID string, path string) error {
+	s, err := f.NewStream()
+	if err != nil {
+		log.Error("Could not create a file protocol stream", err)
+		return err
+	}
+
+	ctx := context.Background()
+	err = fileP.RequestDelete(ctx, s, path, userDID)
+	if err != nil {
+		log.Error("RequestDelete failed on the stream", err)
+		return err
+	}
 
 	return nil
 }
