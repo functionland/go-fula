@@ -51,7 +51,8 @@ func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*Dri
 		Api:       api,
 		SpaceType: PublicDriveSpaceType,
 		RootCid:   ud.PublicSpaceCid,
-		RootDir:   rootDir.(files.Directory)}}, err
+		RootDir:   rootDir.(files.Directory),
+		Drive:     ud}}, err
 }
 
 // Create a DrivePrivateSpace struct. PrivateSpace creates a Directory instance by getting the root cid of the drive using FS API
@@ -68,7 +69,8 @@ func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*Dr
 		Api:       api,
 		SpaceType: PrivateDriveSpaceType,
 		RootCid:   ud.PrivateSpaceCid,
-		RootDir:   rootDir.(files.Directory)}}, err
+		RootDir:   rootDir.(files.Directory),
+		Drive:     ud}}, err
 }
 
 // Publish a Drive
@@ -106,7 +108,7 @@ func (ud *UserDrive) Publish(ctx context.Context, api fxiface.CoreAPI) error {
 			return err
 		}
 	} else {
-		err := ud.ds.Put(*ud)
+		err := ud.ds.Update(*ud)
 		if err != nil {
 			log.Error("error in publishing drive", err)
 			return err
