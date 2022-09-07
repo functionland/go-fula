@@ -1,6 +1,7 @@
-package mobile
+package mobile_test
 
 import (
+	"context"
 	"crypto/md5"
 	"io"
 	"io/ioutil"
@@ -8,34 +9,78 @@ import (
 	"testing"
 	"time"
 
+	"github.com/functionland/go-fula/drive"
+	"github.com/functionland/go-fula/mobile"
+	fileP "github.com/functionland/go-fula/protocols/newFile"
+	"github.com/ipfs/kubo/core"
+	"github.com/ipfs/kubo/core/bootstrap"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-
+	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 )
 
 const BOX = "/p2p/12D3KooWJVDdxaWYxSEC3M8oK57swu1jc36YYMZihbLmiQjQ2B26"
 const BOX_LOOPBACK = "/ip4/127.0.0.1/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1"
 
+func initNodes() (*core.IpfsNode, *mobile.Fula, error) {
+	apis, nodes, err := mobile.MakeAPISwarm(context.Background(), true, 2)
+	if err != nil {
+		return nil, nil, err
+	}
+	fapi := apis[0]
+	node1 := nodes[0]
+	node2 := nodes[1]
+	ctx := context.Background()
+	ds := drive.NewDriveStore()
+
+	node1.PeerHost.SetStreamHandler(fileP.ProtocolId, func(s network.Stream) {
+		fileP.Handle(ctx, fapi, ds, s)
+	})
+
+	bs1 := []peer.AddrInfo{node1.Peerstore.PeerInfo(node1.Identity)}
+	bs2 := []peer.AddrInfo{node2.Peerstore.PeerInfo(node2.Identity)}
+
+	if err := node2.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs1)); err != nil {
+		return nil, nil, err
+	}
+	if err := node1.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs2)); err != nil {
+		return nil, nil, err
+	}
+
+	fula, err := mobile.NewFula("./repo")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fula.Node = *routedhost.Wrap(node2.PeerHost, node2.Routing)
+
+	err = fula.AddBox("/p2p/" + node1.Identity.Pretty())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return node1, fula, nil
+}
+
 func TestNew(t *testing.T) {
 
-	_, err := NewFula("./repo")
+	_, _, err := initNodes()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestAddBox(t *testing.T) {
-	fula, err := NewFula("./repo")
+	node, fula, err := initNodes()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	time.Sleep(5 * time.Second)
-	err = fula.AddBox(BOX)
+
+	want, err := peer.AddrInfoFromString("/p2p/" + node.Identity.Pretty())
 	if err != nil {
-		t.Error("Fail to adding peer: \n", err)
-		return
+		t.Fatal(err)
 	}
-	want, _ := peer.AddrInfoFromString(BOX)
-	peer, err := fula.getBox()
+	peer, err := fula.GetBox()
 	if err != nil {
 		t.Error(err)
 	}
@@ -45,19 +90,19 @@ func TestAddBox(t *testing.T) {
 	t.Error("Peer Was Not added")
 }
 
-func TestAddBoxLoopBack(t *testing.T) {
-	fula, err := NewFula("./repo")
-	if err != nil {
-		t.Error(err)
-	}
-	err = fula.AddBox(BOX)
-	if err != nil {
-		t.Error("Mobile Can not accept loopback")
-	}
-}
+// func TestAddBoxLoopBack(t *testing.T) {
+// 	fula, err := mobile.NewFula("./repo")
+// 	if err != nil {
+// 		t.Error(err)
+// 	}
+// 	err = fula.AddBox(BOX)
+// 	if err != nil {
+// 		t.Error("Mobile Can not accept loopback")
+// 	}
+// }
 
 func TestFileProtocol(t *testing.T) {
-	fula, err := NewFula("./repo")
+	fula, err := mobile.NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -86,7 +131,7 @@ func TestFileProtocol(t *testing.T) {
 				t.Error("send failed", err)
 				return
 			}
-			meta, err := fula.receiveFileInfo(cid)
+			meta, err := fula.RecieveFileMetaInfo(cid)
 			t.Log("File with CID: ", cid)
 			if err != nil {
 				t.Error("download Failed", err)
@@ -111,7 +156,7 @@ func TestFileProtocol(t *testing.T) {
 }
 
 func TestEncryption(t *testing.T) {
-	fula, err := NewFula("./repo")
+	fula, err := mobile.NewFula("./repo")
 	if err != nil {
 		t.Error(err)
 	}
@@ -151,6 +196,59 @@ func TestEncryption(t *testing.T) {
 			}
 		}
 		time.Sleep(time.Second)
+	}
+
+}
+
+func TestFulaRead(t *testing.T) {
+	_, fula, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = fula.Read("Mehdi-DID", "/DID", "./tmp/DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rb, err := os.ReadFile("./tmp/DID")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(rb) != "Mehdi-DID" {
+		t.Fatal("Recieved content does not match")
+	}
+}
+
+func TestFulaWrite(t *testing.T) {
+	_, fula, err := initNodes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = fula.Write("Mehdi-DID", "./test_assets/t.test", "/my-file")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = fula.Read("Mehdi-DID", "/my-file", "./tmp/t.res")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tb, err := os.ReadFile("./test_assets/t.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rb, err := os.ReadFile("./tmp/t.res")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(tb) != string(rb) {
+		t.Fatal("Recieved content does not match")
 	}
 
 }

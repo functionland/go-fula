@@ -12,8 +12,8 @@ import (
 	"os"
 	"sync"
 
-
 	filePL "github.com/functionland/go-fula/protocols/file"
+	fileP "github.com/functionland/go-fula/protocols/newFile"
 	"github.com/golang/protobuf/proto"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -38,10 +38,12 @@ type IFula interface {
 	ReceiveFile()
 	EncryptSend()
 	ReceiveDecryptFile()
+	Read(string, string, string) error
+	Write(string, string, string) error
 }
 
 type Fula struct {
-	node  rhost.RoutedHost
+	Node  rhost.RoutedHost
 	ctx   context.Context
 	mybox []peer.AddrInfo
 }
@@ -57,7 +59,7 @@ func NewFula(repoPath string) (*Fula, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &Fula{node: *node, ctx: ctx}
+	f := &Fula{Node: *node, ctx: ctx}
 	return f, nil
 }
 
@@ -79,7 +81,7 @@ func (f *Fula) AddBox(boxAddr string) error {
 			return errors.New("not Specified")
 		}
 	}
-	err = f.node.Connect(f.ctx, *peerAddr)
+	err = f.Node.Connect(f.ctx, *peerAddr)
 	if err != nil {
 		log.Error("peer router failed ", err)
 		return err
@@ -90,21 +92,21 @@ func (f *Fula) AddBox(boxAddr string) error {
 
 func (f *Fula) NewStream() (network.Stream, error) {
 
-	peer, err := f.getBox()
+	peer, err := f.GetBox()
 	if err != nil {
 		return nil, err
 	}
 	log.Debug("box found", peer)
 	ctx := context.Background()
 	ctx = network.WithForceDirectDial(ctx, "transiant wont do it")
-	s, err := f.node.NewStream(ctx, peer, filePL.PROTOCOL)
+	s, err := f.Node.NewStream(ctx, peer, fileP.ProtocolId)
 	if err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (f *Fula) getBox() (peer.ID, error) {
+func (f *Fula) GetBox() (peer.ID, error) {
 	if len(f.mybox) > 0 {
 		return f.mybox[0].ID, nil
 	}
@@ -169,7 +171,7 @@ func readFile(filePath string, fileCh chan []byte, wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (f *Fula) receiveFileInfo(fileId string) (*filePL.Meta, error) {
+func (f *Fula) RecieveFileMetaInfo(fileId string) (*filePL.Meta, error) {
 	stream, err := f.NewStream()
 	if err != nil {
 		return nil, err
@@ -194,7 +196,7 @@ func (f *Fula) receiveFileInfo(fileId string) (*filePL.Meta, error) {
 }
 
 func (f *Fula) ReceiveFileInfo(fileId string) (string, error) {
-	meta, err := f.receiveFileInfo(fileId)
+	meta, err := f.RecieveFileMetaInfo(fileId)
 	if err != nil {
 		log.Error("failed to fetch meta", err)
 		return "", err
@@ -226,5 +228,70 @@ func (f *Fula) ReceiveFile(fileId string, filePath string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// Reads a file from a user's drive
+// Calls a ReadRequest on the file protocol
+// It writes the recieved file into a specified path on local storage
+func (f *Fula) Read(userDID string, filePath string, destPath string) error {
+	s, err := f.NewStream()
+	if err != nil {
+		log.Error("Could not create a file protocol stream", err)
+		return err
+	}
+
+	ctx := context.Background()
+	freader, err := fileP.RequestRead(ctx, s, filePath, userDID)
+	if err != nil {
+		log.Error("RequestRead failed on the stream", err)
+		return err
+	}
+
+	if _, err := os.Stat(destPath); err == nil {
+		log.Error("Destination file already exists")
+		return os.ErrExist
+	}
+
+	fw, err := os.Create(destPath)
+	if err != nil {
+		log.Error("Could not create the destination file")
+		return err
+	}
+	defer fw.Close()
+
+	_, err = io.Copy(fw, freader)
+	if err != nil {
+		log.Error("Could not write on the destination file")
+		return err
+	}
+
+	return nil
+}
+
+// Writes a file on a user's drive
+// Calls a WriteRequest on the file protocol
+// It writes an existing file on the local storage in a user's drive in a given location
+func (f *Fula) Write(userDID string, srcPath string, destPath string) error {
+	s, err := f.NewStream()
+	if err != nil {
+		log.Error("Could not create a file protocol stream", err)
+		return err
+	}
+
+	ctx := context.Background()
+	sf, err := os.Open(srcPath)
+	if err != nil {
+		log.Error("Could not open source file")
+		return err
+	}
+
+	cid, err := fileP.RequestWrite(ctx, s, destPath, userDID, sf)
+	if err != nil {
+		log.Error("RequestWrite failed on the stream", err)
+		return err
+	}
+	log.Info("Wrote file, CID: ", cid)
+
 	return nil
 }
