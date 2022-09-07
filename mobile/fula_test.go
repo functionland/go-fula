@@ -15,9 +15,6 @@ import (
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 )
 
-const BOX = "/p2p/12D3KooWJVDdxaWYxSEC3M8oK57swu1jc36YYMZihbLmiQjQ2B26"
-const BOX_LOOPBACK = "/ip4/127.0.0.1/tcp/4002/p2p/12D3KooWGrkcHUBzAAuYhMRxBreCgofKKDhLgR84FbawknJZHwK1"
-
 func initNodes() (*core.IpfsNode, *mobile.Fula, error) {
 	apis, nodes, err := mobile.MakeAPISwarm(context.Background(), true, 2)
 	if err != nil {
