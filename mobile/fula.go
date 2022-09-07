@@ -8,7 +8,7 @@ import (
 
 	"os"
 
-	fileP "github.com/functionland/go-fula/protocols/newFile"
+	fileP "github.com/functionland/go-fula/protocols/file"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"

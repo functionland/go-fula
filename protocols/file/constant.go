@@ -1,3 +1,3 @@
 package file
 
-const PROTOCOL = "/fx/file/0.1.1"
+const ProtocolId = "/fx/file/0.2.0"

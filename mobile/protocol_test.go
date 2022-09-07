@@ -13,7 +13,7 @@ import (
 	"github.com/functionland/go-fula/drive"
 	fxfscore "github.com/functionland/go-fula/fxfs/core/api"
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
-	"github.com/functionland/go-fula/protocols/newFile"
+	fileP "github.com/functionland/go-fula/protocols/file"
 	"github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	"github.com/ipfs/go-filestore"
@@ -137,8 +137,8 @@ func initNodes() (network.Stream, error) {
 	ctx := context.Background()
 	ds := drive.NewDriveStore()
 
-	node1.PeerHost.SetStreamHandler(newFile.ProtocolId, func(s network.Stream) {
-		newFile.Handle(ctx, fapi, ds, s)
+	node1.PeerHost.SetStreamHandler(fileP.ProtocolId, func(s network.Stream) {
+		fileP.Handle(ctx, fapi, ds, s)
 	})
 
 	bs1 := []peer.AddrInfo{node1.Peerstore.PeerInfo(node1.Identity)}
@@ -151,7 +151,7 @@ func initNodes() (network.Stream, error) {
 		return nil, err
 	}
 
-	s, err := node2.PeerHost.NewStream(ctx, node1.PeerHost.ID(), newFile.ProtocolId)
+	s, err := node2.PeerHost.NewStream(ctx, node1.PeerHost.ID(), fileP.ProtocolId)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func TestNewFileProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := newFile.RequestRead(context.Background(), s, "/DID", "MEHDI_DID")
+	res, err := fileP.RequestRead(context.Background(), s, "/DID", "MEHDI_DID")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestMkDirAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dcid, err := newFile.RequestMkDir(context.Background(), s, "/photos", "MEHDI_DID")
+	dcid, err := fileP.RequestMkDir(context.Background(), s, "/photos", "MEHDI_DID")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestWriteAction(t *testing.T) {
 	}
 
 	f := bytes.NewReader([]byte("some test content for file"))
-	fcid, err := newFile.RequestWrite(context.Background(), s, "/data.txt", "MEHDI_DID", f)
+	fcid, err := fileP.RequestWrite(context.Background(), s, "/data.txt", "MEHDI_DID", f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,13 +218,13 @@ func TestDeleteAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	de, err := newFile.RequestLs(context.Background(), s, "/", "MEHDI_DID")
+	de, err := fileP.RequestLs(context.Background(), s, "/", "MEHDI_DID")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(de)
 
-	err = newFile.RequestDelete(context.Background(), s, "/DID", "MEHDI_DID")
+	err = fileP.RequestDelete(context.Background(), s, "/DID", "MEHDI_DID")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestLsAction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	de, err := newFile.RequestLs(context.Background(), s, "/", "MEHDI_DID")
+	de, err := fileP.RequestLs(context.Background(), s, "/", "MEHDI_DID")
 	if err != nil {
 		t.Fatal(err)
 	}
