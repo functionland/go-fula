@@ -1,0 +1,6 @@
+type Event struct {
+    Version   String
+    Previous  optional Link
+    Peer      String
+    Signature Bytes
+}
