@@ -16,6 +16,8 @@ import (
 	"github.com/ipfs/kubo/gc"
 	"github.com/ipfs/kubo/repo"
 
+	unixfile "github.com/functionland/go-unixfs/file"
+	testu "github.com/functionland/go-unixfs/test"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
@@ -25,8 +27,6 @@ import (
 	files "github.com/ipfs/go-ipfs-files"
 	pi "github.com/ipfs/go-ipfs-posinfo"
 	dag "github.com/ipfs/go-merkledag"
-	unixfile "github.com/ipfs/go-unixfs/file"
-	testu "github.com/ipfs/go-unixfs/test"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	config "github.com/ipfs/kubo/config"
 )
