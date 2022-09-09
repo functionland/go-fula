@@ -6,11 +6,11 @@ import (
 	"io"
 	"testing"
 
+	ft "github.com/functionland/go-unixfs"
+	importer "github.com/functionland/go-unixfs/importer"
+	uio "github.com/functionland/go-unixfs/io"
 	bserv "github.com/ipfs/go-blockservice"
 	merkledag "github.com/ipfs/go-merkledag"
-	ft "github.com/ipfs/go-unixfs"
-	importer "github.com/ipfs/go-unixfs/importer"
-	uio "github.com/ipfs/go-unixfs/io"
 	core "github.com/ipfs/kubo/core"
 
 	cid "github.com/ipfs/go-cid"

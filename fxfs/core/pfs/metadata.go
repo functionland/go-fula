@@ -1,9 +1,9 @@
 package pfs
 
 import (
+	ft "github.com/functionland/go-unixfs"
 	cid "github.com/ipfs/go-cid"
 	dag "github.com/ipfs/go-merkledag"
-	ft "github.com/ipfs/go-unixfs"
 	core "github.com/ipfs/kubo/core"
 )
 
