@@ -1,8 +1,8 @@
 package main
 
 import (
-	example "github.com/functionland/go-fula/beast"
+	fula "github.com/functionland/go-fula/ipfs-plugin"
 )
 
 // Plugins is an exported list of plugins that will be loaded by go-ipfs.
-var Plugins = example.Plugins
+var Plugins = fula.Plugins
