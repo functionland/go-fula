@@ -46,6 +46,7 @@ type DriveSpace struct {
 	SpaceType DriveSpaceType
 	RootCid   string
 	RootDir   files.Directory
+	Drive     *UserDrive
 }
 
 // Public space inside a Drive
@@ -60,6 +61,19 @@ type DrivePrivateSpace struct {
 
 func makePath(dirs ...string) path.Path {
 	return path.Join(path.New("/ipfs"), dirs...)
+}
+
+// Sets the space's root cid in it's parent drive
+// This should be called before UserDrive.Publish()
+func (ds *DriveSpace) Save() {
+	switch ds.SpaceType {
+	case PublicDriveSpaceType:
+		ds.Drive.PublicSpaceCid = ds.RootCid
+	case PrivateDriveSpaceType:
+		ds.Drive.PrivateSpaceCid = ds.RootCid
+	default:
+		return
+	}
 }
 
 // MkDir creates a new directory inside a DriveSpace given a path

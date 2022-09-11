@@ -109,6 +109,12 @@ func HandleMkDir(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 		return err
 	}
 
+	ps.Save()
+	err = ud.Publish(ctx, api)
+	if err != nil {
+		return err
+	}
+
 	go func() {
 		defer s.CloseWrite()
 
@@ -138,6 +144,12 @@ func HandleDelete(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore,
 	_, err = ps.DeleteFile(path, drive.DeleteFileOpts{})
 	if err != nil {
 		log.Error(err)
+		return err
+	}
+
+	ps.Save()
+	err = ud.Publish(ctx, api)
+	if err != nil {
 		return err
 	}
 
@@ -229,8 +241,14 @@ func HandleWrite(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 		log.Error("error in receiving file", err)
 	}
 
+	ps.Save()
+	err = ud.Publish(ctx, api)
+	if err != nil {
+		return err
+	}
+
 	go func() {
-		defer s.CloseWrite()
+		defer s.Close()
 
 		if _, err := s.Write([]byte(fcid)); err != nil {
 			log.Error("error in writing the file cid on the stream", err)
