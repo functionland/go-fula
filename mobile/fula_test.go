@@ -1,4 +1,4 @@
-package mobile_test
+package fulaMobile_test
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 )
 
-func initNodes() (*core.IpfsNode, *mobile.Fula, error) {
-	apis, nodes, err := mobile.MakeAPISwarm(context.Background(), true, 2)
+func initNodes() (*core.IpfsNode, *fulaMobile.Fula, error) {
+	apis, nodes, err := fulaMobile.MakeAPISwarm(context.Background(), true, 2)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -40,7 +40,7 @@ func initNodes() (*core.IpfsNode, *mobile.Fula, error) {
 		return nil, nil, err
 	}
 
-	fula, err := mobile.NewFula("./repo")
+	fula, err := fulaMobile.NewFula("./repo")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,7 +152,7 @@ func TestFulaLs(t *testing.T) {
 	}
 
 	e := es[0]
-	exp := mobile.DirEntry{Name: "DID", Type: mobile.File, Size: 9, Cid: "QmaHLcFdVDqcVEvS9LdurpApHuenXwjhRY1tSHykCzbC91"}
+	exp := fulaMobile.DirEntry{Name: "DID", Type: fulaMobile.File, Size: 9, Cid: "QmaHLcFdVDqcVEvS9LdurpApHuenXwjhRY1tSHykCzbC91"}
 	if e != exp {
 		t.Fatal("Recieved item in the list is not what expected")
 	}
@@ -180,8 +180,8 @@ func TestFulaMkDir(t *testing.T) {
 
 	foundDID := false
 	foundPhotos := false
-	eDID := mobile.DirEntry{Name: "DID", Type: mobile.File, Size: 9, Cid: "QmaHLcFdVDqcVEvS9LdurpApHuenXwjhRY1tSHykCzbC91"}
-	ePhotos := mobile.DirEntry{Name: "photos", Type: mobile.Directory, Size: 0, Cid: "QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"}
+	eDID := fulaMobile.DirEntry{Name: "DID", Type: fulaMobile.File, Size: 9, Cid: "QmaHLcFdVDqcVEvS9LdurpApHuenXwjhRY1tSHykCzbC91"}
+	ePhotos := fulaMobile.DirEntry{Name: "photos", Type: fulaMobile.Directory, Size: 0, Cid: "QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"}
 	for _, d := range es {
 		if d == eDID {
 			foundDID = true
@@ -221,7 +221,7 @@ func TestFulaDelete(t *testing.T) {
 		t.Fatal("Recieved list has wrong len")
 	}
 
-	ePhotos := mobile.DirEntry{Name: "photos", Type: mobile.Directory, Size: 0, Cid: "QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"}
+	ePhotos := fulaMobile.DirEntry{Name: "photos", Type: fulaMobile.Directory, Size: 0, Cid: "QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn"}
 	p := es[0]
 
 	if p != ePhotos {
