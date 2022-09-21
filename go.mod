@@ -3,6 +3,7 @@ module github.com/functionland/go-fula
 go 1.16
 
 require (
+	github.com/functionland/go-unixfs v0.0.0-20220909204746-cb98f55c458a
 	github.com/golang/protobuf v1.5.2
 	github.com/ipfs/go-block-format v0.0.3
 	github.com/ipfs/go-blockservice v0.4.0
@@ -37,12 +38,8 @@ require (
 	github.com/multiformats/go-multiaddr v0.7.0
 	github.com/multiformats/go-multiaddr-dns v0.3.1
 	go.opentelemetry.io/otel v1.9.0
-	google.golang.org/protobuf v1.28.1
-)
-
-require (
-	github.com/functionland/go-unixfs v0.0.0-20220909204746-cb98f55c458a
 	go.opentelemetry.io/otel/trace v1.9.0
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
@@ -52,6 +49,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/ipfs/go-graphsync v0.13.2 // indirect
 	github.com/ipfs/go-ipld-cbor v0.0.6 // indirect
+	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/ipfs/go-unixfsnode v1.5.0 // indirect
 	github.com/ipld/edelweiss v0.1.6 // indirect
 	github.com/ipld/go-codec-dagpb v1.5.0 // indirect
