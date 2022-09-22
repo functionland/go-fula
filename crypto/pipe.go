@@ -7,12 +7,9 @@ import (
 	"sync"
 
 	"github.com/mergermarket/go-pkcs7"
-	// logging "github.com/ipfs/go-log"
 )
 
-// var log = logging.Logger("fula:crypto")
-
-const CHUNK_SIZE = 1024 * aes.BlockSize
+const ChunkSize = 1024 * aes.BlockSize
 
 type encoder struct {
 	reader   io.Reader
@@ -20,14 +17,14 @@ type encoder struct {
 }
 
 func NewEncoder(reader io.Reader) *encoder {
-	encipher, _ := NewEnCipher()
-	return &encoder{reader: reader, EnCipher: encipher}
+	encipher := NewEnCipher()
+	return &encoder{reader: reader, EnCipher: *encipher}
 }
 
 func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 	defer close(fileCh)
 	log.Debug("start EncryptOnFly")
-	fileBuf := make([]byte, CHUNK_SIZE)
+	fileBuf := make([]byte, ChunkSize)
 	for {
 		n, err := c.reader.Read(fileBuf)
 		if err == io.EOF {
@@ -45,7 +42,7 @@ func (c *encoder) EncryptOnFly(fileCh chan<- []byte, wg *sync.WaitGroup) error {
 					return err
 				}
 			}
-			encBuf, err := c.EnCipher.Encrypt(fileBuf, n)
+			encBuf, err := c.EnCipher.Encrypt(fileBuf)
 			if err != nil {
 				return err
 			}
@@ -67,21 +64,25 @@ type decoder struct {
 }
 
 func NewDecoder(reader io.Reader, iv []byte, symKey []byte) *decoder {
-	decipher, _ := NewDeCipher(iv, symKey)
-	return &decoder{reader: reader, DeCipher: decipher}
+	decipher := NewDeCipher(iv, symKey)
+	return &decoder{reader: reader, DeCipher: *decipher}
 }
 
-func (c *decoder) DycryptOnFly(filePath string) error {
-	size:=16
+func (c *decoder) DecryptOnFly(filePath string) error {
+	const size = 16
 	buffer := make([]byte, size)
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	var cache []byte = nil
-	var cacheDec []byte = nil
-	chunkIndex := 0
+
+	var (
+		cache      []byte = nil
+		cacheDec   []byte = nil
+		chunkIndex        = 0
+	)
+
 	for {
 		n, err := c.reader.Read(buffer)
 		if err == io.EOF {
@@ -104,7 +105,7 @@ func (c *decoder) DycryptOnFly(filePath string) error {
 		if n > 0 {
 			cache = append(cache, buffer...)
 			chunkIndex += 1 * size
-			if chunkIndex >= CHUNK_SIZE {
+			if chunkIndex >= ChunkSize {
 				dec, err := c.DeCipher.Decrypt(cache)
 				if err != nil {
 					return err

@@ -333,8 +333,8 @@ func (adder *Adder) AddAllAndPin(ctx context.Context, file files.Node) (ipld.Nod
 		return nil, err
 	}
 	var root mfs.FSNode
-	rootdir := mr.GetDirectory()
-	root = rootdir
+	rootDir := mr.GetDirectory()
+	root = rootDir
 
 	err = root.Flush()
 	if err != nil {
@@ -346,7 +346,7 @@ func (adder *Adder) AddAllAndPin(ctx context.Context, file files.Node) (ipld.Nod
 	_, dir := file.(files.Directory)
 	var name string
 	if !dir {
-		children, err := rootdir.ListNames(adder.ctx)
+		children, err := rootDir.ListNames(adder.ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -357,7 +357,7 @@ func (adder *Adder) AddAllAndPin(ctx context.Context, file files.Node) (ipld.Nod
 
 		// Replace root with the first child
 		name = children[0]
-		root, err = rootdir.Child(name)
+		root, err = rootDir.Child(name)
 		if err != nil {
 			return nil, err
 		}

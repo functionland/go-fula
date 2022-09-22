@@ -71,9 +71,9 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 		return nil, errors.New("either the filestore or the urlstore must be enabled to use nocopy, see: https://github.com/ipfs/kubo/blob/master/docs/experimental-features.md#ipfs-filestore")
 	}
 
-	addblockstore := api.blockstore
+	addBlockStore := api.blockstore
 	if !(settings.FsCache || settings.NoCopy) {
-		addblockstore = blockstore.NewGCBlockstore(api.baseBlocks, api.blockstore)
+		addBlockStore = blockstore.NewGCBlockstore(api.baseBlocks, api.blockstore)
 	}
 	exch := api.exchange
 	pinning := api.pinning
@@ -83,12 +83,12 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 		if err != nil {
 			return nil, err
 		}
-		addblockstore = node.Blockstore
+		addBlockStore = node.Blockstore
 		exch = node.Exchange
 		pinning = node.Pinning
 	}
 
-	bserv := blockservice.New(addblockstore, exch) // hash security 001
+	bserv := blockservice.New(addBlockStore, exch) // hash security 001
 	dserv := dag.NewDAGService(bserv)
 
 	// add a sync call to the DagService
@@ -113,7 +113,7 @@ func (api *PrivateAPI) Add(ctx context.Context, files files.Node, opts ...option
 		}
 	}
 
-	fileAdder, err := pfs.NewAdder(ctx, pinning, addblockstore, syncDserv)
+	fileAdder, err := pfs.NewAdder(ctx, pinning, addBlockStore, syncDserv)
 	if err != nil {
 		return nil, err
 	}

@@ -20,7 +20,7 @@ func initConfig(path string, conf *config.Config) error {
 	// initialization is the one time when it's okay to write to the config
 	// without reading the config from disk and merging any user-provided keys
 	// that may exist.
-	if err := serialize.WriteConfigFile(configFilename, conf); err != nil {
+	if err = serialize.WriteConfigFile(configFilename, conf); err != nil {
 		return err
 	}
 
@@ -37,7 +37,7 @@ func checkWritable(dir string) error {
 			if os.IsPermission(err) {
 				return fmt.Errorf("%s is not writeable by the current user", dir)
 			}
-			return fmt.Errorf("unexpected error while checking writeablility of repo root: %s", err)
+			return fmt.Errorf("unexpected error while checking writeablility of repo root: %s", err.Error())
 		}
 		fi.Close()
 		return os.Remove(testfile)
@@ -45,11 +45,15 @@ func checkWritable(dir string) error {
 
 	if os.IsNotExist(err) {
 		// dir doesn't exist, check that we can create it
-		return os.Mkdir(dir, 0775)
+		var permissionLevel os.FileMode = 0775
+		if err = os.Mkdir(dir, permissionLevel); err != nil {
+			return err
+		}
+		log.Infof("The %s directory - has been created with permision %d", dir, permissionLevel)
 	}
 
 	if os.IsPermission(err) {
-		return fmt.Errorf("cannot write to %s, incorrect permissions", err)
+		return fmt.Errorf("cannot write to %s, incorrect permissions", err.Error())
 	}
 
 	return err
