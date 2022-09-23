@@ -12,6 +12,7 @@ import (
 
 var log = logging.Logger("newFilePL")
 
+// sendRequest send the message to stream
 func sendRequest(req *FSRequest, s network.Stream) error {
 	reqMsg, err := proto.Marshal(req)
 	if err != nil {
@@ -35,13 +36,12 @@ func sendRequest(req *FSRequest, s network.Stream) error {
 	return nil
 }
 
-// Send an FSRequest for Read action, return a io.Reader to read file from the stream
+// RequestRead Send an FSRequest for Read action, return a io.Reader to read file from the stream
 func RequestRead(ctx context.Context, s network.Stream, path string, userDID string) (io.Reader, error) {
 
 	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_READ}
 
-	err := sendRequest(fsReq, s)
-	if err != nil {
+	if err := sendRequest(fsReq, s); err != nil {
 		return nil, err
 	}
 
@@ -52,25 +52,24 @@ func RequestRead(ctx context.Context, s network.Stream, path string, userDID str
 		defer s.Close()
 
 		if _, err := io.Copy(pw, s); err != nil {
-			log.Error("error in reading file from stream", err)
+			log.Error("error in reading file from stream", err.Error())
 		}
 	}()
 
 	return pr, nil
 }
 
-// Send an FSRequest for MkDir action, wait until receiving a cid for the directory
+// RequestMkDir send an FSRequest for MkDir action, wait until receiving a cid for the directory
 func RequestMkDir(ctx context.Context, s network.Stream, path string, userDID string) (string, error) {
 	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_MKDIR}
 
-	err := sendRequest(fsReq, s)
-	if err != nil {
+	if err := sendRequest(fsReq, s); err != nil {
 		return "", err
 	}
 
 	bcid, err := io.ReadAll(s)
 	if err != nil {
-		log.Error("coudn't receive the cid ", err)
+		log.Error("couldn't receive the cid ", err.Error())
 		s.Reset()
 		return "", err
 	}
@@ -78,25 +77,24 @@ func RequestMkDir(ctx context.Context, s network.Stream, path string, userDID st
 	return string(bcid), nil
 }
 
-// Send an FSRequest for Write action, wait until receiving a cid for the file
+// RequestWrite send an FSRequest for Write action, wait until receiving a cid for the file
 func RequestWrite(ctx context.Context, s network.Stream, path string, userDID string, f io.Reader) (string, error) {
 	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_WRITE}
 
-	err := sendRequest(fsReq, s)
-	if err != nil {
+	if err := sendRequest(fsReq, s); err != nil {
 		return "", err
 	}
 
 	if _, err := io.Copy(s, f); err != nil {
-		log.Error("error writing the file on the stream: ", err)
+		log.Error("error writing the file on the stream: ", err.Error())
 		return "", err
 	}
-	log.Debug("wrote file on the stream successfuly")
+	log.Debug("wrote file on the stream successfully")
 	s.CloseWrite()
 
 	bcid, err := io.ReadAll(s)
 	if err != nil {
-		log.Error("coudn't receive the cid ", err)
+		log.Error("couldn't receive the cid ", err.Error())
 		s.Reset()
 		return "", err
 	}
@@ -109,14 +107,12 @@ func RequestWrite(ctx context.Context, s network.Stream, path string, userDID st
 func RequestDelete(ctx context.Context, s network.Stream, path string, userDID string) error {
 	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_DELETE}
 
-	err := sendRequest(fsReq, s)
-	if err != nil {
+	if err := sendRequest(fsReq, s); err != nil {
 		return err
 	}
 
-	_, err = io.ReadAll(s)
-	if err != nil {
-		log.Error("couldn't receive the cid ", err)
+	if _, err := io.ReadAll(s); err != nil {
+		log.Error("couldn't receive the cid ", err.Error())
 		s.Reset()
 		return err
 	}
@@ -128,20 +124,22 @@ func RequestDelete(ctx context.Context, s network.Stream, path string, userDID s
 func RequestLs(ctx context.Context, s network.Stream, path string, userDID string) (*DirEntries, error) {
 	fsReq := &FSRequest{DID: userDID, Path: path, Action: ActionType_LS}
 
-	err := sendRequest(fsReq, s)
-	if err != nil {
+	if err := sendRequest(fsReq, s); err != nil {
 		return nil, err
 	}
 
 	dbuf, err := io.ReadAll(s)
 	if err != nil {
-		log.Error("couldn't receive the cid ", err)
+		log.Error("couldn't receive the cid ", err.Error())
 		s.Reset()
 		return nil, err
 	}
 
 	dentries := &DirEntries{}
-	proto.Unmarshal(dbuf, dentries)
+	if err = proto.Unmarshal(dbuf, dentries); err != nil {
+		log.Error("couldn't unmarshal entries the cid ", err.Error())
+		return nil, err
+	}
 
 	return dentries, nil
 }

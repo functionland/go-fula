@@ -4,18 +4,17 @@ import (
 	"context"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
+	logging "github.com/ipfs/go-log"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/coreapi"
 	"github.com/ipfs/kubo/plugin"
-	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p-core/network"
 )
 
 var log = logging.Logger("plugin/beast")
 
-func check(err error) {
-
-}
+// TODO implement check func or remove it
+func check(err error) {}
 
 type BeastPlugin struct {
 	plugin.PluginDaemonInternal

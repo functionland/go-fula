@@ -22,6 +22,7 @@ var (
 
 func init() {
 	typeSystem, err := ipld.LoadSchemaBytes(schemaBytes)
+	//TODO: add retry logic instead of panic
 	if err != nil {
 		panic(fmt.Errorf("cannot load schema: %w", err))
 	}

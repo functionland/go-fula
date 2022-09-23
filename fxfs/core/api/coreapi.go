@@ -81,17 +81,17 @@ func NewCoreAPI(n *core.IpfsNode, c ipfsiface.CoreAPI, opts ...options.ApiOption
 	return (&CoreAPI{nd: n, parentOpts: *parentOpts, nc: c}).WithIPFSOptions(opts...)
 }
 
-// Unixfs returns the UnixfsAPI interface implementation backed by the go-ipfs node
+// PrivateFS unixfs returns the UnixfsAPI interface implementation backed by the go-ipfs node
 func (api *CoreAPI) PrivateFS() fxfsiface.PrivateFS {
 	return (*PrivateAPI)(api)
 }
 
-// Block returns the BlockAPI interface implementation backed by the go-ipfs node
+// PublicFS block returns the BlockAPI interface implementation backed by the go-ipfs node
 func (api *CoreAPI) PublicFS() fxfsiface.PublicFS {
 	return (*PublicAPI)(api)
 }
 
-// WithOptions returns fxCoreAPI api with global options applied
+// WithIPFSOptions withOptions returns fxCoreAPI api with global options applied
 func (api *CoreAPI) WithIPFSOptions(opts ...options.ApiOption) (fxfsiface.CoreAPI, error) {
 	settings := api.parentOpts // make sure to copy
 	_, err := options.ApiOptionsTo(&settings, opts...)

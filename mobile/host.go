@@ -35,6 +35,7 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 	// Set your own keypair
 	con, err := connmgr.NewConnManager(10, 100)
 	if err != nil {
+		// TODO: Use retry logic instead of panic
 		panic(err)
 	}
 
@@ -46,25 +47,30 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 				options.Key.Type(algorithmDefault),
 			})
 			if err != nil {
+				// TODO: Use retry logic instead of panic
 				panic(err)
 			}
 			conf, err = config.InitWithIdentity(identity)
 			if err != nil {
+				// TODO: Use retry logic instead of panic
 				panic(err)
 			}
 		}
-		err = doInit(os.Stdout, configRoot, conf)
-		if err != nil {
+
+		if err = doInit(os.Stdout, configRoot, conf); err != nil {
+			// TODO: Use retry logic instead of panic
 			panic(err)
 		}
 	}
 
 	cfg, err := openConfig(configRoot)
 	if err != nil {
+		// TODO: Use retry logic instead of panic
 		panic(err)
 	}
 	sk, err := cfg.Identity.DecodePrivateKey("passphrase todo!")
 	if err != nil {
+		// TODO: Use retry logic instead of panic
 		panic(err)
 	}
 
@@ -118,9 +124,8 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 	btconf.MinPeerThreshold = 2
 
 	// connect to the chosen ipfs nodes
-	_, err = bootstrap.Bootstrap(peer.ID(cfg.Identity.PeerID), basicHost, kDht, btconf)
-	if err != nil {
-		log.Error("bootstrap failed. ", err)
+	if _, err = bootstrap.Bootstrap(peer.ID(cfg.Identity.PeerID), basicHost, kDht, btconf); err != nil {
+		log.Error("bootstrap failed. ", err.Error())
 		return nil, err
 	}
 	// Make the routed host

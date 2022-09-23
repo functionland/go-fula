@@ -57,6 +57,7 @@ func NewFula(repoPath string) (*Fula, error) {
 	err := logging.SetLogLevelRegex(".*", "DEBUG")
 
 	if err != nil {
+		// TODO: don't panic!
 		panic("logger failed")
 	}
 	ctx := context.Background()
@@ -76,35 +77,33 @@ func (f *Fula) AddBox(boxAddr string) error {
 
 	hasAdder := len(peerAddr.Addrs) != 0
 	if hasAdder {
-		var check bool
-		check = manet.IsIPLoopback(peerAddr.Addrs[0])
-		if check {
+		if manet.IsIPLoopback(peerAddr.Addrs[0]) {
 			return errors.New("cant Use loop back")
 		}
-		check = manet.IsIPUnspecified(peerAddr.Addrs[0])
-		if check {
+		if manet.IsIPUnspecified(peerAddr.Addrs[0]) {
 			return errors.New("not Specified")
 		}
 	}
-	err = f.Node.Connect(f.ctx, *peerAddr)
-	if err != nil {
-		log.Error("peer router failed ", err)
+
+	if err = f.Node.Connect(f.ctx, *peerAddr); err != nil {
+		log.Error("peer router failed ", err.Error())
 		return err
 	}
+
 	f.mybox = append(f.mybox, *peerAddr)
 	return nil
 }
 
 func (f *Fula) NewStream() (network.Stream, error) {
 
-	peer, err := f.GetBox()
+	peerID, err := f.GetBox()
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("box found", peer)
-	ctx := context.Background()
-	ctx = network.WithForceDirectDial(ctx, "transiant wont do it")
-	s, err := f.Node.NewStream(ctx, peer, fileP.ProtocolId)
+	log.Debug("box found", peerID)
+
+	ctx := network.WithForceDirectDial(context.Background(), "transient wont do it")
+	s, err := f.Node.NewStream(ctx, peerID, fileP.ProtocolId)
 	if err != nil {
 		return nil, err
 	}
@@ -124,18 +123,17 @@ func (f *Fula) GetBox() (peer.ID, error) {
 func (f *Fula) Read(userDID string, filePath string, destPath string) error {
 	s, err := f.NewStream()
 	if err != nil {
-		log.Error("Could not create a file protocol stream", err)
+		log.Error("Could not create a file protocol stream", err.Error())
 		return err
 	}
 
-	ctx := context.Background()
-	freader, err := fileP.RequestRead(ctx, s, filePath, userDID)
+	freader, err := fileP.RequestRead(context.Background(), s, filePath, userDID)
 	if err != nil {
-		log.Error("RequestRead failed on the stream", err)
+		log.Error("RequestRead failed on the stream", err.Error())
 		return err
 	}
 
-	if _, err := os.Stat(destPath); err == nil {
+	if _, err = os.Stat(destPath); err == nil {
 		log.Error("Destination file already exists")
 		return os.ErrExist
 	}
@@ -147,8 +145,7 @@ func (f *Fula) Read(userDID string, filePath string, destPath string) error {
 	}
 	defer fw.Close()
 
-	_, err = io.Copy(fw, freader)
-	if err != nil {
+	if _, err = io.Copy(fw, freader); err != nil {
 		log.Error("Could not write on the destination file")
 		return err
 	}
@@ -162,20 +159,19 @@ func (f *Fula) Read(userDID string, filePath string, destPath string) error {
 func (f *Fula) Write(userDID string, srcPath string, destPath string) error {
 	s, err := f.NewStream()
 	if err != nil {
-		log.Error("Could not create a file protocol stream", err)
+		log.Error("Could not create a file protocol stream", err.Error())
 		return err
 	}
 
-	ctx := context.Background()
 	sf, err := os.Open(srcPath)
 	if err != nil {
 		log.Error("Could not open source file")
 		return err
 	}
 
-	cid, err := fileP.RequestWrite(ctx, s, destPath, userDID, sf)
+	cid, err := fileP.RequestWrite(context.Background(), s, destPath, userDID, sf)
 	if err != nil {
-		log.Error("RequestWrite failed on the stream", err)
+		log.Error("RequestWrite failed on the stream", err.Error())
 		return err
 	}
 	log.Info("Wrote file, CID: ", cid)
@@ -188,14 +184,12 @@ func (f *Fula) Write(userDID string, srcPath string, destPath string) error {
 func (f *Fula) MkDir(userDID string, path string) error {
 	s, err := f.NewStream()
 	if err != nil {
-		log.Error("Could not create a file protocol stream", err)
+		log.Error("Could not create a file protocol stream", err.Error())
 		return err
 	}
 
-	ctx := context.Background()
-	_, err = fileP.RequestMkDir(ctx, s, path, userDID)
-	if err != nil {
-		log.Error("RequestMkDir failed on the stream")
+	if _, err = fileP.RequestMkDir(context.Background(), s, path, userDID); err != nil {
+		log.Error("RequestMkDir failed on the stream", err.Error())
 		return err
 	}
 
@@ -207,23 +201,22 @@ func (f *Fula) MkDir(userDID string, path string) error {
 func (f *Fula) Ls(userDID string, path string) ([]DirEntry, error) {
 	s, err := f.NewStream()
 	if err != nil {
-		log.Error("Could not create a file protocol stream", err)
+		log.Error("Could not create a file protocol stream", err.Error())
 		return nil, err
 	}
 
-	ctx := context.Background()
-	ds, err := fileP.RequestLs(ctx, s, path, userDID)
+	ds, err := fileP.RequestLs(context.Background(), s, path, userDID)
 	if err != nil {
-		log.Error("RequestLs failed on the stream", err)
+		log.Error("RequestLs failed on the stream", err.Error())
 		return nil, err
 	}
 
-	dentires := make([]DirEntry, 0)
+	entire := make([]DirEntry, 0)
 	for _, de := range ds.Items {
-		dentires = append(dentires, DirEntry{Name: de.Name, Size: int(de.Size), Type: EntryType(de.Type), Cid: de.Cid})
+		entire = append(entire, DirEntry{Name: de.Name, Size: int(de.Size), Type: EntryType(de.Type), Cid: de.Cid})
 	}
 
-	return dentires, nil
+	return entire, nil
 }
 
 // Deletes an entry in a path on a user's drive
@@ -231,14 +224,12 @@ func (f *Fula) Ls(userDID string, path string) ([]DirEntry, error) {
 func (f *Fula) Delete(userDID string, path string) error {
 	s, err := f.NewStream()
 	if err != nil {
-		log.Error("Could not create a file protocol stream", err)
+		log.Error("Could not create a file protocol stream", err.Error())
 		return err
 	}
 
-	ctx := context.Background()
-	err = fileP.RequestDelete(ctx, s, path, userDID)
-	if err != nil {
-		log.Error("RequestDelete failed on the stream", err)
+	if err = fileP.RequestDelete(context.Background(), s, path, userDID); err != nil {
+		log.Error("RequestDelete failed on the stream", err.Error())
 		return err
 	}
 

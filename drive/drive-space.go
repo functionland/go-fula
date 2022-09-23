@@ -39,7 +39,7 @@ type ListEntry struct {
 }
 
 // DriveSpace holds information about a space inside a user's drive
-// A drive space can be either Private or Public, SpactType indicates this
+// A drive space can be either Private or Public, SpaceType indicates this
 type DriveSpace struct {
 	Ctx       context.Context
 	Api       fxiface.CoreAPI
@@ -49,12 +49,12 @@ type DriveSpace struct {
 	Drive     *UserDrive
 }
 
-// Public space inside a Drive
+// DrivePublicSpace implement public space inside a Drive
 type DrivePublicSpace struct {
 	DriveSpace
 }
 
-// Private space inside a Drive
+// DrivePrivateSpace implement private space inside a Drive
 type DrivePrivateSpace struct {
 	DriveSpace
 }
@@ -63,7 +63,7 @@ func makePath(dirs ...string) path.Path {
 	return path.Join(path.New("/ipfs"), dirs...)
 }
 
-// Sets the space's root cid in it's parent drive
+// Save sets the space's root cid in it's parent drive
 // This should be called before UserDrive.Publish()
 func (ds *DriveSpace) Save() {
 	switch ds.SpaceType {
@@ -98,7 +98,7 @@ func (ds *DriveSpace) MkDir(p string, options MkDirOpts) (string, error) {
 	return ds.RootCid, nil
 }
 
-// Writes a file into drive at a given location (in public space).
+// WriteFile writes a file into drive at a given location (in public space).
 func (ds *DrivePublicSpace) WriteFile(p string, file files.File, options WriteFileOpts) (string, error) {
 	// @TODO handle options.parents = true (create the directories in the path)
 
@@ -122,7 +122,7 @@ func (ds *DrivePublicSpace) WriteFile(p string, file files.File, options WriteFi
 	return ds.RootCid, nil
 }
 
-// Writes a file into private space in a drive at a given location, it takes a byte array called JWE in addition to DrivePublicSpace.WriteFile
+// WriteFile writes a file into private space in a drive at a given location, it takes a byte array called JWE in addition to DrivePublicSpace.WriteFile
 func (ds *DrivePrivateSpace) WriteFile(p string, file files.File, jwe []byte, options WriteFileOpts) (string, error) {
 	// @TODO handle options.parents = true (create the not-existing directories in the path)
 
@@ -148,7 +148,7 @@ func (ds *DrivePrivateSpace) WriteFile(p string, file files.File, jwe []byte, op
 	return ds.RootCid, nil
 }
 
-// Reads a file from the drive at a given location
+// ReadFile reads a file from the drive at a given location
 func (ds *DrivePublicSpace) ReadFile(p string, options ReadFileOpts) (files.File, error) {
 	file, err := ds.Api.PublicFS().Get(ds.Ctx, makePath(ds.RootCid, p))
 	if err != nil {
@@ -176,7 +176,7 @@ func (ds *DrivePrivateSpace) ReadFile(p string, options ReadFileOpts) (pfs.Encod
 	return file.(pfs.EncodedFile), nil
 }
 
-// Deletes a file at a given location on the drive
+// DeleteFile deletes a file at a given location on the drive
 func (ds *DriveSpace) DeleteFile(p string, options DeleteFileOpts) (string, error) {
 	newRoot, err := deletefileDAG(ds.RootDir, p)
 	if err != nil {

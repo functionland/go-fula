@@ -3,11 +3,10 @@ package drive
 import (
 	"context"
 
-	logging "github.com/ipfs/go-log"
-
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
 	"github.com/functionland/go-fula/fxfs/core/pfs"
 	files "github.com/ipfs/go-ipfs-files"
+	logging "github.com/ipfs/go-log"
 )
 
 var log = logging.Logger("fula-drive")
@@ -22,22 +21,20 @@ type UserDrive struct {
 	ds              DriveStore
 }
 
-// Create a new null Drive, the only field set is the UserDID, other fields are initialized by first call to Publish
+// NewDrive create a new null Drive, the only field set is the UserDID, other fields are initialized by first call to Publish
 func NewDrive(userDID string, ds DriveStore) UserDrive {
-	return UserDrive{UserDID: userDID,
-		PrivateSpaceCid: "",
-		PublicSpaceCid:  "",
-		Dirs:            nil,
-		ds:              ds,
+	return UserDrive{
+		UserDID: userDID,
+		ds:      ds,
 	}
 }
 
-// Check if a drive is null
+// IsNull check if a drive is null
 func (ud *UserDrive) IsNull() bool {
 	return ud.PrivateSpaceCid == "" && ud.PublicSpaceCid == "" && ud.Dirs == nil
 }
 
-// Create a DrivePublicSpace struct. PublicSpace creates a Directory instance by getting the root cid of the drive using FS API
+// PublicSpace create a DrivePublicSpace struct. PublicSpace creates a Directory instance by getting the root cid of the drive using FS API
 func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePublicSpace, error) {
 	rpath := makePath(ud.PublicSpaceCid)
 	rootDir, err := api.PublicFS().Get(ctx, rpath)
@@ -55,7 +52,7 @@ func (ud *UserDrive) PublicSpace(ctx context.Context, api fxiface.CoreAPI) (*Dri
 		Drive:     ud}}, err
 }
 
-// Create a DrivePrivateSpace struct. PrivateSpace creates a Directory instance by getting the root cid of the drive using FS API
+// PrivateSpace create a DrivePrivateSpace struct. PrivateSpace creates a Directory instance by getting the root cid of the drive using FS API
 func (ud *UserDrive) PrivateSpace(ctx context.Context, api fxiface.CoreAPI) (*DrivePrivateSpace, error) {
 	rpath := makePath(ud.PrivateSpaceCid)
 	rootDir, err := api.PrivateFS().Get(ctx, rpath)

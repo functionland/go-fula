@@ -14,21 +14,19 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 )
 
-// Root handler for newFile protocol
-// It reads 2 bytes from the stream which determines the size of the request messeage
+// Handle implement root handler for newFile protocol
+// It reads 2 bytes from the stream which determines the size of the request message
 // It then reads the request message and passes the stream to the appropriate handler
 func Handle(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, s network.Stream) error {
 	log.Debug("handling")
 
-	sizebuf := make([]byte, 2)
-	_, err := io.ReadFull(s, sizebuf)
-	if err != nil {
+	sizeBuf := make([]byte, 2)
+	if _, err := io.ReadFull(s, sizeBuf); err != nil {
 		return err
 	}
 
-	reqbuf := make([]byte, binary.LittleEndian.Uint16(sizebuf))
-	_, err = io.ReadAtLeast(s, reqbuf, int(binary.LittleEndian.Uint16(sizebuf)))
-	if err != nil {
+	reqbuf := make([]byte, binary.LittleEndian.Uint16(sizeBuf))
+	if _, err := io.ReadAtLeast(s, reqbuf, int(binary.LittleEndian.Uint16(sizeBuf))); err != nil {
 		return err
 	}
 
@@ -48,29 +46,32 @@ func Handle(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, s net
 		return HandleLs(ctx, api, ds, req.Path, req.DID, s)
 	default:
 		s.Reset()
-		return fmt.Errorf("Action Type not supported: %s", req.Action)
+		return fmt.Errorf("action Type not supported: %s", req.Action)
 	}
 }
 
-// Read a file at a given path from the user's drive
+// HandleRead read a file at a given path from the user's drive
 func HandleRead(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
 
 	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
+
+	//TODO: Error needs to be handled and add retry logic
 	ud.Publish(ctx, api)
 
 	ps, err := ud.PublicSpace(ctx, api)
+	//TODO: add retry logic
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
 	file, err := ps.ReadFile(path, drive.ReadFileOpts{})
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
@@ -88,13 +89,15 @@ func HandleRead(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, p
 	return nil
 }
 
-// Create a new directory at a given location in the user's drive
+// HandleMkDir create a new directory at a given location in the user's drive
 func HandleMkDir(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
 	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+
+	//TODO: Error needs to be handled and add retry logic
 	ud.Publish(ctx, api)
 
 	ps, err := ud.PublicSpace(ctx, api)
@@ -110,8 +113,7 @@ func HandleMkDir(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 	}
 
 	ps.Save()
-	err = ud.Publish(ctx, api)
-	if err != nil {
+	if err = ud.Publish(ctx, api); err != nil {
 		return err
 	}
 
@@ -126,24 +128,23 @@ func HandleMkDir(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 	return nil
 }
 
-// Handle FSRequest with Delete action, delete a Node at a given location in the user's drive
+// HandleDelete handle FSRequest with Delete action, delete a Node at a given location in the user's drive
 func HandleDelete(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
 	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 	ud.Publish(ctx, api)
 
 	ps, err := ud.PublicSpace(ctx, api)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
-	_, err = ps.DeleteFile(path, drive.DeleteFileOpts{})
-	if err != nil {
-		log.Error(err)
+	if _, err = ps.DeleteFile(path, drive.DeleteFileOpts{}); err != nil {
+		log.Error(err.Error())
 		return err
 	}
 
@@ -156,7 +157,7 @@ func HandleDelete(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore,
 	go func() {
 		defer s.CloseWrite()
 
-		if _, err := s.Write([]byte{1}); err != nil {
+		if _, err = s.Write([]byte{1}); err != nil {
 			log.Error("error in writing delete ack on the stream", err)
 		}
 	}()
@@ -164,7 +165,7 @@ func HandleDelete(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore,
 	return nil
 }
 
-// Handle FSRequest with Ls action, list entries existing in a given path in a user's drive
+// HandleLs handle FSRequest with Ls action, list entries existing in a given path in a user's drive
 func HandleLs(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
 	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
@@ -198,7 +199,7 @@ func HandleLs(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, pat
 		if err != nil {
 			log.Error("error in encoding the DirEntries")
 		}
-		if _, err := s.Write(dbuf); err != nil {
+		if _, err = s.Write(dbuf); err != nil {
 			log.Error("error in writing directory entries on the stream", err)
 		}
 	}()
@@ -206,22 +207,22 @@ func HandleLs(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, pat
 	return nil
 }
 
-// Handle FSRequest with Write action, write a file at a given location in the user's drive
+// HandleWrite handle FSRequest with Write action, write a file at a given location in the user's drive
 func HandleWrite(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, path string, userDID string, s network.Stream) error {
 	ud, err := ds.ResolveCreate(userDID)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
-	err = ud.Publish(context.Background(), api)
-	if err != nil {
-		log.Error(err)
+
+	if err = ud.Publish(context.Background(), api); err != nil {
+		log.Error(err.Error())
 		return err
 	}
 
 	ps, err := ud.PublicSpace(ctx, api)
 	if err != nil {
-		log.Error(err)
+		log.Error(err.Error())
 		return err
 	}
 
@@ -238,7 +239,7 @@ func HandleWrite(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 
 	fcid, err := ps.WriteFile(path, f, drive.WriteFileOpts{})
 	if err != nil {
-		log.Error("error in receiving file", err)
+		log.Error("error in receiving file", err.Error())
 	}
 
 	ps.Save()
@@ -250,7 +251,7 @@ func HandleWrite(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 	go func() {
 		defer s.Close()
 
-		if _, err := s.Write([]byte(fcid)); err != nil {
+		if _, err = s.Write([]byte(fcid)); err != nil {
 			log.Error("error in writing the file cid on the stream", err)
 		}
 	}()

@@ -11,6 +11,8 @@ import (
 
 var log = logging.Logger("fula:crypto")
 
+const randomKeyGenError = "something goes wording with random generator: %s"
+
 type IChipher interface {
 	Encrypt()
 	Decrypt()
@@ -21,22 +23,25 @@ type Cipher struct {
 	SymKey []byte
 }
 
-func NewEnCipher() (Cipher, error) {
+func NewEnCipher() *Cipher {
 	symKey, err := RandomKey(32)
 	if err != nil {
-		log.Error("somthing goes worng with random generator")
-		return Cipher{}, err
+		log.Errorf(randomKeyGenError, err.Error())
+		return &Cipher{}
 	}
 	iv, err := RandomKey(16)
 	if err != nil {
-		log.Error("somthing goes worng with random generator")
-		return Cipher{}, err
+		log.Errorf(randomKeyGenError, err.Error())
+		return &Cipher{}
 	}
-	return Cipher{Iv: iv, SymKey: symKey}, nil
+	return &Cipher{Iv: iv, SymKey: symKey}
 }
 
-func NewDeCipher(iv []byte, symKey []byte) (Cipher, error) {
-	return Cipher{Iv: iv, SymKey: symKey}, nil
+func NewDeCipher(iv []byte, symKey []byte) *Cipher {
+	return &Cipher{
+		Iv:     iv,
+		SymKey: symKey,
+	}
 }
 
 // RandomKey generate array of size n with random data.
@@ -52,11 +57,10 @@ func RandomKey(n int) ([]byte, error) {
 }
 
 // Encrypt encrypts plain text string into cipher text string
-func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
+func (c *Cipher) Encrypt(unencrypted []byte) ([]byte, error) {
 
 	if len(unencrypted)%aes.BlockSize != 0 {
-		err := fmt.Errorf(`plainText: "%s" has the wrong block size`, unencrypted)
-		return nil, err
+		return nil, fmt.Errorf(`plainText: "%s" has the wrong block size`, unencrypted)
 	}
 
 	block, err := aes.NewCipher(c.SymKey)
@@ -68,7 +72,7 @@ func (c *Cipher) Encrypt(unencrypted []byte, n int) ([]byte, error) {
 
 	mode := cipher.NewCBCEncrypter(block, c.Iv)
 	mode.CryptBlocks(encData, unencrypted)
-	log.Debug("encypted buff size:", len(encData))
+	log.Debug("encrypted buff size:", len(encData))
 	return encData, nil
 }
 
@@ -79,12 +83,11 @@ func (c *Cipher) Decrypt(encrypted []byte) ([]byte, error) {
 		return nil, err
 	}
 	decData := make([]byte, len(encrypted))
+
 	log.Debug("size of encrypted input", len(encrypted))
 	mode := cipher.NewCBCDecrypter(block, c.Iv)
 	mode.CryptBlocks(decData, encrypted)
 	log.Debug("size of dencrypted input", len(decData))
-	if err != nil {
-		return nil, err
-	}
+
 	return decData, nil
 }
