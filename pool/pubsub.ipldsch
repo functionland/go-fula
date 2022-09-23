@@ -1,0 +1,5 @@
+type Announcement struct {
+    Version   String
+    Type      Int
+    Addrs     [String]
+}
