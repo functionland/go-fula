@@ -21,7 +21,7 @@ require (
 	github.com/ipfs/go-ipfs-pinner v0.2.1
 	github.com/ipfs/go-ipfs-posinfo v0.0.1
 	github.com/ipfs/go-ipfs-provider v0.7.1
-	github.com/ipfs/go-ipfs-routing v0.2.1
+	github.com/ipfs/go-ipfs-routing v0.3.0
 	github.com/ipfs/go-ipfs-util v0.0.2
 	github.com/ipfs/go-ipld-format v0.4.0
 	github.com/ipfs/go-log v1.0.5
@@ -46,8 +46,9 @@ require (
 	bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/functionland/go-mfs v0.0.0-20220909191302-1886090da299
+	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
-	github.com/ipfs/go-graphsync v0.13.2 // indirect
+	github.com/ipfs/go-graphsync v0.14.0
 	github.com/ipfs/go-ipld-cbor v0.0.6 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/ipfs/go-unixfsnode v1.5.0 // indirect
@@ -59,6 +60,7 @@ require (
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-multicodec v0.6.0
 	github.com/prometheus/client_golang v1.13.0 // indirect
+	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/tidwall/gjson v1.14.3 // indirect
 	github.com/whyrusleeping/cbor-gen v0.0.0-20220514204315-f29c37e9c44c // indirect
