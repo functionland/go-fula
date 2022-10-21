@@ -1,11 +1,17 @@
 package pool
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"time"
 
+	"github.com/ipfs/go-datastore"
+	dssync "github.com/ipfs/go-datastore/sync"
+	"github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 )
@@ -17,6 +23,8 @@ type (
 		name             string
 		topicName        string
 		announceInterval time.Duration
+		ds               datastore.Batching
+		ls               *ipld.LinkSystem
 	}
 )
 
@@ -39,6 +47,25 @@ func newOptions(o ...Option) (*options, error) {
 		var err error
 		if opts.h, err = libp2p.New(); err != nil {
 			return nil, err
+		}
+	}
+	if opts.ds == nil {
+		opts.ds = dssync.MutexWrap(datastore.NewMapDatastore())
+	}
+	if opts.ls == nil {
+		ls := cidlink.DefaultLinkSystem()
+		ls.StorageWriteOpener = func(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
+			buf := bytes.NewBuffer(nil)
+			return buf, func(l ipld.Link) error {
+				return opts.ds.Put(ctx.Ctx, datastore.NewKey(l.Binary()), buf.Bytes())
+			}, nil
+		}
+		ls.StorageReadOpener = func(ctx ipld.LinkContext, l ipld.Link) (io.Reader, error) {
+			val, err := opts.ds.Get(ctx.Ctx, datastore.NewKey(l.Binary()))
+			if err != nil {
+				return nil, err
+			}
+			return bytes.NewBuffer(val), nil
 		}
 	}
 	return &opts, nil
@@ -78,6 +105,20 @@ func WithTopicName(n string) Option {
 func WithAnnounceInterval(i time.Duration) Option {
 	return func(o *options) error {
 		o.announceInterval = i
+		return nil
+	}
+}
+
+func WithDatastore(ds datastore.Batching) Option {
+	return func(o *options) error {
+		o.ds = ds
+		return nil
+	}
+}
+
+func WithLinkSystem(ls *ipld.LinkSystem) Option {
+	return func(o *options) error {
+		o.ls = ls
 		return nil
 	}
 }

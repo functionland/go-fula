@@ -6,7 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ipfs/go-graphsync"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -23,6 +26,8 @@ type (
 		*options
 		sub   *pubsub.Subscription
 		topic *pubsub.Topic
+		ls    ipld.LinkSystem
+		gx    graphsync.GraphExchange
 	}
 )
 
@@ -31,12 +36,17 @@ func New(o ...Option) (*Pool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Pool{
+	p := Pool{
 		options: opts,
-	}, nil
+		ls:      cidlink.DefaultLinkSystem(),
+	}
+	p.ls.StorageReadOpener = p.blockReadOpener
+	p.ls.StorageWriteOpener = p.blockWriteOpener
+	return &p, nil
 }
 
 func (p *Pool) Start(ctx context.Context) error {
+	p.startGraphExchange(ctx)
 	gsub, err := pubsub.NewGossipSub(ctx, p.h,
 		pubsub.WithPeerExchange(true),
 		pubsub.WithFloodPublish(true),
