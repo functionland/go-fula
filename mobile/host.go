@@ -10,6 +10,7 @@ import (
 	dsync "github.com/ipfs/go-datastore/sync"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -28,7 +29,7 @@ const (
 	profileOptionName   = "profile"
 )
 
-func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
+func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, host.Host, error) {
 	// Now, normally you do not just want a simple host, you want
 	// that is fully configured to best support your p2p application.
 	// Let's create a second host setting some more options.
@@ -104,7 +105,7 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 
 	basicHost, err := libp2p.New(opt...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Construct a datastore (needed by the DHT). This is just a simple, in-memory thread-safe datastore.
@@ -126,13 +127,13 @@ func create(ctx context.Context, configRoot string) (*rhost.RoutedHost, error) {
 	// connect to the chosen ipfs nodes
 	if _, err = bootstrap.Bootstrap(peer.ID(cfg.Identity.PeerID), basicHost, kDht, btconf); err != nil {
 		log.Error("bootstrap failed. ", err.Error())
-		return nil, err
+		return nil, nil, err
 	}
 	// Make the routed host
 	routedHost := rhost.Wrap(basicHost, kDht)
 
 	log.Infof("Fula Bootsraped and ready with ID:", routedHost.ID())
-	return routedHost, nil
+	return routedHost, basicHost, nil
 }
 
 func doInit(out io.Writer, repoRoot string, conf *config.Config) error {

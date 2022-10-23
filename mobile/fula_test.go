@@ -2,57 +2,76 @@ package fulaMobile_test
 
 import (
 	"context"
+	"math/rand"
 	"os"
 	"testing"
 
 	"github.com/functionland/go-fula/drive"
-	"github.com/functionland/go-fula/mobile"
+	fulaMobile "github.com/functionland/go-fula/mobile"
 	fileP "github.com/functionland/go-fula/protocols/file"
-	"github.com/ipfs/kubo/core"
-	"github.com/ipfs/kubo/core/bootstrap"
+
+	// "github.com/ipfs/kubo/core"
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 )
 
-func initNodes() (*core.IpfsNode, *fulaMobile.Fula, error) {
-	apis, nodes, err := fulaMobile.MakeAPISwarm(context.Background(), true, 2)
+func initNodes() (host.Host, *fulaMobile.Fula, error) {
+	apis, _, err := fulaMobile.MakeAPISwarm(context.Background(), true, 2)
 	if err != nil {
 		return nil, nil, err
 	}
 	fapi := apis[0]
-	node1 := nodes[0]
-	node2 := nodes[1]
+	// node1 := nodes[0]
+	// node2 := nodes[1]
 	ctx := context.Background()
 	ds := drive.NewDriveStore()
 
-	node1.PeerHost.SetStreamHandler(fileP.ProtocolId, func(s network.Stream) {
+	rng := rand.New(rand.NewSource(42))
+	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
+	if err != nil {
+		panic(err)
+	}
+	h1, err := libp2p.New(libp2p.Identity(pid1))
+	if err != nil {
+		panic(err)
+	}
+
+	h1.SetStreamHandler(fileP.ProtocolId, func(s network.Stream) {
 		fileP.Handle(ctx, fapi, ds, s)
 	})
 
-	bs1 := []peer.AddrInfo{node1.Peerstore.PeerInfo(node1.Identity)}
-	bs2 := []peer.AddrInfo{node2.Peerstore.PeerInfo(node2.Identity)}
+	// bs1 := []peer.AddrInfo{node1.Peerstore.PeerInfo(node1.Identity)}
+	// bs2 := []peer.AddrInfo{node2.Peerstore.PeerInfo(node2.Identity)}
 
-	if err := node2.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs1)); err != nil {
-		return nil, nil, err
-	}
-	if err := node1.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs2)); err != nil {
-		return nil, nil, err
-	}
+	// if err := node2.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs1)); err != nil {
+	// 	return nil, nil, err
+	// }
+	// if err := node1.Bootstrap(bootstrap.BootstrapConfigWithPeers(bs2)); err != nil {
+	// 	return nil, nil, err
+	// }
 
 	fula, err := fulaMobile.NewFula("./repo")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	fula.Node = *routedhost.Wrap(node2.PeerHost, node2.Routing)
+	// fula.Node = *routedhost.Wrap(node2.PeerHost, node2.Routing)
 
-	err = fula.AddBox("/p2p/" + node1.Identity.Pretty())
+	// err = fula.AddBox("/p2p/" + node1.Identity.Pretty())
+	err = fula.AddBox(h1.ID(), h1.Addrs())
 	if err != nil {
 		return nil, nil, err
 	}
+	h1.Peerstore().AddAddrs(fula.Node.ID(), fula.Node.Addrs(), peerstore.PermanentAddrTTL)
+	if err = h1.Connect(ctx, peer.AddrInfo{ID: fula.Node.ID(), Addrs: fula.Node.Addrs()}); err != nil {
+		panic(err)
+	}
 
-	return node1, fula, nil
+	return h1, fula, nil
 }
 
 func TestNew(t *testing.T) {
@@ -69,7 +88,8 @@ func TestAddBox(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want, err := peer.AddrInfoFromString("/p2p/" + node.Identity.Pretty())
+	want, err := peer.AddrInfoFromString("/p2p/" + node.ID().Pretty())
+	// want, err := peer.AddrInfoFromString("/p2p/" + node.Identity.Pretty())
 	if err != nil {
 		t.Fatal(err)
 	}

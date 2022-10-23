@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"testing"
 	"time"
 
+	fulaMobile "github.com/functionland/go-fula/mobile"
 	"github.com/functionland/go-fula/pool"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
@@ -291,4 +293,112 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
 	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	//     content: {"this":true}
+}
+
+func TestExamplePool_ExchangeDagBetweenPoolAndFula(t *testing.T) {
+	const poolName = "my-pool"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Elevate log level to show internal communications.
+	if err := logging.SetLogLevel("*", "error"); err != nil {
+		panic(err)
+	}
+
+	// Use a deterministic random generator to generate deterministic
+	// output for the example.
+	rng := rand.New(rand.NewSource(42))
+
+	// Instantiate the first node in the pool
+	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
+	if err != nil {
+		panic(err)
+	}
+	h1, err := libp2p.New(libp2p.Identity(pid1))
+	if err != nil {
+		panic(err)
+	}
+	n1, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h1))
+	if err != nil {
+		panic(err)
+	}
+	if err := n1.Start(ctx); err != nil {
+		panic(err)
+	}
+	defer n1.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+
+	fula, err := fulaMobile.NewFula("./repo")
+	if err != nil {
+		panic(err)
+	}
+
+	err = fula.AddBox(h1.ID(), h1.Addrs())
+	if err != nil {
+		panic(err)
+	}
+
+	// Connect n1 to fula.
+	h1.Peerstore().AddAddrs(fula.Node.ID(), fula.Node.Addrs(), peerstore.PermanentAddrTTL)
+	if err = h1.Connect(ctx, peer.AddrInfo{ID: fula.Node.ID(), Addrs: fula.Node.Addrs()}); err != nil {
+		panic(err)
+	}
+
+	// Generate a sample DAG and store it on node 1 (n1) in the pool
+	leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
+		na.AssembleEntry("this").AssignBool(true)
+	})
+	leafLink, err := n1.Store(ctx, leaf)
+	if err != nil {
+		panic(err)
+	}
+	root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
+		na.AssembleEntry("that").AssignInt(42)
+		na.AssembleEntry("leafLink").AssignLink(leafLink)
+	})
+	rootLink, err := n1.Store(ctx, root)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), rootLink, leafLink)
+
+	// Fetch the sample DAG stored on node 1 from node 2 by only asking for the root link.
+	// Because fetch implementation is recursive, it should fetch the leaf link too.
+	if err := fula.Fetch(ctx, h1.ID(), rootLink); err != nil {
+		panic(err)
+	}
+
+	// Assert that n2 now has both root and leaf links
+	if exists, err := fula.Has(ctx, rootLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", fula.Node.ID(), rootLink, h1.ID())
+		n, err := fula.Load(ctx, rootLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+	if exists, err := fula.Has(ctx, leafLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", fula.Node.ID(), leafLink, h1.ID())
+		n, err := fula.Load(ctx, leafLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
 }
