@@ -1,0 +1,8 @@
+type PoolsDirectory struct {
+    Version   String
+    Next  optional Link
+    Peer      String
+	Type		String
+	Value	String
+    Signature Bytes
+}
