@@ -9,11 +9,11 @@ import (
 Poolsdirectory is used to create and publish a DAG that holds the Fula pools.
 DAG STRUCTURE:
 
-		----------[HEAD]---------
-		|			|			|
-	[POOL1]-- --[POOL2]		[POOL3]
-	|		| |					|
-[PEER1]	  [PEER2]			[PEER3]
+		----------[HEAD]----------------
+		|			|	|
+	[POOL1]---	-------------[POOL2]		[POOL3]
+	|	 |     |				  |
+   [PEER1]	 [PEER2]				[PEER3]
 ****/
 
 /****
