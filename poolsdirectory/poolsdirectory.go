@@ -57,3 +57,19 @@ Published the cid on IPNS
 func Publish (root cid.Cid) (String, error) {
 
 }
+
+/****
+Get the list of pools
+Gets a pool id for a specific pool, and returns the pool details.
+****/
+func GetPools (poolid String) ([]PoolDetail, error) {
+
+}
+
+/****
+Get the boostrap nodes for a specific pool id
+Gets a pool id for a specific pool, and returns the ipv4 of the nodes in the pool.
+****/
+func GetBootstrapnodes (poolid String) ([]String, error) {
+
+}
