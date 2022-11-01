@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 
 	"io"
 
 	"os"
 
 	fileP "github.com/functionland/go-fula/protocols/file"
-	"github.com/ipfs/go-cid"
+	cid "github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/ipfs/go-graphsync"
@@ -19,12 +20,14 @@ import (
 	format "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log"
 	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/node/basicnode"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p/core/host"
-	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multicodec"
 )
@@ -61,7 +64,6 @@ type DirEntry struct {
 }
 
 type Fula struct {
-	Node  rhost.RoutedHost
 	h     host.Host
 	ctx   context.Context
 	mybox []peer.AddrInfo
@@ -71,18 +73,12 @@ type Fula struct {
 }
 
 func NewFula(repoPath string) (*Fula, error) {
-	// err := logging.SetLogLevelRegex(".*", "DEBUG")
-
-	// if err != nil {
-	// 	// TODO: don't panic!
-	// 	panic("logger failed")
-	// }
 	ctx := context.Background()
-	node, host, err := create(ctx, repoPath)
+	host, err := create(ctx, repoPath)
 	if err != nil {
 		return nil, err
 	}
-	f := &Fula{Node: *node, h: host, ctx: ctx}
+	f := &Fula{h: host, ctx: ctx}
 
 	f.ds = dssync.MutexWrap(datastore.NewMapDatastore())
 
@@ -175,26 +171,56 @@ func (f *Fula) Fetch(ctx context.Context, from peer.ID, l ipld.Link) error {
 	}
 }
 
+func (f *Fula) TestGraphExchange(pid string, mas string, link string) (string, error) {
+	ctx := context.Background()
+
+	ma, err := multiaddr.NewMultiaddr(mas)
+	if err != nil {
+		return "", err
+	}
+	addrs := []multiaddr.Multiaddr{ma}
+	id, err := peer.Decode(pid)
+	if err != nil {
+		return "", err
+	}
+	f.h.Peerstore().AddAddrs(id, addrs, peerstore.PermanentAddrTTL)
+	if err = f.h.Connect(ctx, peer.AddrInfo{ID: id, Addrs: addrs}); err != nil {
+		return "", err
+	}
+	fmt.Printf("Connected to host %s", id)
+
+	rcid, err := cid.Decode(link)
+	if err != nil {
+		return "", err
+	}
+	rootLink := cidlink.Link{Cid: rcid}
+
+	if err := f.Fetch(ctx, id, rootLink); err != nil {
+		return "", err
+	}
+
+	if exists, err := f.Has(ctx, rootLink); err != nil {
+		return "", err
+	} else if !exists {
+		return "", errors.New("expected host to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", f.h.ID(), rootLink, id)
+		n, err := f.Load(ctx, rootLink, basicnode.Prototype.Any)
+		if err != nil {
+			return "", err
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			return "", err
+		}
+
+		res := fmt.Sprintf("    content: %s\n", buf.String())
+		fmt.Printf(res)
+		return res, nil
+	}
+}
+
 func (f *Fula) AddBox(id peer.ID, addrs []multiaddr.Multiaddr) error {
-	// peerAddr, err := peer.AddrInfoFromString(boxAddr)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// hasAdder := len(peerAddr.Addrs) != 0
-	// if hasAdder {
-	// 	if manet.IsIPLoopback(peerAddr.Addrs[0]) {
-	// 		return errors.New("cant Use loop back")
-	// 	}
-	// 	if manet.IsIPUnspecified(peerAddr.Addrs[0]) {
-	// 		return errors.New("not Specified")
-	// 	}
-	// }
-
-	// if err = f.Node.Connect(f.ctx, *peerAddr); err != nil {
-	// 	log.Error("peer router failed ", err.Error())
-	// 	return err
-	// }
 
 	if err := f.h.Connect(f.ctx, peer.AddrInfo{ID: id, Addrs: addrs}); err != nil {
 		log.Error("peer connect failed ", err.Error())
@@ -206,19 +232,16 @@ func (f *Fula) AddBox(id peer.ID, addrs []multiaddr.Multiaddr) error {
 }
 
 func (f *Fula) NewStream() (network.Stream, error) {
+	// @TODO
+	return nil, nil
+}
 
-	peerID, err := f.GetBox()
-	if err != nil {
-		return nil, err
-	}
-	log.Debug("box found", peerID)
+func (f *Fula) HostID() peer.ID {
+	return f.h.ID()
+}
 
-	ctx := network.WithForceDirectDial(context.Background(), "transient wont do it")
-	s, err := f.Node.NewStream(ctx, peerID, fileP.ProtocolId)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+func (f *Fula) HostAddrs() []multiaddr.Multiaddr {
+	return f.h.Addrs()
 }
 
 func (f *Fula) GetBox() (peer.ID, error) {

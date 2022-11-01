@@ -10,14 +10,17 @@ import (
 
 	fulaMobile "github.com/functionland/go-fula/mobile"
 	"github.com/functionland/go-fula/pool"
+	cid "github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/fluent"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 )
 
 // ExamplePool_DiscoverPeersViaPubSub starts a pool named "my-pool" across three nodes, connects two of the nodes to
@@ -339,8 +342,8 @@ func TestExamplePool_ExchangeDagBetweenPoolAndFula(t *testing.T) {
 	}
 
 	// Connect n1 to fula.
-	h1.Peerstore().AddAddrs(fula.Node.ID(), fula.Node.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: fula.Node.ID(), Addrs: fula.Node.Addrs()}); err != nil {
+	h1.Peerstore().AddAddrs(fula.HostID(), fula.HostAddrs(), peerstore.PermanentAddrTTL)
+	if err = h1.Connect(ctx, peer.AddrInfo{ID: fula.HostID(), Addrs: fula.HostAddrs()}); err != nil {
 		panic(err)
 	}
 
@@ -374,7 +377,7 @@ func TestExamplePool_ExchangeDagBetweenPoolAndFula(t *testing.T) {
 	} else if !exists {
 		panic("expected n2 to have fetched the entire sample DAG")
 	} else {
-		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", fula.Node.ID(), rootLink, h1.ID())
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", fula.HostID(), rootLink, h1.ID())
 		n, err := fula.Load(ctx, rootLink, basicnode.Prototype.Any)
 		if err != nil {
 			panic(err)
@@ -390,8 +393,170 @@ func TestExamplePool_ExchangeDagBetweenPoolAndFula(t *testing.T) {
 	} else if !exists {
 		panic("expected n2 to have fetched the entire sample DAG")
 	} else {
-		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", fula.Node.ID(), leafLink, h1.ID())
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", fula.HostID(), leafLink, h1.ID())
 		n, err := fula.Load(ctx, leafLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+}
+
+func TestPoolNodeIdle(t *testing.T) {
+	const poolName = "my-pool"
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer cancel()
+
+	// Elevate log level to show internal communications.
+	if err := logging.SetLogLevel("*", "error"); err != nil {
+		panic(err)
+	}
+
+	// Use a deterministic random generator to generate deterministic
+	// output for the example.
+	rng := rand.New(rand.NewSource(42))
+
+	// Instantiate the first node in the pool
+	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
+	if err != nil {
+		panic(err)
+	}
+	h1, err := libp2p.New(libp2p.Identity(pid1), libp2p.ListenAddrStrings("/ip4/192.168.0.2/tcp/64658"))
+	if err != nil {
+		panic(err)
+	}
+	n1, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h1))
+	if err != nil {
+		panic(err)
+	}
+	if err := n1.Start(ctx); err != nil {
+		panic(err)
+	}
+	defer n1.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+
+	// Generate a sample DAG and store it on node 1 (n1) in the pool
+	leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
+		na.AssembleEntry("this").AssignBool(true)
+	})
+	leafLink, err := n1.Store(ctx, leaf)
+	if err != nil {
+		panic(err)
+	}
+	root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
+		na.AssembleEntry("that").AssignInt(42)
+		na.AssembleEntry("leafLink").AssignLink(leafLink)
+	})
+	rootLink, err := n1.Store(ctx, root)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), rootLink, leafLink)
+
+	for {
+
+	}
+}
+
+func TestPoolNodeCall(t *testing.T) {
+	const poolName = "my-pool"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Elevate log level to show internal communications.
+	if err := logging.SetLogLevel("*", "error"); err != nil {
+		panic(err)
+	}
+
+	cidstr := "QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT"
+	hpid, err := peer.Decode(cidstr)
+	if err != nil {
+		panic(err)
+	}
+
+	// Use a deterministic random generator to generate deterministic
+	// output for the example.
+	rng := rand.New(rand.NewSource(43))
+
+	// Instantiate the first node in the pool
+	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
+	if err != nil {
+		panic(err)
+	}
+	h1, err := libp2p.New(libp2p.Identity(pid1))
+	if err != nil {
+		panic(err)
+	}
+	n1, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h1))
+	if err != nil {
+		panic(err)
+	}
+	if err := n1.Start(ctx); err != nil {
+		panic(err)
+	}
+	defer n1.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+
+	id := hpid
+	ma, err := multiaddr.NewMultiaddr("/ip4/192.168.0.2/tcp/64658")
+	if err != nil {
+		panic(err)
+	}
+	addrs := []multiaddr.Multiaddr{ma}
+	h1.Peerstore().AddAddrs(id, addrs, peerstore.PermanentAddrTTL)
+	if err = h1.Connect(ctx, peer.AddrInfo{ID: id, Addrs: addrs}); err != nil {
+		panic(err)
+	}
+	fmt.Printf("Connected to host %s", id)
+
+	// Fetch the sample DAG stored on node 1 from node 2 by only asking for the root link.
+	// Because fetch implementation is recursive, it should fetch the leaf link too.
+	rcidstr := "bafyreihpspvqaii6nvjphmrerg4grecxcvkxaz7thfzhnu4drczbhvqpoq"
+	rcid, err := cid.Decode(rcidstr)
+	if err != nil {
+		panic(err)
+	}
+	rootLink := cidlink.Link{Cid: rcid}
+
+	lcidstr := "bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"
+	lcid, err := cid.Decode(lcidstr)
+	if err != nil {
+		panic(err)
+	}
+	leafLink := cidlink.Link{Cid: lcid}
+
+	if err := n1.Fetch(ctx, hpid, rootLink); err != nil {
+		panic(err)
+	}
+
+	// Assert that n2 now has both root and leaf links
+	if exists, err := n1.Has(ctx, rootLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h1.ID(), rootLink, hpid)
+		n, err := n1.Load(ctx, rootLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+	if exists, err := n1.Has(ctx, leafLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h1.ID(), leafLink, hpid)
+		n, err := n1.Load(ctx, leafLink, basicnode.Prototype.Any)
 		if err != nil {
 			panic(err)
 		}
