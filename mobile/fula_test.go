@@ -10,8 +10,8 @@ import (
 	fileP "github.com/functionland/go-fula/protocols/file"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/bootstrap"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 )
 

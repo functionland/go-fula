@@ -8,8 +8,8 @@ import (
 
 	fileP "github.com/functionland/go-fula/protocols/file"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
