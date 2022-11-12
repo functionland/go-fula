@@ -4,7 +4,7 @@ import (
 	"context"
 
 	filePL "github.com/functionland/go-fula/protocols/file"
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/coreapi"
 	"github.com/ipfs/kubo/plugin"

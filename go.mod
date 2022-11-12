@@ -3,6 +3,7 @@ module github.com/functionland/go-fula
 go 1.16
 
 require (
+	github.com/functionland/go-mfs v0.0.0-20220909191302-1886090da299
 	github.com/functionland/go-unixfs v0.0.0-20220909204746-cb98f55c458a
 	github.com/golang/protobuf v1.5.2
 	github.com/ipfs/go-block-format v0.0.3
@@ -12,6 +13,7 @@ require (
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-fetcher v1.6.1
 	github.com/ipfs/go-filestore v1.2.0
+	github.com/ipfs/go-graphsync v0.14.0
 	github.com/ipfs/go-ipfs-blockstore v1.2.0
 	github.com/ipfs/go-ipfs-chunker v0.0.5
 	github.com/ipfs/go-ipfs-exchange-interface v0.2.0
@@ -24,7 +26,7 @@ require (
 	github.com/ipfs/go-ipfs-routing v0.3.0
 	github.com/ipfs/go-ipfs-util v0.0.2
 	github.com/ipfs/go-ipld-format v0.4.0
-	github.com/ipfs/go-log v1.0.5
+	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/ipfs/go-merkledag v0.7.0
 	github.com/ipfs/go-namesys v0.5.0
 	github.com/ipfs/interface-go-ipfs-core v0.7.0
@@ -37,6 +39,7 @@ require (
 	github.com/mergermarket/go-pkcs7 v0.0.0-20170926155232-153b18ea13c9
 	github.com/multiformats/go-multiaddr v0.7.0
 	github.com/multiformats/go-multiaddr-dns v0.3.1
+	github.com/multiformats/go-multicodec v0.6.0
 	go.opentelemetry.io/otel v1.9.0
 	go.opentelemetry.io/otel/trace v1.9.0
 	google.golang.org/protobuf v1.28.1
@@ -45,12 +48,9 @@ require (
 require (
 	bazil.org/fuse v0.0.0-20200524192727-fb710f7dfd05 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/functionland/go-mfs v0.0.0-20220909191302-1886090da299
 	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
-	github.com/ipfs/go-graphsync v0.14.0
 	github.com/ipfs/go-ipld-cbor v0.0.6 // indirect
-	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/ipfs/go-unixfsnode v1.5.0 // indirect
 	github.com/ipld/edelweiss v0.1.6 // indirect
 	github.com/ipld/go-codec-dagpb v1.5.0 // indirect
@@ -58,7 +58,6 @@ require (
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.1 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
-	github.com/multiformats/go-multicodec v0.6.0
 	github.com/prometheus/client_golang v1.13.0 // indirect
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
