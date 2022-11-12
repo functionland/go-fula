@@ -2,11 +2,12 @@ package graph
 
 import (
 	"fmt"
-	proto "github.com/golang/protobuf/proto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	structpb "google.golang.org/protobuf/types/known/structpb"
 	"io/ioutil"
+
+	proto "github.com/golang/protobuf/proto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 const Protocol = "fx/graph/1"

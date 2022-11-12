@@ -11,7 +11,7 @@ import (
 	files "github.com/ipfs/go-ipfs-files"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p/core/network"
 )
 
 // Handle implement root handler for newFile protocol
@@ -59,11 +59,11 @@ func HandleRead(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, p
 		return err
 	}
 
-	//TODO: Error needs to be handled and add retry logic
+	// TODO: Error needs to be handled and add retry logic
 	ud.Publish(ctx, api)
 
 	ps, err := ud.PublicSpace(ctx, api)
-	//TODO: add retry logic
+	// TODO: add retry logic
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -97,7 +97,7 @@ func HandleMkDir(ctx context.Context, api fxiface.CoreAPI, ds drive.DriveStore, 
 		return err
 	}
 
-	//TODO: Error needs to be handled and add retry logic
+	// TODO: Error needs to be handled and add retry logic
 	ud.Publish(ctx, api)
 
 	ps, err := ud.PublicSpace(ctx, api)

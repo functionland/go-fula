@@ -26,8 +26,8 @@ import (
 	mock "github.com/ipfs/kubo/core/mock"
 	"github.com/ipfs/kubo/core/node/libp2p"
 	"github.com/ipfs/kubo/repo"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 )
 
@@ -224,7 +224,7 @@ func TestAPI(t *testing.T) {
 	plsres, err := fapi.PrivateFS().Ls(ctx, prdirp)
 	pdid := <-plsres
 
-	//@TODO add size check for pdid
+	// @TODO add size check for pdid
 	if pdid.Name != "DIDP" {
 		t.Log("The file inside private directory is not what expected")
 		t.Fail()
