@@ -6,7 +6,7 @@ import (
 	fxiface "github.com/functionland/go-fula/fxfs/core/iface"
 	"github.com/functionland/go-fula/fxfs/core/pfs"
 	files "github.com/ipfs/go-ipfs-files"
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("fula-drive")

@@ -3,24 +3,22 @@ package fulaMobile
 import (
 	"context"
 	"errors"
-
 	"io"
-
 	"os"
 
 	fileP "github.com/functionland/go-fula/protocols/file"
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
-var log = logging.Logger("fula:mobile")
+var log = logging.Logger("fula/mobile")
 
 const (
 	STORE_PATH = "storePath"
-	//I will cheet until i can add threadsafe datastore
+	// I will cheet until i can add threadsafe datastore
 	MY_BOX = "/mybox/cheat"
 )
 

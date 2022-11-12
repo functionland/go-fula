@@ -6,10 +6,10 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 )
 
-var log = logging.Logger("fula:crypto")
+var log = logging.Logger("fula/crypto")
 
 const randomKeyGenError = "something goes wording with random generator: %s"
 
