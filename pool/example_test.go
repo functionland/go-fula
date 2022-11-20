@@ -113,7 +113,7 @@ func ExamplePool_DiscoverPeersViaPubSub() {
 		}
 		select {
 		case <-ctx.Done():
-			break
+			panic(ctx.Err())
 		default:
 			time.Sleep(time.Second)
 		}
