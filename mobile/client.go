@@ -1,6 +1,7 @@
 package fulamobile
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	ipldmc "github.com/ipld/go-ipld-prime/multicodec"
+	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -60,22 +63,27 @@ func NewClient(cfg *Config) (*Client, error) {
 	return &mc, nil
 }
 
-// Get gets the value corresponding to the given key from the local datastore.
-// The key must be a valid ipld.Link.
+// Get gets the value corresponding to the given key from the local ipld.LinkSystem
+// The key must be a valid ipld.Link and the value returned is encoded ipld.Node.
 func (c *Client) Get(key []byte) ([]byte, error) {
 	l, err := toLink(key)
 	if err != nil {
 		return nil, err
 	}
-	exists, err := c.hasLink(l)
-	switch {
-	case err != nil:
+	ctx := context.TODO()
+	node, err := c.ls.Load(ipld.LinkContext{Ctx: ctx}, l, basicnode.Prototype.Any)
+	if err != nil {
 		return nil, err
-	case !exists:
-		return nil, datastore.ErrNotFound
-	default:
-		return c.ds.Get(context.Background(), datastore.NewKey(l.Binary()))
 	}
+	encoder, err := ipldmc.LookupEncoder(l.Cid.Prefix().GetCodec())
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := encoder(node, &buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Has checks whether the value corresponding to the given key is present in the local datastore.
@@ -92,12 +100,12 @@ func (c *Client) hasLink(l ipld.Link) (bool, error) {
 	return c.ds.Has(context.Background(), datastore.NewKey(l.Binary()))
 }
 
-func toLink(key []byte) (ipld.Link, error) {
+func toLink(key []byte) (*cidlink.Link, error) {
 	_, cc, err := cid.CidFromBytes(key)
 	if err != nil {
 		return nil, err
 	}
-	return cidlink.Link{Cid: cc}, nil
+	return &cidlink.Link{Cid: cc}, nil
 }
 
 // Pull downloads the data corresponding to the given key from the given addr.
@@ -183,16 +191,33 @@ func (c *Client) Push(addr string, key []byte) error {
 	}
 }
 
-// Put stores the given key value onto the local datastore.
-// The key must be a valid ipld.Link and the value must be the valid encoded ipld.Node corresponding
-// to the given key.
-func (c *Client) Put(key, value []byte) error {
+// Put stores the given value onto the ipld.LinkSystem and returns its corresponding link.
+// The value is decoded using the decoder that corresponds to the given codec. Therefore, the given
+// value must be a valid ipld.Node.
+func (c *Client) Put(value []byte, codec uint64) ([]byte, error) {
 	ctx := context.TODO()
-	link, err := toLink(key)
+	decode, err := ipldmc.LookupDecoder(codec)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return c.ds.Put(ctx, datastore.NewKey(link.Binary()), value)
+	buf := bytes.NewBuffer(value)
+	nb := basicnode.Prototype.Any.NewBuilder()
+	if err := decode(nb, buf); err != nil {
+		return nil, err
+	}
+	node := nb.Build()
+	link, err := c.ls.Store(ipld.LinkContext{Ctx: ctx}, cidlink.LinkPrototype{
+		Prefix: cid.Prefix{
+			Version:  1,
+			Codec:    codec,
+			MhType:   uint64(multicodec.Sha2_256),
+			MhLength: -1,
+		},
+	}, node)
+	if err != nil {
+		return nil, err
+	}
+	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
 // Shutdown closes all resources used by Client.
