@@ -14,6 +14,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -24,10 +25,16 @@ type Config struct {
 
 func (cfg *Config) init(mc *Client) error {
 	var err error
-	if len(cfg.Identity) == 0 {
-		if mc.h, err = libp2p.New(); err != nil {
+	var hopts []libp2p.Option
+	if len(cfg.Identity) != 0 {
+		pk, err := crypto.UnmarshalPrivateKey(cfg.Identity)
+		if err != nil {
 			return err
 		}
+		hopts = append(hopts, libp2p.Identity(pk))
+	}
+	if mc.h, err = libp2p.New(hopts...); err != nil {
+		return err
 	}
 	if cfg.StorePath == "" {
 		mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
