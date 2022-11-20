@@ -3,6 +3,8 @@ package fulamobile
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"fmt"
 	"io"
 
 	"github.com/ipfs/go-datastore"
@@ -19,21 +21,31 @@ import (
 )
 
 type Config struct {
-	Identity  []byte
+	// IdentitySeed is the seed that is used to generate Ed25519 libp2p key-pair. If unspecified, a
+	// random seed is used, otherwise, it must be 32 bytes long. Longer seed value is accepted but
+	// only the first 32 bytes are read. See: ed25519.SeedSize.
+	IdentitySeed []byte
+	// StorePath is the path used to persist data. If unspecified, an in-memory store is used.
 	StorePath string
 }
 
 func (cfg *Config) init(mc *Client) error {
-	var err error
-	var hopts []libp2p.Option
-	if len(cfg.Identity) != 0 {
-		pk, err := crypto.UnmarshalPrivateKey(cfg.Identity)
-		if err != nil {
-			return err
-		}
-		hopts = append(hopts, libp2p.Identity(pk))
+	seedLen := len(cfg.IdentitySeed)
+	var seed io.Reader
+	switch {
+	case seedLen == 0:
+		// No seed is given; generate identity at random by leaving seed to be nil.
+		break
+	case seedLen < ed25519.SeedSize:
+		return fmt.Errorf("identity seed too short; it must be at least 32 bytes but got %d", seedLen)
+	default:
+		seed = bytes.NewBuffer(cfg.IdentitySeed)
 	}
-	if mc.h, err = libp2p.New(hopts...); err != nil {
+	pk, _, err := crypto.GenerateEd25519Key(seed)
+	if err != nil {
+		return err
+	}
+	if mc.h, err = libp2p.New(libp2p.Identity(pk)); err != nil {
 		return err
 	}
 	if cfg.StorePath == "" {

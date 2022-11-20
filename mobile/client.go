@@ -55,12 +55,18 @@ type Client struct {
 	gx graphsync.GraphExchange
 }
 
+// NewClient instantiates a new Fula mobile Client.
 func NewClient(cfg *Config) (*Client, error) {
 	var mc Client
 	if err := cfg.init(&mc); err != nil {
 		return nil, err
 	}
 	return &mc, nil
+}
+
+// ID returns the libp2p host peer ID of this client.
+func (c Client) ID() peer.ID {
+	return c.h.ID()
 }
 
 // Get gets the value corresponding to the given key from the local ipld.LinkSystem
