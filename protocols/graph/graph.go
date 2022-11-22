@@ -2,12 +2,12 @@ package graph
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 
-	proto "github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
-	structpb "google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const Protocol = "fx/graph/1"
@@ -33,7 +33,7 @@ func GraphQL(query string, values *structpb.Value, stream network.Stream) ([]byt
 	}
 	stream.CloseWrite()
 
-	buf, err := ioutil.ReadAll(stream)
+	buf, err := io.ReadAll(stream)
 	if err != nil {
 		return nil, err
 	}
