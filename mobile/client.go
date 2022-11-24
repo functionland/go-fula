@@ -63,6 +63,11 @@ func NewClient(cfg *Config) (*Client, error) {
 	return &mc, nil
 }
 
+// ID returns the libp2p peer ID of the client.
+func (c *Client) ID() peer.ID {
+	return c.h.ID()
+}
+
 // Get gets the value corresponding to the given key from the local ipld.LinkSystem
 // The key must be a valid ipld.Link and the value returned is encoded ipld.Node.
 func (c *Client) Get(key []byte) ([]byte, error) {
