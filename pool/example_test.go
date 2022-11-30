@@ -219,38 +219,57 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 		panic(err)
 	}
 
-	// Generate a sample DAG and store it on node 1 (n1) in the pool
-	leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
+	// Generate a sample DAG and store it on node 1 (n1) in the pool, which we will pull from n1
+	n1leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
 		na.AssembleEntry("this").AssignBool(true)
 	})
-	leafLink, err := n1.Store(ctx, leaf)
+	n1leafLink, err := n1.Store(ctx, n1leaf)
 	if err != nil {
 		panic(err)
 	}
-	root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
+	n1Root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
 		na.AssembleEntry("that").AssignInt(42)
-		na.AssembleEntry("leafLink").AssignLink(leafLink)
+		na.AssembleEntry("oneLeafLink").AssignLink(n1leafLink)
 	})
-	rootLink, err := n1.Store(ctx, root)
+	n1RootLink, err := n1.Store(ctx, n1Root)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), rootLink, leafLink)
+	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n1RootLink, n1leafLink)
 
-	// Fetch the sample DAG stored on node 1 from node 2 by only asking for the root link.
+	// Generate a sample DAG and store it on node 2 (n1) in the pool, which we will push to n1
+	n2leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
+		na.AssembleEntry("that").AssignBool(false)
+	})
+	n2leafLink, err := n2.Store(ctx, n2leaf)
+	if err != nil {
+		panic(err)
+	}
+	n2Root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
+		na.AssembleEntry("this").AssignInt(24)
+		na.AssembleEntry("anotherLeafLink").AssignLink(n2leafLink)
+	})
+	n2RootLink, err := n2.Store(ctx, n2Root)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n1RootLink, n1leafLink)
+
+	fmt.Println("exchanging by Pull...")
+	// Pull the sample DAG stored on node 1 from node 2 by only asking for the root link.
 	// Because fetch implementation is recursive, it should fetch the leaf link too.
-	if err := n2.Fetch(ctx, h1.ID(), rootLink); err != nil {
+	if err := n2.Pull(ctx, h1.ID(), n1RootLink); err != nil {
 		panic(err)
 	}
 
 	// Assert that n2 now has both root and leaf links
-	if exists, err := n2.Has(ctx, rootLink); err != nil {
+	if exists, err := n2.Has(ctx, n1RootLink); err != nil {
 		panic(err)
 	} else if !exists {
 		panic("expected n2 to have fetched the entire sample DAG")
 	} else {
-		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), rootLink, h1.ID())
-		n, err := n2.Load(ctx, rootLink, basicnode.Prototype.Any)
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1RootLink, h1.ID())
+		n, err := n2.Load(ctx, n1RootLink, basicnode.Prototype.Any)
 		if err != nil {
 			panic(err)
 		}
@@ -260,13 +279,68 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 		}
 		fmt.Printf("    content: %s\n", buf.String())
 	}
-	if exists, err := n2.Has(ctx, leafLink); err != nil {
+	if exists, err := n2.Has(ctx, n1leafLink); err != nil {
 		panic(err)
 	} else if !exists {
 		panic("expected n2 to have fetched the entire sample DAG")
 	} else {
-		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), leafLink, h1.ID())
-		n, err := n2.Load(ctx, leafLink, basicnode.Prototype.Any)
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1leafLink, h1.ID())
+		n, err := n2.Load(ctx, n1leafLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+
+	fmt.Println("exchanging by Push...")
+	// Push the sample DAG stored on node 2 to node 1 by only pushing the root link.
+	// Because Push implementation is recursive, it should push the leaf link too.
+	if err := n2.Push(ctx, h1.ID(), n2RootLink); err != nil {
+		panic(err)
+	}
+
+	// Since push is an asynchronous operation, wait until background push is finished
+	// by periodically checking if link is present on node 1.
+	for {
+		if exists, _ := n1.Has(ctx, n2RootLink); exists {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			panic(ctx.Err())
+		default:
+			time.Sleep(time.Second)
+		}
+	}
+
+	// Assert that n1 now has both root and leaf links
+	if exists, err := n1.Has(ctx, n2RootLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have pushed the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully pushed:\n    link: %s\n    from %s\n", h2.ID(), n1RootLink, h1.ID())
+		n, err := n1.Load(ctx, n2RootLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+	if exists, err := n1.Has(ctx, n2leafLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have pushed the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully pushed:\n    link: %s\n    from %s\n", h2.ID(), n1leafLink, h1.ID())
+		n, err := n1.Load(ctx, n2leafLink, basicnode.Prototype.Any)
 		if err != nil {
 			panic(err)
 		}
@@ -281,14 +355,27 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 	// Instantiated node in pool my-pool with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// Instantiated node in pool my-pool with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
 	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
-	//     root: bafyreihpspvqaii6nvjphmrerg4grecxcvkxaz7thfzhnu4drczbhvqpoq
+	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
 	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
+	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
+	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
+	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
+	// exchanging by Pull...
 	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully fetched:
-	//     link: bafyreihpspvqaii6nvjphmrerg4grecxcvkxaz7thfzhnu4drczbhvqpoq
+	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
 	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	//     content: {"leafLink":{"/":"bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"},"that":42}
+	//     content: {"oneLeafLink":{"/":"bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"},"that":42}
 	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully fetched:
 	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
 	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	//     content: {"this":true}
+	// exchanging by Push...
+	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully pushed:
+	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
+	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     content: {"anotherLeafLink":{"/":"bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4"},"this":24}
+	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully pushed:
+	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
+	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     content: {"that":false}
 }
