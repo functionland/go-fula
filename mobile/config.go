@@ -5,17 +5,14 @@ import (
 	"context"
 	"io"
 
+	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	badger "github.com/ipfs/go-ds-badger"
-	"github.com/ipfs/go-graphsync"
-	gs "github.com/ipfs/go-graphsync/impl"
-	gsnet "github.com/ipfs/go-graphsync/network"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 type Config struct {
@@ -58,14 +55,6 @@ func (cfg *Config) init(mc *Client) error {
 		}
 		return bytes.NewBuffer(val), nil
 	}
-
-	gsn := gsnet.NewFromLibp2pHost(mc.h)
-	mc.gx = gs.New(context.Background(), gsn, mc.ls)
-	mc.gx.RegisterIncomingRequestHook(
-		func(p peer.ID, r graphsync.RequestData, ha graphsync.IncomingRequestHookActions) {
-			// TODO only allow connections from known peer IDs, like the blox peer id
-			ha.ValidateRequest()
-		})
-
-	return nil
+	mc.ex = exchange.New(mc.h, mc.ls)
+	return mc.ex.Start(context.TODO())
 }

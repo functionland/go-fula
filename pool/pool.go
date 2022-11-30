@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ipfs/go-graphsync"
+	"github.com/functionland/go-fula/exchange"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -27,7 +27,7 @@ type (
 		sub   *pubsub.Subscription
 		topic *pubsub.Topic
 		ls    ipld.LinkSystem
-		gx    graphsync.GraphExchange
+		ex    *exchange.Exchange
 	}
 )
 
@@ -42,11 +42,14 @@ func New(o ...Option) (*Pool, error) {
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
+	p.ex = exchange.New(p.h, p.ls)
 	return &p, nil
 }
 
 func (p *Pool) Start(ctx context.Context) error {
-	p.startGraphExchange(ctx)
+	if err := p.ex.Start(ctx); err != nil {
+		return err
+	}
 	gsub, err := pubsub.NewGossipSub(ctx, p.h,
 		pubsub.WithPeerExchange(true),
 		pubsub.WithFloodPublish(true),
@@ -139,6 +142,7 @@ func (p *Pool) announceIExistPeriodically() {
 }
 
 func (p *Pool) Shutdown(ctx context.Context) error {
+	p.ex.Shutdown()
 	p.sub.Cancel()
 	err := p.topic.Close()
 	p.cancel()

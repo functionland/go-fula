@@ -5,16 +5,14 @@ import (
 	"context"
 	"errors"
 
+	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-graphsync"
-	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	ipldmc "github.com/ipld/go-ipld-prime/multicodec"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
-	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
@@ -30,9 +28,6 @@ var (
 			MhLength: -1,
 		},
 	}
-	pushExtensionData = graphsync.ExtensionData{
-		Name: "fx.land/v0/push",
-	}
 )
 
 // Note to self; copied from gomobile docs:
@@ -40,19 +35,17 @@ var (
 //  * Signed integer and floating point types.
 //  * String and boolean types.
 //  * Byte slice types.
-//    * Note that byte slices are passed by reference, and support mutation.
+//    * Note that byte slices are passed by reference and support mutation.
 //  * Any function type all of whose parameters and results have supported types.
 //    * Functions must return either no results, one result, or two results where the type of the second is the built-in 'error' type.
 //  * Any interface type, all of whose exported methods have supported function types.
 //  * Any struct type, all of whose exported methods have supported function types and all of whose exported fields have supported types.
 
-var logger = logging.Logger("fula/mobile")
-
 type Client struct {
 	h  host.Host
 	ds datastore.Batching
 	ls ipld.LinkSystem
-	gx graphsync.GraphExchange
+	ex *exchange.Exchange
 }
 
 func NewClient(cfg *Config) (*Client, error) {
@@ -136,24 +129,7 @@ func (c *Client) Pull(addr string, key []byte) error {
 	}
 	c.h.Peerstore().AddAddrs(from.ID, from.Addrs, peerstore.TempAddrTTL)
 	ctx := context.TODO()
-	resps, errs := c.gx.Request(ctx, from.ID, l, selectorparse.CommonSelector_ExploreAllRecursively)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case resp, ok := <-resps:
-			if !ok {
-				return nil
-			}
-			logger.Infow("synced node", "node", resp.Node)
-		case err, ok := <-errs:
-			if !ok {
-				return nil
-			}
-			logger.Warnw("sync failed", "err", err)
-		}
-	}
+	return c.ex.Pull(ctx, from.ID, l)
 }
 
 // Push requests the given addr to download the given key from this node.
@@ -177,23 +153,7 @@ func (c *Client) Push(addr string, key []byte) error {
 	}
 	c.h.Peerstore().AddAddrs(to.ID, to.Addrs, peerstore.TempAddrTTL)
 	ctx := context.TODO()
-	resps, errs := c.gx.Request(ctx, to.ID, l, selectorparse.CommonSelector_ExploreAllRecursively, pushExtensionData)
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case resp, ok := <-resps:
-			if !ok {
-				return nil
-			}
-			logger.Infow("synced node", "node", resp.Node)
-		case err, ok := <-errs:
-			if !ok {
-				return nil
-			}
-			logger.Warnw("sync failed", "err", err)
-		}
-	}
+	return c.ex.Push(ctx, to.ID, l)
 }
 
 // Put stores the given value onto the ipld.LinkSystem and returns its corresponding link.
@@ -228,5 +188,6 @@ func (c *Client) Put(value []byte, codec uint64) ([]byte, error) {
 // Shutdown closes all resources used by Client.
 // After calling this function Client must be discarded.
 func (c *Client) Shutdown() error {
+	c.ex.Shutdown()
 	return c.h.Close()
 }
