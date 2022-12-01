@@ -15,7 +15,6 @@ import (
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multicodec"
 )
 
@@ -42,10 +41,11 @@ var (
 //  * Any struct type, all of whose exported methods have supported function types and all of whose exported fields have supported types.
 
 type Client struct {
-	h  host.Host
-	ds datastore.Batching
-	ls ipld.LinkSystem
-	ex *exchange.Exchange
+	h       host.Host
+	ds      datastore.Batching
+	ls      ipld.LinkSystem
+	ex      *exchange.Exchange
+	bloxPid peer.ID
 }
 
 func NewClient(cfg *Config) (*Client, error) {
@@ -57,12 +57,14 @@ func NewClient(cfg *Config) (*Client, error) {
 }
 
 // ID returns the libp2p peer ID of the client.
-func (c *Client) ID() peer.ID {
-	return c.h.ID()
+func (c *Client) ID() string {
+	return c.h.ID().String()
 }
 
 // Get gets the value corresponding to the given key from the local ipld.LinkSystem
 // The key must be a valid ipld.Link and the value returned is encoded ipld.Node.
+// If data is not found locally, an attempt is made to automatically fetch the data
+// from blox at Config.BloxAddr address.
 func (c *Client) Get(key []byte) ([]byte, error) {
 	l, err := toLink(key)
 	if err != nil {
@@ -106,13 +108,9 @@ func toLink(key []byte) (*cidlink.Link, error) {
 	return &cidlink.Link{Cid: cc}, nil
 }
 
-// Pull downloads the data corresponding to the given key from the given addr.
-// The key must be a valid ipld.Link, and the addr must be a valid multiaddr that includes peer ID.
-// See peer.AddrInfoFromString.
-func (c *Client) Pull(addr string, key []byte) error {
-	// TODO we don't need to take addr when there is a discovery mechanism facilitated via fx.land.
-	//      For now we manually take addr, the blox address, as an argument.
-
+// Pull downloads the data corresponding to the given key from blox at Config.BloxAddr.
+// The key must be a valid ipld.Link.
+func (c *Client) Pull(key []byte) error {
 	l, err := toLink(key)
 	if err != nil {
 		return err
@@ -122,22 +120,15 @@ func (c *Client) Pull(addr string, key []byte) error {
 	} else if exists {
 		return nil
 	}
-
-	from, err := peer.AddrInfoFromString(addr)
-	if err != nil {
-		return err
-	}
-	c.h.Peerstore().AddAddrs(from.ID, from.Addrs, peerstore.TempAddrTTL)
-	ctx := context.TODO()
-	return c.ex.Pull(ctx, from.ID, l)
+	return c.ex.Pull(context.TODO(), c.bloxPid, l)
 }
 
-// Push requests the given addr to download the given key from this node.
+// Push requests blox at Config.BloxAddr to download the given key from this node.
 // The key must be a valid ipld.Link, and the addr must be a valid multiaddr that includes peer ID.
 // The value corresponding to the given key must be stored in the local datastore prior to calling
 // this function.
-// See: Client.Put, peer.AddrInfoFromString.
-func (c *Client) Push(addr string, key []byte) error {
+// See: Client.Put.
+func (c *Client) Push(key []byte) error {
 	l, err := toLink(key)
 	if err != nil {
 		return err
@@ -147,21 +138,17 @@ func (c *Client) Push(addr string, key []byte) error {
 	} else if !exists {
 		return errors.New("value not found locally")
 	}
-	to, err := peer.AddrInfoFromString(addr)
-	if err != nil {
-		return err
-	}
-	c.h.Peerstore().AddAddrs(to.ID, to.Addrs, peerstore.TempAddrTTL)
-	ctx := context.TODO()
-	return c.ex.Push(ctx, to.ID, l)
+	return c.ex.Push(context.TODO(), c.bloxPid, l)
 }
 
 // Put stores the given value onto the ipld.LinkSystem and returns its corresponding link.
-// The value is decoded using the decoder that corresponds to the given codec. Therefore, the given
-// value must be a valid ipld.Node.
-func (c *Client) Put(value []byte, codec uint64) ([]byte, error) {
+// The value is decoded using the decoder that corresponds to the given codec. Therefore,
+// the given value must be a valid ipld.Node.
+// Upon successful local storage of the given value, it is automatically pushed to the blox
+// at Config.BloxAddr address.
+func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 	ctx := context.TODO()
-	decode, err := ipldmc.LookupDecoder(codec)
+	decode, err := ipldmc.LookupDecoder(uint64(codec))
 	if err != nil {
 		return nil, err
 	}
@@ -171,14 +158,7 @@ func (c *Client) Put(value []byte, codec uint64) ([]byte, error) {
 		return nil, err
 	}
 	node := nb.Build()
-	link, err := c.ls.Store(ipld.LinkContext{Ctx: ctx}, cidlink.LinkPrototype{
-		Prefix: cid.Prefix{
-			Version:  1,
-			Codec:    codec,
-			MhType:   uint64(multicodec.Sha2_256),
-			MhLength: -1,
-		},
-	}, node)
+	link, err := c.ls.Store(ipld.LinkContext{Ctx: ctx}, lp, node)
 	if err != nil {
 		return nil, err
 	}
