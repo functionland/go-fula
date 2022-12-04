@@ -18,10 +18,20 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
+const noopExchange = "noop"
+
 type Config struct {
 	Identity  []byte
 	StorePath string
-	BloxAddr  string
+	// Exchange specifies the DAG exchange protocol for Fula mobile client. If left unspecified,
+	// The default FxExchange protocol is used which will attempt to make remote connections
+	// when links are stored and retrieved.
+	//
+	// For testing purposes, the value may be set to `noop`, in which case, no remote connections
+	// will be made and the requested exchange is simply logged. When the value is set to `noop`
+	// the BloxAddr may also be left empty.
+	Exchange string
+	BloxAddr string
 
 	// TODO we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
 	//      For now we manually take BloxAddr as config.
@@ -50,7 +60,10 @@ func (cfg *Config) init(mc *Client) error {
 		}
 	}
 	if cfg.BloxAddr == "" {
-		return errors.New("BloxAddr must be specified until autodiscovery service is implemented")
+		if cfg.Exchange != noopExchange {
+			return errors.New("the BloxAddr must be specified until autodiscovery service is implemented; " +
+				"for testing purposes, BloxAddr may be omitted only when Exchange is set to `noop`")
+		}
 	} else {
 		bloxAddr, err := peer.AddrInfoFromString(cfg.BloxAddr)
 		if err != nil {
@@ -86,6 +99,11 @@ func (cfg *Config) init(mc *Client) error {
 			return nil, err
 		}
 	}
-	mc.ex = exchange.New(mc.h, mc.ls)
+	switch cfg.Exchange {
+	case noopExchange:
+		mc.ex = exchange.NoopExchange{}
+	default:
+		mc.ex = exchange.NewFxExchange(mc.h, mc.ls)
+	}
 	return mc.ex.Start(context.TODO())
 }

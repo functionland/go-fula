@@ -44,7 +44,7 @@ type Client struct {
 	h       host.Host
 	ds      datastore.Batching
 	ls      ipld.LinkSystem
-	ex      *exchange.Exchange
+	ex      exchange.Exchange
 	bloxPid peer.ID
 }
 
@@ -168,6 +168,11 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 // Shutdown closes all resources used by Client.
 // After calling this function Client must be discarded.
 func (c *Client) Shutdown() error {
-	c.ex.Shutdown()
-	return c.h.Close()
+	ctx := context.TODO()
+	xErr := c.ex.Shutdown(ctx)
+	hErr := c.h.Close()
+	if hErr != nil {
+		return hErr
+	}
+	return xErr
 }
