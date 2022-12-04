@@ -27,7 +27,7 @@ type (
 		sub   *pubsub.Subscription
 		topic *pubsub.Topic
 		ls    ipld.LinkSystem
-		ex    *exchange.Exchange
+		ex    *exchange.FxExchange
 	}
 )
 
@@ -42,7 +42,7 @@ func New(o ...Option) (*Pool, error) {
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
-	p.ex = exchange.New(p.h, p.ls)
+	p.ex = exchange.NewFxExchange(p.h, p.ls)
 	return &p, nil
 }
 
@@ -142,9 +142,9 @@ func (p *Pool) announceIExistPeriodically() {
 }
 
 func (p *Pool) Shutdown(ctx context.Context) error {
-	p.ex.Shutdown()
+	xErr := p.ex.Shutdown(ctx)
 	p.sub.Cancel()
-	err := p.topic.Close()
+	tErr := p.topic.Close()
 	p.cancel()
 	done := make(chan struct{}, 1)
 	go func() {
@@ -154,7 +154,10 @@ func (p *Pool) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-done:
-		return err
+		if tErr != nil {
+			return tErr
+		}
+		return xErr
 	case <-ctx.Done():
 		return ctx.Err()
 	}

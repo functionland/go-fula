@@ -26,10 +26,13 @@ import (
 
 const FxExchangeProtocolID = "/fx.land/exchange/0.0.1"
 
-var log = logging.Logger("fula/exchange")
+var (
+	log          = logging.Logger("fula/exchange")
+	_   Exchange = (*FxExchange)(nil)
+)
 
 type (
-	Exchange struct {
+	FxExchange struct {
 		h  host.Host
 		gx graphsync.GraphExchange
 		ls ipld.LinkSystem
@@ -41,8 +44,8 @@ type (
 	}
 )
 
-func New(h host.Host, ls ipld.LinkSystem) *Exchange {
-	return &Exchange{
+func NewFxExchange(h host.Host, ls ipld.LinkSystem) *FxExchange {
+	return &FxExchange{
 		h:  h,
 		ls: ls,
 		s:  &http.Server{},
@@ -60,7 +63,7 @@ func New(h host.Host, ls ipld.LinkSystem) *Exchange {
 	}
 }
 
-func (e *Exchange) Start(ctx context.Context) error {
+func (e *FxExchange) Start(ctx context.Context) error {
 	gsn := gsnet.NewFromLibp2pHost(e.h)
 	e.gx = gs.New(ctx, gsn, e.ls)
 	e.gx.RegisterIncomingRequestHook(
@@ -78,7 +81,7 @@ func (e *Exchange) Start(ctx context.Context) error {
 	return nil
 }
 
-func (e *Exchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
+func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
 	resps, errs := e.gx.Request(ctx, from, l, selectorparse.CommonSelector_ExploreAllRecursively)
 	for {
 		select {
@@ -98,7 +101,7 @@ func (e *Exchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
 	}
 }
 
-func (e *Exchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
+func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	r := pushRequest{Link: l.(cidlink.Link).Cid}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
@@ -124,7 +127,7 @@ func (e *Exchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	}
 }
 
-func (e *Exchange) serve(w http.ResponseWriter, r *http.Request) {
+func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
 	switch path.Base(r.URL.Path) {
 	case "push":
 		e.handlePush(w, r)
@@ -133,7 +136,7 @@ func (e *Exchange) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (e *Exchange) handlePush(w http.ResponseWriter, r *http.Request) {
+func (e *FxExchange) handlePush(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -167,7 +170,7 @@ func (e *Exchange) handlePush(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (e *Exchange) Shutdown() {
-	_ = e.s.Close()
+func (e *FxExchange) Shutdown(ctx context.Context) error {
 	e.c.CloseIdleConnections()
+	return e.s.Shutdown(ctx)
 }
