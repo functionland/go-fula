@@ -100,12 +100,12 @@ func (c *Client) hasLink(l ipld.Link) (bool, error) {
 	return c.ds.Has(context.Background(), datastore.NewKey(l.Binary()))
 }
 
-func toLink(key []byte) (*cidlink.Link, error) {
+func toLink(key []byte) (cidlink.Link, error) {
 	_, cc, err := cid.CidFromBytes(key)
 	if err != nil {
-		return nil, err
+		return cidlink.Link{}, err
 	}
-	return &cidlink.Link{Cid: cc}, nil
+	return cidlink.Link{Cid: cc}, nil
 }
 
 // Pull downloads the data corresponding to the given key from blox at Config.BloxAddr.
