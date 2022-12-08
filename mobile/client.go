@@ -20,17 +20,6 @@ import (
 	"github.com/multiformats/go-multicodec"
 )
 
-var (
-	lp = cidlink.LinkPrototype{
-		Prefix: cid.Prefix{
-			Version:  1,
-			Codec:    uint64(multicodec.DagCbor),
-			MhType:   uint64(multicodec.Sha2_256),
-			MhLength: -1,
-		},
-	}
-)
-
 // Note to self; copied from gomobile docs:
 // All exported symbols in the package must have types that are supported. Supported types include:
 //  * Signed integer and floating point types.
@@ -150,7 +139,8 @@ func (c *Client) Push(key []byte) error {
 // at Config.BloxAddr address.
 func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 	ctx := context.TODO()
-	decode, err := ipldmc.LookupDecoder(uint64(codec))
+	ucodec := uint64(codec)
+	decode, err := ipldmc.LookupDecoder(ucodec)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +150,16 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 		return nil, err
 	}
 	node := nb.Build()
-	link, err := c.ls.Store(ipld.LinkContext{Ctx: ctx}, lp, node)
+	link, err := c.ls.Store(ipld.LinkContext{Ctx: ctx},
+		cidlink.LinkPrototype{
+			Prefix: cid.Prefix{
+				Version:  1,
+				Codec:    ucodec,
+				MhType:   uint64(multicodec.Sha2_256),
+				MhLength: -1,
+			},
+		},
+		node)
 	if err != nil {
 		return nil, err
 	}
