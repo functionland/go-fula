@@ -172,8 +172,13 @@ func (c *Client) Shutdown() error {
 	ctx := context.TODO()
 	xErr := c.ex.Shutdown(ctx)
 	hErr := c.h.Close()
-	if hErr != nil {
+	dsErr := c.ds.Close()
+	switch {
+	case hErr != nil:
 		return hErr
+	case dsErr != nil:
+		return dsErr
+	default:
+		return xErr
 	}
-	return xErr
 }

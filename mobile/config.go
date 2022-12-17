@@ -76,8 +76,11 @@ func (cfg *Config) init(mc *Client) error {
 	mc.ls.StorageWriteOpener = func(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
 		buf := bytes.NewBuffer(nil)
 		return buf, func(l ipld.Link) error {
-			err := mc.ds.Put(ctx.Ctx, datastore.NewKey(l.Binary()), buf.Bytes())
-			if err != nil {
+			k := datastore.NewKey(l.Binary())
+			if err := mc.ds.Put(ctx.Ctx, k, buf.Bytes()); err != nil {
+				return err
+			}
+			if err := mc.ds.Sync(ctx.Ctx, k); err != nil {
 				return err
 			}
 			return mc.ex.Push(ctx.Ctx, mc.bloxPid, l)
