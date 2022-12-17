@@ -1,4 +1,4 @@
-package pool
+package blox
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func newOptions(o ...Option) (*options, error) {
 		}
 	}
 	if opts.name == "" {
-		return nil, errors.New("pool name must be specified")
+		return nil, errors.New("blox pool name must be specified")
 	}
 	if opts.topicName == "" {
 		opts.topicName = fmt.Sprintf("/explore.fula/pools/%s", path.Clean(opts.name))
@@ -71,7 +71,7 @@ func newOptions(o ...Option) (*options, error) {
 	return &opts, nil
 }
 
-// WithHost sets the libp2p host on which the pool is exposed.
+// WithHost sets the libp2p host on which the blox is exposed.
 // If unset a default host with random identity is used.
 // See: libp2p.New.
 func WithHost(h host.Host) Option {
@@ -81,7 +81,7 @@ func WithHost(h host.Host) Option {
 	}
 }
 
-// WithPoolName sets a human readable name for the pool.
+// WithPoolName sets a human readable name for the pool that the blox should join or create.
 // Required.
 func WithPoolName(n string) Option {
 	return func(o *options) error {

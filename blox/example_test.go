@@ -1,4 +1,4 @@
-package pool_test
+package blox_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/functionland/go-fula/pool"
+	"github.com/functionland/go-fula/blox"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/fluent"
@@ -44,7 +44,7 @@ func ExamplePool_DiscoverPeersViaPubSub() {
 	if err != nil {
 		panic(err)
 	}
-	n1, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h1))
+	n1, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h1))
 	if err != nil {
 		panic(err)
 	}
@@ -63,7 +63,7 @@ func ExamplePool_DiscoverPeersViaPubSub() {
 	if err != nil {
 		panic(err)
 	}
-	n2, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h2))
+	n2, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h2))
 	if err != nil {
 		panic(err)
 	}
@@ -82,7 +82,7 @@ func ExamplePool_DiscoverPeersViaPubSub() {
 	if err != nil {
 		panic(err)
 	}
-	n3, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h3))
+	n3, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h3))
 	if err != nil {
 		panic(err)
 	}
@@ -180,7 +180,7 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 	if err != nil {
 		panic(err)
 	}
-	n1, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h1))
+	n1, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h1))
 	if err != nil {
 		panic(err)
 	}
@@ -199,7 +199,7 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 	if err != nil {
 		panic(err)
 	}
-	n2, err := pool.New(pool.WithPoolName(poolName), pool.WithHost(h2))
+	n2, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h2))
 	if err != nil {
 		panic(err)
 	}

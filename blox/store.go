@@ -1,4 +1,4 @@
-package pool
+package blox
 
 import (
 	"bytes"
@@ -22,26 +22,26 @@ var lp = cidlink.LinkPrototype{
 	},
 }
 
-func (p *Pool) Store(ctx context.Context, n ipld.Node) (ipld.Link, error) {
+func (p *Blox) Store(ctx context.Context, n ipld.Node) (ipld.Link, error) {
 	return p.ls.Store(ipld.LinkContext{Ctx: ctx}, lp, n)
 }
 
-func (p *Pool) Load(ctx context.Context, l ipld.Link, np ipld.NodePrototype) (ipld.Node, error) {
+func (p *Blox) Load(ctx context.Context, l ipld.Link, np ipld.NodePrototype) (ipld.Node, error) {
 	return p.ls.Load(ipld.LinkContext{Ctx: ctx}, l, np)
 }
 
-func (p *Pool) Has(ctx context.Context, l ipld.Link) (bool, error) {
+func (p *Blox) Has(ctx context.Context, l ipld.Link) (bool, error) {
 	return p.ds.Has(ctx, toDatastoreKey(l))
 }
 
-func (p *Pool) blockWriteOpener(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
+func (p *Blox) blockWriteOpener(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
 	buf := bytes.NewBuffer(nil)
 	return buf, func(l ipld.Link) error {
 		return p.ds.Put(ctx.Ctx, toDatastoreKey(l), buf.Bytes())
 	}, nil
 }
 
-func (p *Pool) blockReadOpener(ctx ipld.LinkContext, l ipld.Link) (io.Reader, error) {
+func (p *Blox) blockReadOpener(ctx ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 	val, err := p.ds.Get(ctx.Ctx, toDatastoreKey(l))
 	switch err {
 	case nil:

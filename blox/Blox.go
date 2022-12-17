@@ -1,4 +1,4 @@
-package pool
+package blox
 
 import (
 	"context"
@@ -15,10 +15,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
-var log = logging.Logger("fula/pool")
+var log = logging.Logger("fula/blox")
 
 type (
-	Pool struct {
+	Blox struct {
 		ctx    context.Context
 		cancel context.CancelFunc
 		wg     sync.WaitGroup
@@ -31,12 +31,12 @@ type (
 	}
 )
 
-func New(o ...Option) (*Pool, error) {
+func New(o ...Option) (*Blox, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
 	}
-	p := Pool{
+	p := Blox{
 		options: opts,
 		ls:      cidlink.DefaultLinkSystem(),
 	}
@@ -46,7 +46,7 @@ func New(o ...Option) (*Pool, error) {
 	return &p, nil
 }
 
-func (p *Pool) Start(ctx context.Context) error {
+func (p *Blox) Start(ctx context.Context) error {
 	if err := p.ex.Start(ctx); err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (p *Pool) Start(ctx context.Context) error {
 	return nil
 }
 
-func (p *Pool) handleAnnouncements() {
+func (p *Blox) handleAnnouncements() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 	for {
@@ -108,7 +108,7 @@ func (p *Pool) handleAnnouncements() {
 	}
 }
 
-func (p *Pool) announceIExistPeriodically() {
+func (p *Blox) announceIExistPeriodically() {
 	p.wg.Add(1)
 	defer p.wg.Done()
 	ticker := time.NewTicker(p.announceInterval)
@@ -141,7 +141,7 @@ func (p *Pool) announceIExistPeriodically() {
 	}
 }
 
-func (p *Pool) Shutdown(ctx context.Context) error {
+func (p *Blox) Shutdown(ctx context.Context) error {
 	xErr := p.ex.Shutdown(ctx)
 	p.sub.Cancel()
 	tErr := p.topic.Close()

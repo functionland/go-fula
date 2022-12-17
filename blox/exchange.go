@@ -1,4 +1,4 @@
-package pool
+package blox
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-func (p *Pool) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
+func (p *Blox) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
 	if exists, err := p.Has(ctx, l); err != nil {
 		return err
 	} else if exists {
@@ -17,7 +17,7 @@ func (p *Pool) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
 	return p.ex.Pull(ctx, from, l)
 }
 
-func (p *Pool) Push(ctx context.Context, from peer.ID, l ipld.Link) error {
+func (p *Blox) Push(ctx context.Context, from peer.ID, l ipld.Link) error {
 	if exists, err := p.Has(ctx, l); err != nil {
 		return err
 	} else if !exists {
