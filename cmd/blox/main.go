@@ -173,12 +173,9 @@ func action(ctx *cli.Context) error {
 	logger.Info("Started blox")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case <-sig:
-		logger.Info("Shutting down blox")
-		_ = bb.Shutdown(context.Background())
-	}
-	return nil
+	<-sig
+	logger.Info("Shutting down blox")
+	return bb.Shutdown(context.Background())
 }
 
 func main() {
