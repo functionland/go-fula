@@ -135,7 +135,12 @@ func (c *Client) Push(key []byte) error {
 	} else if !exists {
 		return errors.New("value not found locally")
 	}
-	return c.ex.Push(context.TODO(), c.bloxPid, l)
+	ctx := context.TODO()
+	err = c.ex.Push(ctx, c.bloxPid, l)
+	if err == nil {
+		_ = c.markAsPushedSuccessfully(ctx, l)
+	}
+	return err
 }
 
 // Put stores the given value onto the ipld.LinkSystem and returns its corresponding link.
@@ -170,6 +175,18 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 		return nil, err
 	}
 	return link.(cidlink.Link).Cid.Bytes(), nil
+}
+
+func (c *Client) ListFailedPushes() ([][]byte, error) {
+	links, err := c.listFailedPushes(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	bl := make([][]byte, 0, len(links))
+	for _, l := range links {
+		bl = append(bl, l.(cidlink.Link).Bytes())
+	}
+	return bl, nil
 }
 
 // Shutdown closes all resources used by Client.
