@@ -1,0 +1,15 @@
+builds:
+  - main: ./blox
+    dir: cmd
+    binary: blox
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - 'amd64'
+      - '386'
+release:
+  mode: keep-existing
+changelog:
+  skip: true

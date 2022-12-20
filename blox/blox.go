@@ -146,6 +146,7 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	p.sub.Cancel()
 	tErr := p.topic.Close()
 	p.cancel()
+	dsErr := p.ds.Close()
 	done := make(chan struct{}, 1)
 	go func() {
 		defer close(done)
@@ -156,6 +157,9 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	case <-done:
 		if tErr != nil {
 			return tErr
+		}
+		if dsErr != nil {
+			return dsErr
 		}
 		return xErr
 	case <-ctx.Done():

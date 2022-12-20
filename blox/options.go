@@ -57,7 +57,11 @@ func newOptions(o ...Option) (*options, error) {
 		ls.StorageWriteOpener = func(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
 			buf := bytes.NewBuffer(nil)
 			return buf, func(l ipld.Link) error {
-				return opts.ds.Put(ctx.Ctx, datastore.NewKey(l.Binary()), buf.Bytes())
+				key := datastore.NewKey(l.Binary())
+				if err := opts.ds.Put(ctx.Ctx, key, buf.Bytes()); err != nil {
+					return err
+				}
+				return opts.ds.Sync(ctx.Ctx, key)
 			}, nil
 		}
 		ls.StorageReadOpener = func(ctx ipld.LinkContext, l ipld.Link) (io.Reader, error) {
