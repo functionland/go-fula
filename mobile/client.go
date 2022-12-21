@@ -177,16 +177,12 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
-func (c *Client) ListFailedPushes() ([][]byte, error) {
+func (c *Client) ListFailedPushes() (*LinkIterator, error) {
 	links, err := c.listFailedPushes(context.TODO())
 	if err != nil {
 		return nil, err
 	}
-	bl := make([][]byte, 0, len(links))
-	for _, l := range links {
-		bl = append(bl, l.(cidlink.Link).Bytes())
-	}
-	return bl, nil
+	return &LinkIterator{links: links}, nil
 }
 
 // Shutdown closes all resources used by Client.
