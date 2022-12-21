@@ -47,6 +47,12 @@ func NewClient(cfg *Config) (*Client, error) {
 	return &mc, nil
 }
 
+// ConnectToBlox attempts to connect to blox via the configured address. This function can be used
+// to check if blox is currently accessible.
+func (c *Client) ConnectToBlox() error {
+	return c.h.Connect(context.TODO(), c.h.Peerstore().PeerInfo(c.bloxPid))
+}
+
 // ID returns the libp2p peer ID of the client.
 func (c *Client) ID() string {
 	return c.h.ID().String()
