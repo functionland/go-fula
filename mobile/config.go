@@ -33,6 +33,11 @@ type Config struct {
 	Exchange string
 	BloxAddr string
 
+	// SyncWrites assures that writes to the local datastore are flushed to the backing store as
+	// soon as they are written. By default, writes are not synchronized to disk until either the
+	// client is shut down or Clinet.Flush is explicitly called.
+	SyncWrites bool
+
 	// TODO we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
 	//      For now we manually take BloxAddr as config.
 
@@ -54,7 +59,9 @@ func (cfg *Config) init(mc *Client) error {
 	if cfg.StorePath == "" {
 		mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
 	} else {
-		mc.ds, err = badger.NewDatastore(cfg.StorePath, &badger.DefaultOptions)
+		options := &badger.DefaultOptions
+		options.SyncWrites = cfg.SyncWrites
+		mc.ds, err = badger.NewDatastore(cfg.StorePath, options)
 		if err != nil {
 			return err
 		}
@@ -79,9 +86,6 @@ func (cfg *Config) init(mc *Client) error {
 			ctx := ctx.Ctx
 			k := datastore.NewKey(l.Binary())
 			if err := mc.ds.Put(ctx, k, buf.Bytes()); err != nil {
-				return err
-			}
-			if err := mc.ds.Sync(ctx, k); err != nil {
 				return err
 			}
 			if err := mc.ex.Push(ctx, mc.bloxPid, l); err != nil {

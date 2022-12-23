@@ -31,6 +31,8 @@ import (
 //  * Any interface type, all of whose exported methods have supported function types.
 //  * Any struct type, all of whose exported methods have supported function types and all of whose exported fields have supported types.
 
+var rootDatastoreKey = datastore.NewKey("/")
+
 type Client struct {
 	h       host.Host
 	ds      datastore.Batching
@@ -137,10 +139,10 @@ func (c *Client) Push(key []byte) error {
 	}
 	ctx := context.TODO()
 	err = c.ex.Push(ctx, c.bloxPid, l)
-	if err == nil {
-		_ = c.markAsPushedSuccessfully(ctx, l)
+	if err != nil {
+		return err
 	}
-	return err
+	return c.markAsPushedSuccessfully(ctx, l)
 }
 
 // Put stores the given value onto the ipld.LinkSystem and returns its corresponding link.
@@ -185,16 +187,25 @@ func (c *Client) ListFailedPushes() (*LinkIterator, error) {
 	return &LinkIterator{links: links}, nil
 }
 
+// Flush guarantees that all values stored locally are synced to the baking local storage.
+
+func (c *Client) Flush() error {
+	return c.ds.Sync(context.TODO(), rootDatastoreKey)
+}
+
 // Shutdown closes all resources used by Client.
 // After calling this function Client must be discarded.
 func (c *Client) Shutdown() error {
 	ctx := context.TODO()
 	xErr := c.ex.Shutdown(ctx)
 	hErr := c.h.Close()
+	fErr := c.Flush()
 	dsErr := c.ds.Close()
 	switch {
 	case hErr != nil:
 		return hErr
+	case fErr != nil:
+		return fErr
 	case dsErr != nil:
 		return dsErr
 	default:
