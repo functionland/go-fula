@@ -52,6 +52,9 @@ func NewClient(cfg *Config) (*Client, error) {
 // ConnectToBlox attempts to connect to blox via the configured address. This function can be used
 // to check if blox is currently accessible.
 func (c *Client) ConnectToBlox() error {
+	if _, ok := c.ex.(exchange.NoopExchange); ok {
+		return nil
+	}
 	return c.h.Connect(context.TODO(), c.h.Peerstore().PeerInfo(c.bloxPid))
 }
 
