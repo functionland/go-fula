@@ -135,14 +135,16 @@ func (c *Client) Push(key []byte) error {
 	if err != nil {
 		return err
 	}
+	return c.pushLink(context.TODO(), l)
+}
+
+func (c *Client) pushLink(ctx context.Context, l ipld.Link) error {
 	if exists, err := c.hasLink(l); err != nil {
 		return err
 	} else if !exists {
 		return errors.New("value not found locally")
 	}
-	ctx := context.TODO()
-	err = c.ex.Push(ctx, c.bloxPid, l)
-	if err != nil {
+	if err := c.ex.Push(ctx, c.bloxPid, l); err != nil {
 		return err
 	}
 	return c.markAsPushedSuccessfully(ctx, l)
@@ -190,8 +192,24 @@ func (c *Client) ListFailedPushes() (*LinkIterator, error) {
 	return &LinkIterator{links: links}, nil
 }
 
-// Flush guarantees that all values stored locally are synced to the baking local storage.
+// RetryFailedPushes retries pushing all links that failed to push.
+// The retry is disrupted as soon as a failure occurs.
+// See ListFailedPushes.
+func (c *Client) RetryFailedPushes() error {
+	ctx := context.TODO()
+	links, err := c.listFailedPushes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if err := c.pushLink(ctx, link); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+// Flush guarantees that all values stored locally are synced to the baking local storage.
 func (c *Client) Flush() error {
 	return c.ds.Sync(context.TODO(), rootDatastoreKey)
 }
