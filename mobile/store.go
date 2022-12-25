@@ -18,9 +18,10 @@ func (c *Client) markAsFailedPush(ctx context.Context, l ipld.Link) error {
 }
 
 func (c *Client) markAsPushedSuccessfully(ctx context.Context, l ipld.Link) error {
-	k := failedPushKeyPrefix.ChildString(l.Binary())
+	k := failedPushKeyPrefix.ChildString(l.String())
 	return c.ds.Delete(ctx, k)
 }
+
 func (c *Client) listFailedPushes(ctx context.Context) ([]ipld.Link, error) {
 	q := query.Query{
 		KeysOnly: true,
