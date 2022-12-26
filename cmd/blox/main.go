@@ -15,6 +15,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 	"gopkg.in/yaml.v3"
@@ -30,6 +31,7 @@ var (
 			PoolName    string   `yaml:"poolName"`
 			LogLevel    string   `yaml:"logLevel"`
 			ListenAddrs []string `yaml:"listenAddrs"`
+			Authorizer  string   `yaml:"authorizer"`
 
 			listenAddrs cli.StringSlice
 		}
@@ -69,6 +71,13 @@ func init() {
 				Destination: &app.config.LogLevel,
 				EnvVars:     []string{"FULA_BLOX_LOG_LEVEL"},
 				Value:       "info",
+			}),
+			altsrc.NewStringFlag(&cli.StringFlag{
+				Name:        "authorizer",
+				Usage:       "Peer ID that is allowed to manage authorization",
+				DefaultText: "Peer ID of Blox itself, i.e. --identity",
+				Destination: &app.config.Authorizer,
+				EnvVars:     []string{"FULA_BLOX_AUTHORIZER"},
 			}),
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "listenAddr",
@@ -122,6 +131,17 @@ func before(ctx *cli.Context) error {
 		}
 		app.config.Identity = base64.StdEncoding.EncodeToString(km)
 	}
+	if app.config.Authorizer == "" {
+		key, err := crypto.UnmarshalPrivateKey([]byte(app.config.Identity))
+		if err != nil {
+			return err
+		}
+		pid, err := peer.IDFromPrivateKey(key)
+		if err != nil {
+			return err
+		}
+		app.config.Authorizer = pid.String()
+	}
 	// Initialize store directory if not set.
 	if app.config.StoreDir == "" {
 		app.config.StoreDir = path.Join(homeDir, ".fula", "blox", "store")
@@ -144,6 +164,10 @@ func before(ctx *cli.Context) error {
 }
 
 func action(ctx *cli.Context) error {
+	authorizer, err := peer.Decode(app.config.Authorizer)
+	if err != nil {
+		return err
+	}
 	km, err := base64.StdEncoding.DecodeString(app.config.Identity)
 	if err != nil {
 		return err
@@ -163,7 +187,7 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bb, err := blox.New(blox.WithHost(h), blox.WithDatastore(ds), blox.WithPoolName(app.config.PoolName))
+	bb, err := blox.New(blox.WithHost(h), blox.WithDatastore(ds), blox.WithPoolName(app.config.PoolName), blox.WithAuthorizer(authorizer))
 	if err != nil {
 		return err
 	}
