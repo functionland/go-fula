@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -27,31 +28,51 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-const FxExchangeProtocolID = "/fx.land/exchange/0.0.1"
+const (
+	FxExchangeProtocolID = "/fx.land/exchange/0.0.1"
+
+	actionPull = "pull"
+	actionPush = "push"
+	actionAuth = "auth"
+)
 
 var (
-	log          = logging.Logger("fula/exchange")
-	_   Exchange = (*FxExchange)(nil)
+	_ Exchange = (*FxExchange)(nil)
+
+	log             = logging.Logger("fula/exchange")
+	errUnauthorized = errors.New("not authorized")
 )
 
 type (
 	FxExchange struct {
+		*options
 		h  host.Host
 		gx graphsync.GraphExchange
 		ls ipld.LinkSystem
 		s  *http.Server
 		c  *http.Client
+
+		authorizedPeers map[peer.ID]struct{}
 	}
 	pushRequest struct {
 		Link cid.Cid `json:"link"`
 	}
+	authorizationRequest struct {
+		Subject peer.ID `json:"id"`
+		Allow   bool    `json:"allow"`
+	}
 )
 
-func NewFxExchange(h host.Host, ls ipld.LinkSystem) *FxExchange {
-	return &FxExchange{
-		h:  h,
-		ls: ls,
-		s:  &http.Server{},
+func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, error) {
+	opts, err := newOptions(o...)
+	if err != nil {
+		return nil, err
+	}
+	e := &FxExchange{
+		options: opts,
+		h:       h,
+		ls:      ls,
+		s:       &http.Server{},
 		c: &http.Client{
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -63,7 +84,14 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem) *FxExchange {
 				},
 			},
 		},
+		authorizedPeers: make(map[peer.ID]struct{}),
 	}
+	if e.authorizer != "" {
+		if err := e.SetAuth(context.Background(), h.ID(), e.authorizer, true); err != nil {
+			return nil, err
+		}
+	}
+	return e, nil
 }
 
 func (e *FxExchange) Start(ctx context.Context) error {
@@ -71,10 +99,12 @@ func (e *FxExchange) Start(ctx context.Context) error {
 	e.gx = gs.New(ctx, gsn, e.ls)
 	e.gx.RegisterIncomingRequestHook(
 		func(p peer.ID, r graphsync.RequestData, ha graphsync.IncomingRequestHookActions) {
-			// TODO check the peer is allowed and request is valid
-			ha.ValidateRequest()
+			if e.authorized(p, actionPull) {
+				ha.ValidateRequest()
+			} else {
+				ha.TerminateWithError(errUnauthorized)
+			}
 		})
-
 	listen, err := gostream.Listen(e.h, FxExchangeProtocolID)
 	if err != nil {
 		return err
@@ -110,7 +140,7 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/push", &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPush, &buf)
 	if err != nil {
 		return err
 	}
@@ -131,15 +161,30 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 }
 
 func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
-	switch path.Base(r.URL.Path) {
-	case "push":
-		e.handlePush(w, r)
+	from, err := peer.Decode(r.RemoteAddr)
+	if err != nil {
+		log.Debugw("cannot parse remote addr as peer ID", "err", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	action := path.Base(r.URL.Path)
+	if !e.authorized(from, action) {
+		log.Debugw("rejected unauthorized request", "from", from, "action", action)
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+	switch action {
+	case actionPush:
+		e.handlePush(from, w, r)
+	case actionAuth:
+		e.handleAuthorization(from, w, r)
 	default:
 		http.Error(w, "", http.StatusNotFound)
 	}
 }
 
-func (e *FxExchange) handlePush(w http.ResponseWriter, r *http.Request) {
+func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionPush, "from", from)
 	defer r.Body.Close()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -147,30 +192,95 @@ func (e *FxExchange) handlePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	// TODO: verify source peer ID is allowed
-	pid, err := peer.Decode(r.RemoteAddr)
-
 	var p pushRequest
 	if err := json.Unmarshal(b, &p); err != nil {
 		log.Debugw("cannot parse request body", "err", err)
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
-	l := cidlink.Link{Cid: p.Link}
-	ctx := context.TODO()
-	if err != nil {
-		log.Debugw("cannot parse remote addr as peer ID", "err", err)
-		http.Error(w, "", http.StatusBadRequest)
-		return
-	}
 	go func() {
-		if err := e.Pull(ctx, pid, l); err != nil {
+		ctx := context.TODO()
+		if err := e.Pull(ctx, from, cidlink.Link{Cid: p.Link}); err != nil {
 			log.Warnw("failed to fetch in response to push", "err", err)
 		} else {
-			log.Debugw("successfully fetched in response to push", "from", pid, "link", p.Link)
+			log.Debugw("successfully fetched in response to push", "from", from, "link", p.Link)
 		}
 	}()
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionAuth, "from", from)
+	defer r.Body.Close()
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Errorw("failed to read request body", "err", err)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	var a authorizationRequest
+	if err := json.Unmarshal(b, &a); err != nil {
+		log.Debugw("cannot parse request body", "err", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	if a.Allow {
+		e.authorizedPeers[a.Subject] = struct{}{}
+	} else {
+		delete(e.authorizedPeers, a.Subject)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
+	// Check if auth is for local host; if so, handle it locally.
+	if on == e.h.ID() {
+		if allow {
+			e.authorizedPeers[subject] = struct{}{}
+		} else {
+			delete(e.authorizedPeers, subject)
+		}
+		return nil
+	}
+	r := authorizationRequest{Subject: subject, Allow: allow}
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(r); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+on.String()+".invalid/"+actionAuth, &buf)
+	if err != nil {
+		return err
+	}
+	resp, err := e.c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	switch {
+	case err != nil:
+		return err
+	case resp.StatusCode != http.StatusOK:
+		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+	default:
+		return nil
+	}
+}
+
+func (e *FxExchange) authorized(pid peer.ID, action string) bool {
+	if e.authorizer == "" {
+		// If no authorizer is set allow all.
+		return true
+	}
+	switch action {
+	case actionPull, actionPush:
+		_, ok := e.authorizedPeers[pid]
+		return ok
+	case actionAuth:
+		return pid == e.authorizer
+	default:
+		return false
+	}
 }
 
 func (e *FxExchange) Shutdown(ctx context.Context) error {

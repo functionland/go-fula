@@ -11,5 +11,6 @@ type Exchange interface {
 	Start(context.Context) error
 	Push(context.Context, peer.ID, ipld.Link) error
 	Pull(context.Context, peer.ID, ipld.Link) error
+	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 	Shutdown(context.Context) error
 }

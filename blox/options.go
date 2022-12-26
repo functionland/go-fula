@@ -14,6 +14,7 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 type (
@@ -25,6 +26,7 @@ type (
 		announceInterval time.Duration
 		ds               datastore.Batching
 		ls               *ipld.LinkSystem
+		authorizer       peer.ID
 	}
 )
 
@@ -71,6 +73,9 @@ func newOptions(o ...Option) (*options, error) {
 			}
 			return bytes.NewBuffer(val), nil
 		}
+	}
+	if opts.authorizer == "" {
+		opts.authorizer = opts.h.ID()
 	}
 	return &opts, nil
 }
@@ -123,6 +128,15 @@ func WithDatastore(ds datastore.Batching) Option {
 func WithLinkSystem(ls *ipld.LinkSystem) Option {
 	return func(o *options) error {
 		o.ls = ls
+		return nil
+	}
+}
+
+// WithAuthorizer sets the peer ID that has permission to configure DAG exchange authorization.
+// Defaults to the blox libp2p host ID if unset.
+func WithAuthorizer(pid peer.ID) Option {
+	return func(o *options) error {
+		o.authorizer = pid
 		return nil
 	}
 }

@@ -42,7 +42,10 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
-	p.ex = exchange.NewFxExchange(p.h, p.ls)
+	p.ex, err = exchange.NewFxExchange(p.h, p.ls, exchange.WithAuthorizer(p.authorizer))
+	if err != nil {
+		return nil, err
+	}
 	return &p, nil
 }
 
@@ -70,6 +73,10 @@ func (p *Blox) Start(ctx context.Context) error {
 	go p.announceIExistPeriodically()
 	go p.handleAnnouncements()
 	return nil
+}
+
+func (p *Blox) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
+	return p.ex.SetAuth(ctx, on, subject, allow)
 }
 
 func (p *Blox) handleAnnouncements() {

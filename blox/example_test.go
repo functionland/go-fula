@@ -219,6 +219,14 @@ func ExamplePool_ExchangeDagBetweenPoolNodes() {
 		panic(err)
 	}
 
+	// Authorize exchange between the two nodes
+	if err := n1.SetAuth(ctx, h1.ID(), h2.ID(), true); err != nil {
+		panic(err)
+	}
+	if err := n2.SetAuth(ctx, h2.ID(), h1.ID(), true); err != nil {
+		panic(err)
+	}
+
 	// Generate a sample DAG and store it on node 1 (n1) in the pool, which we will pull from n1
 	n1leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
 		na.AssembleEntry("this").AssignBool(true)

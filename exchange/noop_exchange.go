@@ -16,17 +16,22 @@ func (n NoopExchange) Start(context.Context) error {
 	return nil
 }
 
-func (n NoopExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
+func (n NoopExchange) Push(_ context.Context, to peer.ID, l ipld.Link) error {
 	log.Debugw("Pushed noop exchange.", "to", to, "link", l)
 	return nil
 }
 
-func (n NoopExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
+func (n NoopExchange) Pull(_ context.Context, from peer.ID, l ipld.Link) error {
 	log.Debugw("Pulled noop exchange.", "from", from, "link", l)
 	return nil
 }
 
-func (n NoopExchange) Shutdown(ctx context.Context) error {
+func (n NoopExchange) SetAuth(_ context.Context, on peer.ID, subject peer.ID, allow bool) error {
+	log.Debugw("Set auth noop exchange.", "on", on, "subject", subject, "allow", allow)
+	return nil
+}
+
+func (n NoopExchange) Shutdown(context.Context) error {
 	log.Debug("Shut down noop exchange.")
 	return nil
 }

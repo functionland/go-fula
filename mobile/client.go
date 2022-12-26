@@ -214,6 +214,19 @@ func (c *Client) Flush() error {
 	return c.ds.Sync(context.TODO(), rootDatastoreKey)
 }
 
+// SetAuth sets authorization on the given peer ID for the given subject.
+func (c *Client) SetAuth(on string, subject string, allow bool) error {
+	onp, err := peer.Decode(on)
+	if err != nil {
+		return err
+	}
+	subp, err := peer.Decode(subject)
+	if err != nil {
+		return err
+	}
+	return c.ex.SetAuth(context.TODO(), onp, subp, allow)
+}
+
 // Shutdown closes all resources used by Client.
 // After calling this function Client must be discarded.
 func (c *Client) Shutdown() error {

@@ -38,9 +38,8 @@ type Config struct {
 	// client is shut down or Clinet.Flush is explicitly called.
 	SyncWrites bool
 
-	// TODO we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
-	//      For now we manually take BloxAddr as config.
-
+	// TODO: we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
+	//       For now we manually take BloxAddr as config.
 }
 
 func (cfg *Config) init(mc *Client) error {
@@ -114,7 +113,16 @@ func (cfg *Config) init(mc *Client) error {
 	case noopExchange:
 		mc.ex = exchange.NoopExchange{}
 	default:
-		mc.ex = exchange.NewFxExchange(mc.h, mc.ls)
+		mc.ex, err = exchange.NewFxExchange(mc.h, mc.ls, exchange.WithAuthorizer(mc.h.ID()))
+		if mc.bloxPid != "" {
+			// Explicitly authorize the Blox ID if its address is specified.
+			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {
+				return err
+			}
+		}
+		if err != nil {
+			return err
+		}
 	}
 	return mc.ex.Start(context.TODO())
 }
