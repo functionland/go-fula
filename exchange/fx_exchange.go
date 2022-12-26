@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
@@ -52,7 +53,8 @@ type (
 		s  *http.Server
 		c  *http.Client
 
-		authorizedPeers map[peer.ID]struct{}
+		authorizedPeers     map[peer.ID]struct{}
+		authorizedPeersLock sync.RWMutex
 	}
 	pushRequest struct {
 		Link cid.Cid `json:"link"`
@@ -224,22 +226,26 @@ func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r 
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
+	e.authorizedPeersLock.Lock()
 	if a.Allow {
 		e.authorizedPeers[a.Subject] = struct{}{}
 	} else {
 		delete(e.authorizedPeers, a.Subject)
 	}
+	e.authorizedPeersLock.Unlock()
 	w.WriteHeader(http.StatusOK)
 }
 
 func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
 	// Check if auth is for local host; if so, handle it locally.
 	if on == e.h.ID() {
+		e.authorizedPeersLock.Lock()
 		if allow {
 			e.authorizedPeers[subject] = struct{}{}
 		} else {
 			delete(e.authorizedPeers, subject)
 		}
+		e.authorizedPeersLock.Unlock()
 		return nil
 	}
 	r := authorizationRequest{Subject: subject, Allow: allow}
@@ -274,7 +280,9 @@ func (e *FxExchange) authorized(pid peer.ID, action string) bool {
 	}
 	switch action {
 	case actionPull, actionPush:
+		e.authorizedPeersLock.RLock()
 		_, ok := e.authorizedPeers[pid]
+		e.authorizedPeersLock.RUnlock()
 		return ok
 	case actionAuth:
 		return pid == e.authorizer
