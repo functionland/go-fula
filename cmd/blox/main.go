@@ -132,7 +132,11 @@ func before(ctx *cli.Context) error {
 		app.config.Identity = base64.StdEncoding.EncodeToString(km)
 	}
 	if app.config.Authorizer == "" {
-		key, err := crypto.UnmarshalPrivateKey([]byte(app.config.Identity))
+		km, err := base64.StdEncoding.DecodeString(app.config.Identity)
+		if err != nil {
+			return err
+		}
+		key, err := crypto.UnmarshalPrivateKey(km)
 		if err != nil {
 			return err
 		}
