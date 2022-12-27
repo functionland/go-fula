@@ -194,7 +194,7 @@ func action(ctx *cli.Context) error {
 	if err := bb.Start(ctx.Context); err != nil {
 		return err
 	}
-	logger.Info("Started blox")
+	logger.Info("Started blox", "addrs", h.Addrs())
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
