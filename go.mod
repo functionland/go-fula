@@ -14,6 +14,7 @@ require (
 	github.com/libp2p/go-libp2p v0.23.4
 	github.com/libp2p/go-libp2p-gostream v0.5.0
 	github.com/libp2p/go-libp2p-pubsub v0.8.1
+	github.com/mdp/qrterminal v1.0.1
 	github.com/multiformats/go-multiaddr v0.8.0
 	github.com/multiformats/go-multicodec v0.7.0
 	github.com/urfave/cli/v2 v2.23.7
@@ -143,4 +144,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
+	rsc.io/qr v0.2.0 // indirect
 )

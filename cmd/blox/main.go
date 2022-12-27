@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,7 +16,11 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/mdp/qrterminal"
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 	"gopkg.in/yaml.v3"
@@ -199,11 +204,41 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 	logger.Info("Started blox", "addrs", h.Addrs())
+	printMultiaddrAsQR(h)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	logger.Info("Shutting down blox")
 	return bb.Shutdown(context.Background())
+}
+
+func printMultiaddrAsQR(h host.Host) {
+	var addr multiaddr.Multiaddr
+	addrs := h.Addrs()
+	switch len(addrs) {
+	case 0:
+	case 1:
+		addr = addrs[0]
+	default:
+		// Prefer printing public address if there is one.
+		// Otherwise, fallback on a non-loopback address.
+		for _, a := range addrs {
+			if manet.IsPublicAddr(a) {
+				addr = a
+				break
+			}
+			if !manet.IsIPLoopback(a) {
+				addr = a
+			}
+		}
+	}
+	if addr == nil {
+		logger.Warn("blox has no multiaddrs")
+		return
+	}
+	as := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
+	fmt.Printf(">>> blox multiaddr: %s\n", as)
+	qrterminal.Generate(as, qrterminal.L, os.Stdout)
 }
 
 func main() {
