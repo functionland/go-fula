@@ -238,7 +238,14 @@ func printMultiaddrAsQR(h host.Host) {
 	}
 	as := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
 	fmt.Printf(">>> blox multiaddr: %s\n", as)
-	qrterminal.Generate(as, qrterminal.L, os.Stdout)
+	qrterminal.GenerateWithConfig(as, qrterminal.Config{
+		Level:      qrterminal.L,
+		Writer:     os.Stdout,
+		HalfBlocks: false,
+		BlackChar:  "%%",
+		WhiteChar:  "  ",
+		QuietZone:  qrterminal.QUIET_ZONE,
+	})
 }
 
 func main() {
