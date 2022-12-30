@@ -127,8 +127,39 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 	return
 }
 
+func runCommand(tDuration time.Duration, commands string) (stdout, stderr string, err error) {
+	log.Infow("running", "commands", commands, "tDuration", tDuration)
+	command := strings.Fields(commands)
+	cmd := exec.Command(command[0])
+	if len(command) > 0 {
+		cmd = exec.Command(command[0], command[1:]...)
+	}
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	err = cmd.Start()
+	if err != nil {
+		return
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	select {
+	case <-time.After(tDuration):
+		err = cmd.Process.Kill()
+	case err = <-done:
+		stdout = outb.String()
+		stderr = errb.String()
+	}
+	return
+}
+
 var TimeLimit = 10 * time.Second
 
+// Scan can be used to get the list of available wifis and their strength
+// If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
+// wifiInterface is the name of interface that it should look for in Linux. Default is wlan0
 func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error) {
 	command := ""
 	os := ""
@@ -163,33 +194,5 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 		return
 	}
 	wifilist, err = parse(stdout, os)
-	return
-}
-
-func runCommand(tDuration time.Duration, commands string) (stdout, stderr string, err error) {
-	log.Infow("running", "commands", commands, "tDuration", tDuration)
-	command := strings.Fields(commands)
-	cmd := exec.Command(command[0])
-	if len(command) > 0 {
-		cmd = exec.Command(command[0], command[1:]...)
-	}
-	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
-	err = cmd.Start()
-	if err != nil {
-		return
-	}
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-	select {
-	case <-time.After(tDuration):
-		err = cmd.Process.Kill()
-	case err = <-done:
-		stdout = outb.String()
-		stderr = errb.String()
-	}
 	return
 }

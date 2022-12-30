@@ -4,11 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-
-	logging "github.com/ipfs/go-log/v2"
 )
-
-var log = logging.Logger("fula/wap")
 
 func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/wifi/list" {
