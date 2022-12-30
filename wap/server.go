@@ -61,7 +61,7 @@ func Serve(ip string, port string) {
 		}
 	}
 
-	log.Info("Starting server at port 3500\n")
+	log.Info("Starting server at " + listenAddr)
 	if err := http.Serve(ln, mux); err != nil {
 		log.Errorw("Serve could not initialize", "err", err)
 	}
