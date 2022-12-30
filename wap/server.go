@@ -2,6 +2,7 @@ package wap
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 )
@@ -25,7 +26,11 @@ func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(wifis)
+	jsonErr := json.NewEncoder(w).Encode(wifis)
+	if jsonErr != nil {
+		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
