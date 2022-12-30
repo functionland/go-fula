@@ -28,7 +28,7 @@ func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(wifis)
 }
 
-// This function accepts an ip and port that it runs the webserver on. Default is 0.0.0.0:3500
+// This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(ip string, port string) {
 
@@ -37,21 +37,23 @@ func Serve(ip string, port string) {
 
 	listenAddr := ""
 
-	if ip != "" {
-		listenAddr = listenAddr + ip
-	} else {
-		listenAddr = listenAddr + "0.0.0.0"
+	if ip == "" {
+		ip = "192.168.88.1"
 	}
 
-	if port != "" {
-		listenAddr = listenAddr + ":" + port
-	} else {
-		listenAddr = listenAddr + ":3500"
+	if port == "" {
+		port = "3500"
 	}
+
+	listenAddr = ip + ":" + port
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		log.Errorw("Listen could not initialize", "err", err)
+		listenAddr = "0.0.0.0:" + port
+		ln, err = net.Listen("tcp", listenAddr)
+		if err != nil {
+			log.Errorw("Listen could not initialize", "err", err)
+		}
 	}
 
 	log.Info("Starting server at port 3500\n")
