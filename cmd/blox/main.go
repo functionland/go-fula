@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/mdp/qrterminal"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -31,14 +32,16 @@ var (
 	app    struct {
 		cli.App
 		config struct {
-			Identity    string   `yaml:"identity"`
-			StoreDir    string   `yaml:"storeDir"`
-			PoolName    string   `yaml:"poolName"`
-			LogLevel    string   `yaml:"logLevel"`
-			ListenAddrs []string `yaml:"listenAddrs"`
-			Authorizer  string   `yaml:"authorizer"`
+			Identity     string   `yaml:"identity"`
+			StoreDir     string   `yaml:"storeDir"`
+			PoolName     string   `yaml:"poolName"`
+			LogLevel     string   `yaml:"logLevel"`
+			ListenAddrs  []string `yaml:"listenAddrs"`
+			Authorizer   string   `yaml:"authorizer"`
+			StaticRelays []string `yaml:"staticRelays"`
 
-			listenAddrs cli.StringSlice
+			listenAddrs  cli.StringSlice
+			staticRelays cli.StringSlice
 		}
 	}
 )
@@ -88,6 +91,11 @@ func init() {
 				Name:        "listenAddr",
 				Destination: &app.config.listenAddrs,
 				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001"),
+			}),
+			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
+				Name:        "staticRelays",
+				Destination: &app.config.staticRelays,
+				Value:       cli.NewStringSlice("/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"),
 			}),
 		},
 		Before:    before,
@@ -165,6 +173,7 @@ func before(ctx *cli.Context) error {
 		return errors.New("storeDir must be a directory")
 	}
 	app.config.ListenAddrs = app.config.listenAddrs.Value()
+	app.config.StaticRelays = app.config.staticRelays.Value()
 	yc, err := yaml.Marshal(app.config)
 	if err != nil {
 		return err
@@ -185,10 +194,34 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	sr := make([]peer.AddrInfo, 0, len(app.config.StaticRelays))
+	for _, relay := range app.config.StaticRelays {
+		rma, err := multiaddr.NewMultiaddr(relay)
+		if err != nil {
+			return err
+		}
+		rai, err := peer.AddrInfoFromP2pAddr(rma)
+		if err != nil {
+			return err
+		}
+		sr = append(sr, *rai)
+	}
+	var relays autorelay.Option
+	if len(sr) != 0 {
+		relays = autorelay.WithStaticRelays(sr)
+	} else {
+		relays = autorelay.WithDefaultStaticRelays()
+	}
 	h, err := libp2p.New(
 		libp2p.Identity(k),
-		libp2p.ListenAddrs(),
-		libp2p.ListenAddrStrings(app.config.ListenAddrs...))
+		libp2p.ListenAddrStrings(app.config.ListenAddrs...),
+		libp2p.EnableNATService(),
+		libp2p.NATPortMap(),
+		libp2p.EnableRelay(),
+		libp2p.EnableHolePunching(),
+		libp2p.EnableAutoRelay(relays, autorelay.WithNumRelays(1)),
+	)
 	if err != nil {
 		return err
 	}

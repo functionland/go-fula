@@ -16,9 +16,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
+	"github.com/multiformats/go-multiaddr"
 )
 
-const noopExchange = "noop"
+const (
+	noopExchange = "noop"
+	devRelay     = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
+)
 
 type Config struct {
 	Identity  []byte
@@ -32,6 +37,9 @@ type Config struct {
 	// the BloxAddr may also be left empty.
 	Exchange string
 	BloxAddr string
+	// StaticRelays specifies a list of static relays used by libp2p auto-relay.
+	// Defaults to fx.land managed relay if unspecified.
+	StaticRelays []string
 
 	// SyncWrites assures that writes to the local datastore are flushed to the backing store as
 	// soon as they are written. By default, writes are not synchronized to disk until either the
@@ -44,7 +52,28 @@ type Config struct {
 
 func (cfg *Config) init(mc *Client) error {
 	var err error
-	var hopts []libp2p.Option
+	if len(cfg.StaticRelays) == 0 {
+		cfg.StaticRelays = append(cfg.StaticRelays, devRelay)
+	}
+	sr := make([]peer.AddrInfo, 0, len(cfg.StaticRelays))
+	for _, relay := range cfg.StaticRelays {
+		rma, err := multiaddr.NewMultiaddr(relay)
+		if err != nil {
+			return err
+		}
+		rai, err := peer.AddrInfoFromP2pAddr(rma)
+		if err != nil {
+			return err
+		}
+		sr = append(sr, *rai)
+	}
+	hopts := []libp2p.Option{
+		libp2p.EnableNATService(),
+		libp2p.NATPortMap(),
+		libp2p.EnableRelay(),
+		libp2p.EnableHolePunching(),
+		libp2p.EnableAutoRelay(autorelay.WithStaticRelays(sr), autorelay.WithNumRelays(1)),
+	}
 	if len(cfg.Identity) != 0 {
 		pk, err := crypto.UnmarshalPrivateKey(cfg.Identity)
 		if err != nil {
