@@ -23,9 +23,9 @@ A personal server is a commodity hardware (PC, Raspberry Pi, etc.) that's kept *
 
 To achieve this, we are developing protocols to accommodate client-server programming with minimal effort on developer's side:
 
-- [File Protocol](protocols/file): Send and receive files in a browser or an app **(stage: beta version)**
-- [Data Protocol](protocols/data): Database interface over at client-side; facilitates describing linked JSON documents and having them saved/retrieved **(stage: design draft)**
-- [AI Protocol](protocols/ai): Map-Reduce stack for distributed processing **(stage: ideation)**
+- [fulamobile](mobile): Interacts with WNFS to encrypt the data and Send and receive files in a browser or an Android or iOS app **(stage: beta version)**
+- [blox](blox): Blox provides the backend to receive the DAG created by fulamobile and store it **(stage: beta version)**
+- [exchange](exchange): Fula exchange protocol is responsible for the ctual transfer of data **(stage: beta version)**
 
 ## Architecture
 
