@@ -29,7 +29,7 @@ To achieve this, we are developing protocols to accommodate client-server progra
 
 A react-native app talks with the server(s) by invoking APIs from `@functionland/react-native-fula` library. The Fula library abstracts away the protocols and `libp2p` connection, instead exposes APIs similar to MongoDB for data persistence and S3 for file storage.
 
-The data gets encrypted on the client side using [WebNative Filesystem (WNFS)] (https://github.com/wnfs-wg/rs-wnfs) ( [Android Version] (https://github.com/functionland/wnfs-android) & [iOS Version] (https://github.com/functionland/wnfs-ios) ) and then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
+The data gets encrypted on the client side using [WebNative Filesystem (WNFS)] (https://github.com/wnfs-wg/rs-wnfs) ( with bridges for Android and iOS ) and then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
 
 The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. However, in cases that the user needs absolute assurance on data longevity, e.g. password records in a password manager app or scans of sensitive documents, the cids of encrypted data can be sent over at [Fula blockchain](https://github.com/functionland/sugarfunge-node) and other blox owners can back them up and get rewarded.
 
@@ -42,6 +42,8 @@ By default Libp2p connetction happens through functionland's libp2p relay over t
 | [blox](blox) | Blox provides the backend to receive the DAG created by fulamobile and store it |
 | [mobile](mobile) | Interacts with WNFS to encrypt the data and Send and receive files in a browser or an Android or iOS app. Available for [React-Native here] (https://github.com/functionland/react-native-fula) and for [Android here] (https://github.com/functionland/fula-build-aar) |
 | [exchange](exchange) | Fula exchange protocol is responsible for the ctual transfer of data |
+| [WNFS for Android](https://github.com/functionland/wnfs-android) | Android build for WNFS rust version |
+| [WNFS for iOS](https://github.com/functionland/wnfs-ios) | iOS build for WNFS rust version |
 
 ## Run
 
