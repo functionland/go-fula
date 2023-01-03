@@ -33,6 +33,8 @@ The data gets encrypted on the client side using [WebNative Filesystem (WNFS)] (
 
 The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. However, in cases that the user needs absolute assurance on data longevity, e.g. password records in a password manager app or scans of sensitive documents, the cids of encrypted data can be sent over at [Fula blockchain](https://github.com/functionland/sugarfunge-node) and other blox owners can back them up and get rewarded.
 
+By default Libp2p connetction happens through functionland's libp2p relay over the internet or without any relay over LAN.
+
 ## Packages
 
 | Name | Description |
