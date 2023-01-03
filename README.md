@@ -21,11 +21,7 @@ There are currently two ways to interact with Web3 storage solutions:
 
 A personal server is a commodity hardware (PC, Raspberry Pi, etc.) that's kept *at home* vs. *in pocket*. It helps with actual decentralization, also saves money since people pay once for HDDs and own them forever, no monthly charge! From privacy perspective, it guarantees that data doesn't leave the premise unless user specifically wants to (e.g. sharing).
 
-To achieve this, we are developing protocols to accommodate client-server programming with minimal effort on developer's side:
-
-- [fulamobile](mobile): Interacts with WNFS to encrypt the data and Send and receive files in a browser or an Android or iOS app **(stage: beta version)**
-- [blox](blox): Blox provides the backend to receive the DAG created by fulamobile and store it **(stage: beta version)**
-- [exchange](exchange): Fula exchange protocol is responsible for the ctual transfer of data **(stage: beta version)**
+To achieve this, we are developing protocols to accommodate client-server programming with minimal effort on developer's side.
 
 ## Architecture
 
@@ -33,16 +29,17 @@ To achieve this, we are developing protocols to accommodate client-server progra
 
 A react-native app talks with the server(s) by invoking APIs from `@functionland/react-native-fula` library. The Fula library abstracts away the protocols and `libp2p` connection, instead exposes APIs similar to MongoDB for data persistence and S3 for file storage.
 
-The data gets encrypted on the client side using [WebNative Filesystem (WNFS)] (https://github.com/wnfs-wg/rs-wnfs) adn then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
+The data gets encrypted on the client side using [WebNative Filesystem (WNFS)] (https://github.com/wnfs-wg/rs-wnfs) and then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
 
-The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. However, in cases that the user needs absolute assurance on data longevity, e.g. password records in a password manager app or scans of sensitive documents, the cids of encrypted data can be sent over at Fula blockchain and other blox owners can back them up and get rewarded.
+The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. However, in cases that the user needs absolute assurance on data longevity, e.g. password records in a password manager app or scans of sensitive documents, the cids of encrypted data can be sent over at [Fula blockchain](https://github.com/functionland/sugarfunge-node) and other blox owners can back them up and get rewarded.
 
 ## Packages
 
 | Name | Description |
 | --- | --- |
-| [blox](blox) | Libp2p protocols for the blox stack |
-| [mobile](mobile) | Client library in golang with gomobile interface compatibility for generating IOS and Android apps |
+| [blox](blox) | Blox provides the backend to receive the DAG created by fulamobile and store it |
+| [mobile](mobile) | Interacts with WNFS to encrypt the data and Send and receive files in a browser or an Android or iOS app |
+| [exchange](exchange) | Fula exchange protocol is responsible for the ctual transfer of data |
 
 ## Run
 
