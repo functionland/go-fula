@@ -40,7 +40,7 @@ By default Libp2p connetction happens through functionland's libp2p relay over t
 | Name | Description |
 | --- | --- |
 | [blox](blox) | Blox provides the backend to receive the DAG created by fulamobile and store it |
-| [mobile](mobile) | Interacts with WNFS to encrypt the data and Send and receive files in a browser or an Android or iOS app |
+| [mobile](mobile) | Interacts with WNFS to encrypt the data and Send and receive files in a browser or an Android or iOS app. Available for [React-Native here] (https://github.com/functionland/react-native-fula) |
 | [exchange](exchange) | Fula exchange protocol is responsible for the ctual transfer of data |
 
 ## Run
