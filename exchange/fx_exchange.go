@@ -26,6 +26,7 @@ import (
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	gostream "github.com/libp2p/go-libp2p-gostream"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -117,6 +118,9 @@ func (e *FxExchange) Start(ctx context.Context) error {
 }
 
 func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
+	if e.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.exchange")
+	}
 	resps, errs := e.gx.Request(ctx, from, l, selectorparse.CommonSelector_ExploreAllRecursively)
 	for {
 		select {
@@ -137,6 +141,9 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 }
 
 func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
+	if e.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.exchange")
+	}
 	r := pushRequest{Link: l.(cidlink.Link).Cid}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
@@ -202,6 +209,9 @@ func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Req
 	}
 	go func() {
 		ctx := context.TODO()
+		if e.allowTransientConnection {
+			ctx = network.WithUseTransient(ctx, "fx.exchange")
+		}
 		if err := e.Pull(ctx, from, cidlink.Link{Cid: p.Link}); err != nil {
 			log.Warnw("failed to fetch in response to push", "err", err)
 		} else {
@@ -247,6 +257,9 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 		}
 		e.authorizedPeersLock.Unlock()
 		return nil
+	}
+	if e.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
 	r := authorizationRequest{Subject: subject, Allow: allow}
 	var buf bytes.Buffer

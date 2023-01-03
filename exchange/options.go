@@ -7,7 +7,8 @@ import (
 type (
 	Option  func(*options) error
 	options struct {
-		authorizer peer.ID
+		authorizer               peer.ID
+		allowTransientConnection bool
 	}
 )
 
@@ -24,6 +25,13 @@ func newOptions(o ...Option) (*options, error) {
 func WithAuthorizer(a peer.ID) Option {
 	return func(o *options) error {
 		o.authorizer = a
+		return nil
+	}
+}
+
+func WithAllowTransientConnection(t bool) Option {
+	return func(o *options) error {
+		o.allowTransientConnection = t
 		return nil
 	}
 }

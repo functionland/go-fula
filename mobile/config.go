@@ -41,38 +41,62 @@ type Config struct {
 	// Defaults to fx.land managed relay if unspecified.
 	StaticRelays []string
 
+	// ForceReachabilityPrivate configures weather the libp2p should always think that it is behind
+	// NAT.
+	ForceReachabilityPrivate bool
+
 	// SyncWrites assures that writes to the local datastore are flushed to the backing store as
 	// soon as they are written. By default, writes are not synchronized to disk until either the
-	// client is shut down or Clinet.Flush is explicitly called.
+	// client is shut down or Client.Flush is explicitly called.
 	SyncWrites bool
+
+	// AllowTransientConnection allows transient connectivity via relay when direct connection is
+	// not possible. Defaults to enabled if unspecified.
+	AllowTransientConnection bool
 
 	// TODO: we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
 	//       For now we manually take BloxAddr as config.
 }
 
+// NewConfig instantiates a new Config with default values.
+func NewConfig() *Config {
+	return &Config{
+		StaticRelays:             []string{devRelay},
+		ForceReachabilityPrivate: true,
+		AllowTransientConnection: true,
+	}
+}
+
 func (cfg *Config) init(mc *Client) error {
 	var err error
-	if len(cfg.StaticRelays) == 0 {
-		cfg.StaticRelays = append(cfg.StaticRelays, devRelay)
-	}
-	sr := make([]peer.AddrInfo, 0, len(cfg.StaticRelays))
-	for _, relay := range cfg.StaticRelays {
-		rma, err := multiaddr.NewMultiaddr(relay)
-		if err != nil {
-			return err
-		}
-		rai, err := peer.AddrInfoFromP2pAddr(rma)
-		if err != nil {
-			return err
-		}
-		sr = append(sr, *rai)
-	}
 	hopts := []libp2p.Option{
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
-		libp2p.EnableAutoRelay(autorelay.WithStaticRelays(sr), autorelay.WithNumRelays(1)),
+	}
+	var relays autorelay.Option
+	if len(cfg.StaticRelays) == 0 {
+		relays = autorelay.WithDefaultStaticRelays()
+	} else {
+		sr := make([]peer.AddrInfo, 0, len(cfg.StaticRelays))
+		for _, relay := range cfg.StaticRelays {
+			rma, err := multiaddr.NewMultiaddr(relay)
+			if err != nil {
+				return err
+			}
+			rai, err := peer.AddrInfoFromP2pAddr(rma)
+			if err != nil {
+				return err
+			}
+			sr = append(sr, *rai)
+		}
+		relays = autorelay.WithStaticRelays(sr)
+	}
+	libp2p.EnableAutoRelay(relays, autorelay.WithNumRelays(1))
+
+	if cfg.ForceReachabilityPrivate {
+		hopts = append(hopts, libp2p.ForceReachabilityPrivate())
 	}
 	if len(cfg.Identity) != 0 {
 		pk, err := crypto.UnmarshalPrivateKey(cfg.Identity)
@@ -142,7 +166,9 @@ func (cfg *Config) init(mc *Client) error {
 	case noopExchange:
 		mc.ex = exchange.NoopExchange{}
 	default:
-		mc.ex, err = exchange.NewFxExchange(mc.h, mc.ls, exchange.WithAuthorizer(mc.h.ID()))
+		mc.ex, err = exchange.NewFxExchange(mc.h, mc.ls,
+			exchange.WithAuthorizer(mc.h.ID()),
+			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection))
 		if mc.bloxPid != "" {
 			// Explicitly authorize the Blox ID if its address is specified.
 			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {
