@@ -19,7 +19,7 @@ There are currently two ways to interact with Web3 storage solutions:
 
 [**blox**](https://github.com/functionland/BLOX) aims to address these issues by creating a third alternative: **Personal Server**
 
-A personal server is a commodity hardware (PC, Raspberry Pi, etc.) that's kept *at home* vs. *in pocket*. It helps with actual decentralization, also saves money since people pay once for HDDs and own them forever, no monthly charge! From privacy perspective, it guarantees that data doesn't leave the premise unless user specifically wants to (e.g. sharing).
+A personal server is a commodity hardware device (such as a PC or Raspberry Pi) that is kept *at home* rather than carried with the user. It can help with actual decentralization and can save money in the long run, as there is a one-time cost for the hard drive and no monthly charges. From a privacy perspective, it also guarantees that data does not leave the premises unless the user specifically wants to share it.
 
 To achieve this, we are developing protocols to accommodate client-server programming with minimal effort on developer's side.
 
