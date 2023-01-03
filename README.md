@@ -17,7 +17,7 @@ There are currently two ways to interact with Web3 storage solutions:
 1. Through a pinning service and a gateway: the advantage is that files are served through URLs, an app can then access the files with conventional methods, e.g. simply putting a picture in `<img src="gateway.example.com/Qm...">`. The disadvantage is that there is a subscription payment associated with pinning services. Also this is not really decentralized!
 2. Turn the device to a full IPFS node: this model works beautifully in Brave desktop browser as an example, and makes sense for laptop and PC since they normally have large HDDs. It's much harder on mobile devices, however, biggest hurdle is to have Apple on board with the idea of relaxing file system access in iOS! Even if all goes well, a mobile device is NOT a good candidate for hosting the future Web! They get lost easily and are resource constrained (battery, memory).
 
-**blox** aims to address these issues by creating a third alternative: **Personal Server**
+[**blox**](https://github.com/functionland/BLOX) aims to address these issues by creating a third alternative: **Personal Server**
 
 A personal server is a commodity hardware (PC, Raspberry Pi, etc.) that's kept *at home* vs. *in pocket*. It helps with actual decentralization, also saves money since people pay once for HDDs and own them forever, no monthly charge! From privacy perspective, it guarantees that data doesn't leave the premise unless user specifically wants to (e.g. sharing).
 
