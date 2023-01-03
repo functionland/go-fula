@@ -8,7 +8,7 @@ Client-server stack for Web3
 
 You can see it in action in our Flagship App: [Fx Fotos](https://github.com/functionland/fx-fotos)
 
-![blox server demo](https://gateway.pinata.cloud/ipfs/QmWUjQczA5jHC3ibLq4y7CizVrebr1DTFRaTdJgFyxR5Nh)
+[![Blox server demo](https://gateway.pinata.cloud/ipfs/QmVd3eioLfp19hG1GnfgceBsbK16i39vsQ9Lxq35aAjxnY)](https://gateway.pinata.cloud/ipfs/QmWUjQczA5jHC3ibLq4y7CizVrebr1DTFRaTdJgFyxR5Nh)
 
 ## Motivation
 
