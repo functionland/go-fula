@@ -29,7 +29,7 @@ To achieve this, we are developing protocols to accommodate client-server progra
 
 A react-native app talks with the server(s) by invoking APIs from `@functionland/react-native-fula` library. The Fula library abstracts away the protocols and `libp2p` connection, instead exposes APIs similar to MongoDB for data persistence and S3 for file storage.
 
-The data gets encrypted on the client side using [WebNative Filesystem (WNFS)] (https://github.com/wnfs-wg/rs-wnfs) ( with bridges for [Android](https://github.com/functionland/wnfs-android) and [iOS](https://github.com/functionland/wnfs-ios) ) and then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
+The data gets encrypted on the client side using [WebNative Filesystem (WNFS)](https://github.com/wnfs-wg/rs-wnfs) ( with bridges for [Android](https://github.com/functionland/wnfs-android) and [iOS](https://github.com/functionland/wnfs-ios) ) and then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
 
 The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. However, in cases that the user needs absolute assurance on data longevity, e.g. password records in a password manager app or scans of sensitive documents, the cids of encrypted data can be sent over at [Fula blockchain](https://github.com/functionland/sugarfunge-node) and other blox owners can back them up and get rewarded.
 
