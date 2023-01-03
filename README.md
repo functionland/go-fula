@@ -1,6 +1,7 @@
 # box
 
-[![Go Test](https://github.com/functionland/go-fula/actions/workflows/go-test.yml/badge.svg)](https://github.com/functionland/go-fula/actions/workflows/go-test.yml)
+[![Go Test](https://github.com/functionland/go-fula/actions/workflows/go-test.yml/badge.svg)](https://github.com/functionland/go-fula/actions/workflows/go-test.yml) [![](https://jitpack.io/v/functionland/fula-build-aar.svg)](https://jitpack.io/#functionland/fula-build-aar)
+
 
 Client-server stack for Web3
 
