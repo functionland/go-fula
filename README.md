@@ -25,15 +25,17 @@ To achieve this, we are developing protocols to accommodate client-server progra
 
 ## Architecture
 
+`go-fula` is an implementation of the Fula protocol in Go (Golang). It is designed to facilitate smooth communication between clients and a mesh of backend devices (servers) and provide APIs for developers to build mobile-native decentralized applications (dApps).
+
 ![box architecture](https://gateway.pinata.cloud/ipfs/QmNkoQfCKAzQetJKWfNtLioJf6FCxzqjoDT2KshDZfsJd3)
 
-A react-native app talks with the server(s) by invoking APIs from `@functionland/react-native-fula` library. The Fula library abstracts away the protocols and `libp2p` connection, instead exposes APIs similar to MongoDB for data persistence and S3 for file storage.
+A React Native app can communicate with servers using the `@functionland/react-native-fula` library, which abstracts the underlying protocols and `libp2p` connection and exposes APIs similar to those of MongoDB for data persistence and S3 for file storage.
 
-The data gets encrypted on the client side using [WebNative Filesystem (WNFS)](https://github.com/wnfs-wg/rs-wnfs) ( with bridges for [Android](https://github.com/functionland/wnfs-android) and [iOS](https://github.com/functionland/wnfs-ios) ) and then the encrypted Merkle DAG is transferred to the blox server using Graphsync.
+Data is encrypted on the client side using [WebNative Filesystem (WNFS)](https://github.com/wnfs-wg/rs-wnfs) ( with bridges for [Android](https://github.com/functionland/wnfs-android) and [iOS](https://github.com/functionland/wnfs-ios) ). The encrypted Merkle DAG is then transferred to the blox server using Graphsync.
 
-The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. However, in cases that the user needs absolute assurance on data longevity, e.g. password records in a password manager app or scans of sensitive documents, the cids of encrypted data can be sent over at [Fula blockchain](https://github.com/functionland/sugarfunge-node) and other blox owners can back them up and get rewarded.
+The **blox** stack can provide backup guarantees by having the data pinned on multiple servers owned by the user. In cases where absolute assurance of data longevity is required (e.g. password records in a password manager app or scans of sensitive documents), the cids of encrypted data can be sent to the [Fula blockchain](https://github.com/functionland/sugarfunge-node) and backed up by other blox owners, who are rewarded for their efforts.
 
-By default Libp2p connetction happens through functionland's libp2p relay over the internet or without any relay over LAN.
+By default, Libp2p connections are established through Functionland's libp2p relay over the internet or directly over LAN without the use of a relay.
 
 ## Packages
 
