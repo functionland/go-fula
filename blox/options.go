@@ -20,13 +20,14 @@ import (
 type (
 	Option  func(*options) error
 	options struct {
-		h                host.Host
-		name             string
-		topicName        string
-		announceInterval time.Duration
-		ds               datastore.Batching
-		ls               *ipld.LinkSystem
-		authorizer       peer.ID
+		h                        host.Host
+		name                     string
+		topicName                string
+		announceInterval         time.Duration
+		ds                       datastore.Batching
+		ls                       *ipld.LinkSystem
+		authorizer               peer.ID
+		allowTransientConnection bool
 	}
 )
 
@@ -137,6 +138,13 @@ func WithLinkSystem(ls *ipld.LinkSystem) Option {
 func WithAuthorizer(pid peer.ID) Option {
 	return func(o *options) error {
 		o.authorizer = pid
+		return nil
+	}
+}
+
+func WithAllowTransientConnection(t bool) Option {
+	return func(o *options) error {
+		o.allowTransientConnection = t
 		return nil
 	}
 }

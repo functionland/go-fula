@@ -32,13 +32,15 @@ var (
 	app    struct {
 		cli.App
 		config struct {
-			Identity     string   `yaml:"identity"`
-			StoreDir     string   `yaml:"storeDir"`
-			PoolName     string   `yaml:"poolName"`
-			LogLevel     string   `yaml:"logLevel"`
-			ListenAddrs  []string `yaml:"listenAddrs"`
-			Authorizer   string   `yaml:"authorizer"`
-			StaticRelays []string `yaml:"staticRelays"`
+			Identity                 string   `yaml:"identity"`
+			StoreDir                 string   `yaml:"storeDir"`
+			PoolName                 string   `yaml:"poolName"`
+			LogLevel                 string   `yaml:"logLevel"`
+			ListenAddrs              []string `yaml:"listenAddrs"`
+			Authorizer               string   `yaml:"authorizer"`
+			StaticRelays             []string `yaml:"staticRelays"`
+			ForceReachabilityPrivate bool     `yaml:"forceReachabilityPrivate"`
+			AllowTransientConnection bool     `yaml:"allowTransientConnection"`
 
 			listenAddrs  cli.StringSlice
 			staticRelays cli.StringSlice
@@ -90,12 +92,26 @@ func init() {
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "listenAddr",
 				Destination: &app.config.listenAddrs,
-				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001"),
+				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic"),
 			}),
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "staticRelays",
 				Destination: &app.config.staticRelays,
 				Value:       cli.NewStringSlice("/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"),
+			}),
+			altsrc.NewBoolFlag(&cli.BoolFlag{
+				Name:        "forceReachabilityPrivate",
+				Aliases:     []string{"frp"},
+				Usage:       "Weather to force the local libp2p node to think it is behind NAT.",
+				Destination: &app.config.ForceReachabilityPrivate,
+				Value:       true,
+			}),
+			altsrc.NewBoolFlag(&cli.BoolFlag{
+				Name:        "allowTransientConnection",
+				Aliases:     []string{"atc"},
+				Usage:       "Weather to allow transient connection to other participants.",
+				Destination: &app.config.AllowTransientConnection,
+				Value:       true,
 			}),
 		},
 		Before:    before,
@@ -195,6 +211,19 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
+	hopts := []libp2p.Option{
+		libp2p.Identity(k),
+		libp2p.ListenAddrStrings(app.config.ListenAddrs...),
+		libp2p.EnableNATService(),
+		libp2p.NATPortMap(),
+		libp2p.EnableRelay(),
+		libp2p.EnableHolePunching(),
+	}
+
+	if app.config.ForceReachabilityPrivate {
+		hopts = append(hopts, libp2p.ForceReachabilityPrivate())
+	}
+
 	sr := make([]peer.AddrInfo, 0, len(app.config.StaticRelays))
 	for _, relay := range app.config.StaticRelays {
 		rma, err := multiaddr.NewMultiaddr(relay)
@@ -213,15 +242,9 @@ func action(ctx *cli.Context) error {
 	} else {
 		relays = autorelay.WithDefaultStaticRelays()
 	}
-	h, err := libp2p.New(
-		libp2p.Identity(k),
-		libp2p.ListenAddrStrings(app.config.ListenAddrs...),
-		libp2p.EnableNATService(),
-		libp2p.NATPortMap(),
-		libp2p.EnableRelay(),
-		libp2p.EnableHolePunching(),
-		libp2p.EnableAutoRelay(relays, autorelay.WithNumRelays(1)),
-	)
+	hopts = append(hopts, libp2p.EnableAutoRelay(relays, autorelay.WithNumRelays(1)))
+
+	h, err := libp2p.New(hopts...)
 	if err != nil {
 		return err
 	}
@@ -229,7 +252,12 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	bb, err := blox.New(blox.WithHost(h), blox.WithDatastore(ds), blox.WithPoolName(app.config.PoolName), blox.WithAuthorizer(authorizer))
+	bb, err := blox.New(
+		blox.WithHost(h),
+		blox.WithDatastore(ds),
+		blox.WithPoolName(app.config.PoolName),
+		blox.WithAuthorizer(authorizer),
+		blox.WithAllowTransientConnection(app.config.AllowTransientConnection))
 	if err != nil {
 		return err
 	}
