@@ -68,7 +68,4 @@ goreleaser --rm-dist --snapshot
 
 ## Related Publications and News
 
-- https://filecoin.io/blog/posts/249k-for-17-projects-from-dorahacks-filecoin-grant-hackathon/
-- https://dev.to/fx/google-photos-open-source-alternative-with-react-native-80c
-- https://hackernoon.com/were-building-an-open-source-google-photos-alternative-with-react-native-zw4537pa
-- https://crustnetwork.medium.com/crust-network-and-functionland-partnering-up-on-web3-developer-tools-309e41074fc5
+- https://www.crunchbase.com/organization/functionland/signals_and_news
