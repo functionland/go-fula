@@ -35,6 +35,7 @@ const (
 
 	actionPull = "pull"
 	actionPush = "push"
+	actionCmd  = "cmd"
 	actionAuth = "auth"
 )
 
@@ -59,6 +60,10 @@ type (
 	}
 	pushRequest struct {
 		Link cid.Cid `json:"link"`
+	}
+	cmdRequest struct {
+		Method string `json:"method"`
+		Body   string `json:"body"`
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -140,6 +145,14 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	}
 }
 
+func (e *FxExchange) Run(ctx context.Context, from peer.ID, cmd cmdRequest) error {
+	if e.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.exchange")
+	}
+	//TODO: call API and return the result and swith case on method
+	return errors.New(ctx.Err().Error())
+}
+
 func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
@@ -150,6 +163,41 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 		return err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPush, &buf)
+	if err != nil {
+		return err
+	}
+	resp, err := e.c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	switch {
+	case err != nil:
+		return err
+	case resp.StatusCode != http.StatusAccepted:
+		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+	default:
+		return nil
+	}
+}
+
+func (e *FxExchange) Cmd(ctx context.Context, to peer.ID, body string, method string) error {
+	if e.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.exchange")
+	}
+
+	var js json.RawMessage
+	if json.Unmarshal([]byte(body), &js) != nil {
+		return errors.New("body: not a valid json")
+	}
+	r := cmdRequest{Method: method, Body: body}
+	var buf bytes.Buffer
+
+	if err := json.NewEncoder(&buf).Encode(r); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionCmd, &buf)
 	if err != nil {
 		return err
 	}
@@ -185,6 +233,8 @@ func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case actionPush:
 		e.handlePush(from, w, r)
+	case actionCmd:
+		e.handleCmd(from, w, r)
 	case actionAuth:
 		e.handleAuthorization(from, w, r)
 	default:
@@ -216,6 +266,35 @@ func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Req
 			log.Warnw("failed to fetch in response to push", "err", err)
 		} else {
 			log.Debugw("successfully fetched in response to push", "from", from, "link", p.Link)
+		}
+	}()
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (e *FxExchange) handleCmd(from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionCmd, "from", from)
+	defer r.Body.Close()
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Errorw("failed to read request body", "err", err)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	var p cmdRequest
+	if err := json.Unmarshal(b, &p); err != nil {
+		log.Debugw("cannot parse request body", "err", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	go func() {
+		ctx := context.TODO()
+		if e.allowTransientConnection {
+			ctx = network.WithUseTransient(ctx, "fx.exchange")
+		}
+		if err := e.Run(ctx, from, cmdRequest{Method: p.Method, Body: p.Body}); err != nil {
+			log.Warnw("failed to run in response to cmd", "err", err)
+		} else {
+			log.Debugw("successfully ran in response to cmd", "from", from, "method", p.Method)
 		}
 	}()
 	w.WriteHeader(http.StatusAccepted)
