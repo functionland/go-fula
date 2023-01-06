@@ -16,6 +16,11 @@ func (n NoopExchange) Start(context.Context) error {
 	return nil
 }
 
+func (n NoopExchange) Cmd(_ context.Context, to peer.ID, method string, body string) error {
+	log.Debugw("Cmd noop exchange.", "to", to, "method", method, "body", body)
+	return nil
+}
+
 func (n NoopExchange) Push(_ context.Context, to peer.ID, l ipld.Link) error {
 	log.Debugw("Pushed noop exchange.", "to", to, "link", l)
 	return nil

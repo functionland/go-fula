@@ -150,6 +150,22 @@ func (c *Client) pushLink(ctx context.Context, l ipld.Link) error {
 	return c.markAsPushedSuccessfully(ctx, l)
 }
 
+// Run requests blox at Config.BloxAddr to run the command sent by this node.
+// The command must be a valid method, and the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) Cmd(method string, id, string, body string) (string, error) {
+	return c.runCmd(context.TODO(), id, method, body)
+}
+
+func (c *Client) runCmd(ctx context.Context, id string, method string, body string) (string, error) {
+	if err := c.ex.Cmd(ctx, c.bloxPid, method, body); err != nil {
+		//TODO: Change success to result of Cmd
+		return "success", err
+	}
+	//TODO: return markRanAsSuccess
+	//return c.markAsRanSuccessfully(ctx, id)
+	return "", errors.New("TODO: markRanAsSuccess")
+}
+
 // Put stores the given value onto the ipld.LinkSystem and returns its corresponding link.
 // The value is decoded using the decoder that corresponds to the given codec. Therefore,
 // the given value must be a valid ipld.Node.

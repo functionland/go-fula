@@ -182,7 +182,7 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	}
 }
 
-func (e *FxExchange) Cmd(ctx context.Context, to peer.ID, body string, method string) error {
+func (e *FxExchange) Cmd(ctx context.Context, to peer.ID, method string, body string) error {
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
