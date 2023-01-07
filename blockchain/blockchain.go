@@ -95,7 +95,7 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 	return nil
 }
 
-func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, seed string) error {
+func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r seededRequest) error {
 	var method string
 	var addr string
 
@@ -113,7 +113,6 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, seed string)
 		return errors.New("Invalid type for to")
 	}
 
-	r := seededRequest{Seed: seed}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
 		return err
@@ -182,7 +181,7 @@ func (bl *FxBlockchain) handleSeeded(from peer.ID, w http.ResponseWriter, r *htt
 		if bl.allowTransientConnection {
 			ctx = network.WithUseTransient(ctx, "fx.blockchain")
 		}
-		bl.Seeded(ctx, FxBlockchainEndPoint, p.Seed)
+		bl.Seeded(ctx, FxBlockchainEndPoint, p)
 	}()
 	w.WriteHeader(http.StatusAccepted)
 }
