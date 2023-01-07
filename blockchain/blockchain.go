@@ -24,7 +24,7 @@ const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
 	FxBlockchainEndPoint   = "127.0.0.1:4000"
 
-	actionSeeded = "seeded"
+	actionSeeded = "account-seeded"
 	actionAuth   = "auth"
 )
 
@@ -91,22 +91,47 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 	return nil
 }
 
-func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r SeededRequest) ([]byte, error) {
-	var method string
-	var addr string
+func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p interface{}) ([]byte, error) {
+	method := http.MethodPost
+	addr := "http://" + FxBlockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
 
-	switch v := to.(type) {
-	case string:
-		method = http.MethodPost
-		addr = "http://" + v + "account/" + actionSeeded
-	case peer.ID:
-		if bl.allowTransientConnection {
-			ctx = network.WithUseTransient(ctx, "fx.blockchain")
-		}
-		method = http.MethodGet
-		addr = "http://" + v.String() + ".invalid/" + actionSeeded
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(p); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, addr, &buf)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var bufRes bytes.Buffer
+	_, err = io.Copy(&bufRes, resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	b := bufRes.Bytes()
+	switch {
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
-		return nil, errInvalidType
+		return b, nil
+	}
+}
+
+func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest) ([]byte, error) {
+
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -114,7 +139,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r SeededRequ
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, addr, &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionSeeded, &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +152,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r SeededRequ
 	switch {
 	case err != nil:
 		return nil, err
-	case resp.StatusCode != http.StatusOK:
+	case resp.StatusCode != http.StatusAccepted:
 		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
 		return b, nil
@@ -169,21 +194,18 @@ func (bl *FxBlockchain) handleSeeded(from peer.ID, w http.ResponseWriter, r *htt
 	}
 
 	w.WriteHeader(http.StatusAccepted)
-	go func() {
-		ctx := context.TODO()
-		if bl.allowTransientConnection {
-			ctx = network.WithUseTransient(ctx, "fx.blockchain")
-		}
-		response, err := bl.Seeded(ctx, FxBlockchainEndPoint, p)
-		if err != nil {
-			log.Errorw("failed to process seeded request", "err", err)
-			return
-		}
+	//go func() {
+	ctx := context.TODO()
+	response, err := bl.callBlockchain(ctx, actionSeeded, p)
+	if err != nil {
+		log.Errorw("failed to process seeded request", "err", err)
+		return
+	}
 
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Errorw("failed to write response", "err", err)
-		}
-	}()
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Errorw("failed to write response", "err", err)
+	}
+	//}()
 }
 
 func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter, r *http.Request) {
