@@ -31,8 +31,8 @@ const (
 var (
 	_ Blockchain = (*FxBlockchain)(nil)
 
-	log             = logging.Logger("fula/blockchain")
-	errUnauthorized = errors.New("not authorized")
+	log            = logging.Logger("fula/blockchain")
+	errInvalidType = errors.New("invalid type for to")
 )
 
 type (
@@ -109,7 +109,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r seededRequ
 		method = http.MethodGet
 		addr = "http://" + to.(peer.ID).String() + ".invalid/" + actionSeeded
 	default:
-		return errors.New("invalid type for to")
+		return errInvalidType
 	}
 
 	var buf bytes.Buffer
