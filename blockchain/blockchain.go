@@ -109,7 +109,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r seededRequ
 		method = http.MethodGet
 		addr = "http://" + to.(peer.ID).String() + ".invalid/" + actionSeeded
 	default:
-		return errors.New("Invalid type for to")
+		return errors.New("invalid type for to")
 	}
 
 	var buf bytes.Buffer

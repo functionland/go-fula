@@ -8,7 +8,7 @@ import (
 
 type Blockchain interface {
 	Start(context.Context) error
-	Seeded(context.Context, peer.ID, seededRequest) error
+	Seeded(context.Context, interface{}, seededRequest) error
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 	Shutdown(context.Context) error
 }
