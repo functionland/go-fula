@@ -13,13 +13,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/functionland/go-fula/exchange"
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-
-	"github.com/functionland/go-fula/exchange"
 )
 
 const (
@@ -79,7 +78,7 @@ func NewFxBlockchain(h host.Host, o ...exchange.Option) (*FxBlockchain, error) {
 		authorizedPeers: make(map[peer.ID]struct{}),
 	}
 	if bl.authorizer != "" {
-		if err := exchange.Exchange.SetAuth(context.Background(), h.ID(), e.authorizer, true); err != nil {
+		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
 			return nil, err
 		}
 	}
