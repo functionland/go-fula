@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/functionland/go-fula/exchange"
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -55,7 +54,7 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, o ...exchange.Option) (*FxBlockchain, error) {
+func NewFxBlockchain(h host.Host, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
@@ -257,7 +256,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionPull, actionPush:
+	case actionSeeded:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
