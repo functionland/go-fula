@@ -9,6 +9,7 @@ type (
 	options struct {
 		authorizer               peer.ID
 		allowTransientConnection bool
+		blockchainEndPoint       string
 	}
 )
 
@@ -32,6 +33,13 @@ func WithAuthorizer(a peer.ID) Option {
 func WithAllowTransientConnection(t bool) Option {
 	return func(o *options) error {
 		o.allowTransientConnection = t
+		return nil
+	}
+}
+
+func WithBlockchainEndPoint(b string) Option {
+	return func(o *options) error {
+		o.blockchainEndPoint = b
 		return nil
 	}
 }

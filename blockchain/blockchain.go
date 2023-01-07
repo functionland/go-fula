@@ -22,7 +22,6 @@ import (
 
 const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
-	FxBlockchainEndPoint   = "127.0.0.1:4000"
 
 	actionSeeded = "account-seeded"
 	actionAuth   = "auth"
@@ -93,7 +92,7 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 
 func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p interface{}) ([]byte, error) {
 	method := http.MethodPost
-	addr := "http://" + FxBlockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
+	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(p); err != nil {
