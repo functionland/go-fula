@@ -10,6 +10,11 @@ type SeededRequest struct {
 	Seed string `json:"seed"`
 }
 
+type SeededResponse struct {
+	Seed    string `json:"seed"`
+	Account string `json:"account"`
+}
+
 type Blockchain interface {
 	Start(context.Context) error
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
