@@ -193,7 +193,6 @@ func (bl *FxBlockchain) handleSeeded(from peer.ID, w http.ResponseWriter, r *htt
 		return
 	}
 
-	w.WriteHeader(http.StatusAccepted)
 	//go func() {
 	ctx := context.TODO()
 	response, err := bl.callBlockchain(ctx, actionSeeded, p)
@@ -201,8 +200,14 @@ func (bl *FxBlockchain) handleSeeded(from peer.ID, w http.ResponseWriter, r *htt
 		log.Errorw("failed to process seeded request", "err", err)
 		return
 	}
+	w.WriteHeader(http.StatusAccepted)
+	var res SeededResponse
+	err1 := json.Unmarshal(response, &res)
+	if err1 != nil {
+		log.Errorw("failed to format response", "err", err1)
+	}
 
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := json.NewEncoder(w).Encode(res); err != nil {
 		log.Errorw("failed to write response", "err", err)
 	}
 	//}()
