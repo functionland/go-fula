@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
@@ -38,6 +39,7 @@ type Client struct {
 	ds      datastore.Batching
 	ls      ipld.LinkSystem
 	ex      exchange.Exchange
+	bl      blockchain.Blockchain
 	bloxPid peer.ID
 }
 

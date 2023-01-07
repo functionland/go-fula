@@ -45,9 +45,6 @@ type (
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
 	}
-	seededRequest struct {
-		Seed string `json:"seed"`
-	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
 		Allow   bool    `json:"allow"`
@@ -94,46 +91,46 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 	return nil
 }
 
-func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r seededRequest) error {
+func (bl *FxBlockchain) Seeded(ctx context.Context, to interface{}, r SeededRequest) ([]byte, error) {
 	var method string
 	var addr string
 
-	switch to.(type) {
+	switch v := to.(type) {
 	case string:
 		method = http.MethodPost
-		addr = "http://" + to.(string) + "account/" + actionSeeded
+		addr = "http://" + v + "account/" + actionSeeded
 	case peer.ID:
 		if bl.allowTransientConnection {
 			ctx = network.WithUseTransient(ctx, "fx.blockchain")
 		}
 		method = http.MethodGet
-		addr = "http://" + to.(peer.ID).String() + ".invalid/" + actionSeeded
+		addr = "http://" + v.String() + ".invalid/" + actionSeeded
 	default:
-		return errInvalidType
+		return nil, errInvalidType
 	}
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
-		return err
+		return nil, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, addr, &buf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := bl.c.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	switch {
 	case err != nil:
-		return err
-	case resp.StatusCode != http.StatusAccepted:
-		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		return nil, err
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
-		return nil
+		return b, nil
 	}
 }
 
@@ -163,26 +160,30 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 func (bl *FxBlockchain) handleSeeded(from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", actionSeeded, "from", from)
 	defer r.Body.Close()
-	b, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Errorw("failed to read request body", "err", err)
-		http.Error(w, "", http.StatusInternalServerError)
-		return
-	}
-	var p seededRequest
-	if err := json.Unmarshal(b, &p); err != nil {
+
+	var p SeededRequest
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		log.Debugw("cannot parse request body", "err", err)
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
+
+	w.WriteHeader(http.StatusAccepted)
 	go func() {
 		ctx := context.TODO()
 		if bl.allowTransientConnection {
 			ctx = network.WithUseTransient(ctx, "fx.blockchain")
 		}
-		bl.Seeded(ctx, FxBlockchainEndPoint, p)
+		response, err := bl.Seeded(ctx, FxBlockchainEndPoint, p)
+		if err != nil {
+			log.Errorw("failed to process seeded request", "err", err)
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Errorw("failed to write response", "err", err)
+		}
 	}()
-	w.WriteHeader(http.StatusAccepted)
 }
 
 func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter, r *http.Request) {
