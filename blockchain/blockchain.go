@@ -37,9 +37,10 @@ var (
 type (
 	FxBlockchain struct {
 		*options
-		h host.Host
-		s *http.Server
-		c *http.Client
+		h  host.Host
+		s  *http.Server
+		c  *http.Client
+		ch *http.Client
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
@@ -70,6 +71,7 @@ func NewFxBlockchain(h host.Host, o ...Option) (*FxBlockchain, error) {
 				},
 			},
 		},
+		ch:              &http.Client{},
 		authorizedPeers: make(map[peer.ID]struct{}),
 	}
 	if bl.authorizer != "" {
@@ -106,8 +108,7 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p int
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := bl.ch.Do(req)
 
 	if err != nil {
 		return nil, err
