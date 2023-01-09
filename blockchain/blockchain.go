@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -31,8 +30,7 @@ const (
 var (
 	_ Blockchain = (*FxBlockchain)(nil)
 
-	log            = logging.Logger("fula/blockchain")
-	errInvalidType = errors.New("invalid type for to")
+	log = logging.Logger("fula/blockchain")
 )
 
 type (
