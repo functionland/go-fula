@@ -110,12 +110,21 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 	return nil
 }
 
+func (bl *FxBlockchain) putBuf(buf *bytes.Buffer) {
+	buf.Reset()
+	bl.bufPool.Put(buf)
+}
+func (bl *FxBlockchain) putReq(req *http.Request) {
+	*req = http.Request{}
+	bl.reqPool.Put(req)
+}
+
 func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p interface{}) ([]byte, error) {
 	method := http.MethodPost
 	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
 
 	buf := bl.bufPool.Get().(*bytes.Buffer)
-	defer bl.bufPool.Put(buf)
+	defer bl.putBuf(buf)
 	buf.Reset()
 
 	if err := json.NewEncoder(buf).Encode(p); err != nil {
