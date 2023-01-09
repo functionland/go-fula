@@ -71,7 +71,12 @@ func NewFxBlockchain(h host.Host, o ...Option) (*FxBlockchain, error) {
 				},
 			},
 		},
-		ch:              &http.Client{},
+		ch: &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 100,
+			},
+		},
 		authorizedPeers: make(map[peer.ID]struct{}),
 	}
 	if bl.authorizer != "" {
