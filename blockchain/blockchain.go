@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
@@ -229,7 +230,8 @@ func (bl *FxBlockchain) handleSeeded(from peer.ID, w http.ResponseWriter, r *htt
 	}
 
 	//go func() {
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*30)
+	defer cancel()
 	response, err := bl.callBlockchain(ctx, actionSeeded, p)
 	if err != nil {
 		log.Errorw("failed to process seeded request", "err", err)
