@@ -123,17 +123,20 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p int
 	method := http.MethodPost
 	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
 
+	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
 	buf := bl.bufPool.Get().(*bytes.Buffer)
-	defer bl.putBuf(buf)
-	buf.Reset()
+	req := bl.reqPool.Get().(*http.Request)
+	defer func() {
+		// Reset the buffer and request after they are done being used
+		buf.Reset()
+		*req = http.Request{}
+		bl.putBuf(buf)
+		bl.putReq(req)
+	}()
 
 	if err := json.NewEncoder(buf).Encode(p); err != nil {
 		return nil, err
 	}
-
-	req := bl.reqPool.Get().(*http.Request)
-	defer bl.reqPool.Put(req)
-	*req = http.Request{}
 	req, err := http.NewRequestWithContext(ctx, method, addr, buf)
 	if err != nil {
 		return nil, err
