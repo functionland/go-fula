@@ -127,9 +127,6 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p int
 	buf := bl.bufPool.Get().(*bytes.Buffer)
 	req := bl.reqPool.Get().(*http.Request)
 	defer func() {
-		// Reset the buffer and request after they are done being used
-		buf.Reset()
-		*req = http.Request{}
 		bl.putBuf(buf)
 		bl.putReq(req)
 	}()
