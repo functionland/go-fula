@@ -44,6 +44,9 @@ type (
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
+
+		bufPool *sync.Pool
+		reqPool *sync.Pool
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -78,6 +81,16 @@ func NewFxBlockchain(h host.Host, o ...Option) (*FxBlockchain, error) {
 			},
 		},
 		authorizedPeers: make(map[peer.ID]struct{}),
+		bufPool: &sync.Pool{
+			New: func() interface{} {
+				return new(bytes.Buffer)
+			},
+		},
+		reqPool: &sync.Pool{
+			New: func() interface{} {
+				return new(http.Request)
+			},
+		},
 	}
 	if bl.authorizer != "" {
 		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
@@ -101,12 +114,18 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p int
 	method := http.MethodPost
 	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
 
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(p); err != nil {
+	buf := bl.bufPool.Get().(*bytes.Buffer)
+	defer bl.bufPool.Put(buf)
+	buf.Reset()
+
+	if err := json.NewEncoder(buf).Encode(p); err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, addr, &buf)
+	req := bl.reqPool.Get().(*http.Request)
+	defer bl.reqPool.Put(req)
+	*req = http.Request{}
+	req, err := http.NewRequestWithContext(ctx, method, addr, buf)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +137,9 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p int
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
+
 	var bufRes bytes.Buffer
 	_, err = io.Copy(&bufRes, resp.Body)
 	if err != nil {
