@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -20,4 +21,14 @@ type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 	Shutdown(context.Context) error
+}
+
+const actionSeeded = "account-seeded"
+
+var requestTypes = map[string]reflect.Type{
+	actionSeeded: reflect.TypeOf(SeededRequest{}),
+}
+
+var responseTypes = map[string]reflect.Type{
+	actionSeeded: reflect.TypeOf(SeededResponse{}),
 }

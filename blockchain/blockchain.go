@@ -9,8 +9,10 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
@@ -21,9 +23,7 @@ import (
 
 const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
-
-	actionSeeded = "account-seeded"
-	actionAuth   = "auth"
+	actionAuth             = "auth"
 )
 
 var (
@@ -164,24 +164,67 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p int
 func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 	from, err := peer.Decode(r.RemoteAddr)
 	if err != nil {
-		log.Debugw("cannot parse remote addr as peer ID", "err", err)
+		log.Debug("cannot parse remote addr as peer ID: %v", err)
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 	action := path.Base(r.URL.Path)
 	if !bl.authorized(from, action) {
-		log.Debugw("rejected unauthorized request", "from", from, "action", action)
+		log.Debug("rejected unauthorized request from %s for action %s", from, action)
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
-	switch action {
-	case actionSeeded:
-		bl.handleSeeded(from, w, r)
-	case actionAuth:
-		bl.handleAuthorization(from, w, r)
-	default:
-		http.Error(w, "", http.StatusNotFound)
+	// Define a map of functions with the same signature as handleAction
+	actionMap := map[string]func(peer.ID, http.ResponseWriter, *http.Request){
+		actionSeeded: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(actionSeeded, from, w, r)
+		},
+		actionAuth: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAuthorization(from, w, r)
+		},
 	}
+
+	// Look up the function in the map and call it
+	handleActionFunc, ok := actionMap[action]
+	if !ok {
+		http.Error(w, "", http.StatusNotFound)
+		return
+	}
+	handleActionFunc(from, w, r)
+}
+
+func (bl *FxBlockchain) handleAction(action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", action, "from", from)
+	req := reflect.New(requestTypes[action]).Interface()
+	res := reflect.New(responseTypes[action]).Interface()
+
+	defer r.Body.Close()
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Debug("cannot parse request body: %v", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	//go func() {
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*30)
+	defer cancel()
+	response, err := bl.callBlockchain(ctx, action, req)
+	if err != nil {
+		log.Error("failed to process seeded request: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+
+	err1 := json.Unmarshal(response, &res)
+	if err1 != nil {
+		log.Error("failed to format response: %v", err1)
+	}
+
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.Error("failed to write response: %v", err)
+	}
+	//}()
 }
 
 func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter, r *http.Request) {
