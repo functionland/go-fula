@@ -190,6 +190,26 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 			//TODO: We should check if from owns the blox
 			bl.handleAction(actionPoolJoin, from, w, r)
 		},
+		actionPoolCancelJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
+			bl.handleAction(actionPoolCancelJoin, from, w, r)
+		},
+		actionPoolRequests: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
+			bl.handleAction(actionPoolRequests, from, w, r)
+		},
+		actionPoolList: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
+			bl.handleAction(actionPoolList, from, w, r)
+		},
+		actionPoolVote: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
+			bl.handleAction(actionPoolVote, from, w, r)
+		},
+		actionPoolLeave: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
+			bl.handleAction(actionPoolLeave, from, w, r)
+		},
 		actionAuth: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAuthorization(from, w, r)
 		},
@@ -308,7 +328,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin:
+	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
