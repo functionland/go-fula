@@ -37,8 +37,8 @@ type (
 		*options
 		h  host.Host
 		s  *http.Server
-		c  *http.Client
-		ch *http.Client
+		c  *http.Client //libp2p client
+		ch *http.Client //normal http client
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
@@ -312,5 +312,6 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 
 func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	bl.c.CloseIdleConnections()
+	bl.ch.CloseIdleConnections()
 	return bl.s.Shutdown(ctx)
 }
