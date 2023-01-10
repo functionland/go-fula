@@ -11,6 +11,7 @@ const (
 	actionSeeded        = "account-seeded"
 	actionAccountExists = "account-exists"
 	actionPoolCreate    = "pool-create"
+	actionPoolJoin      = "pool-join"
 )
 
 type SeededRequest struct {
@@ -39,13 +40,25 @@ type PoolCreateRequest struct {
 
 type PoolCreateResponse struct {
 	Owner  string `json:"owner"`
-	PoolID bool   `json:"pool_id"`
+	PoolID int    `json:"pool_id"`
+}
+
+type PoolJoinRequest struct {
+	Seed   string `json:"seed"`
+	PoolID int    `json:"pool_id"`
+	PeerID string `json:"peer_id"`
+}
+
+type PoolJoinResponse struct {
+	Account string `json:"account"`
+	PoolID  int    `json:"pool_id"`
 }
 
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
 	PoolCreate(context.Context, peer.ID, PoolCreateRequest) ([]byte, error)
+	PoolJoin(context.Context, peer.ID, PoolJoinRequest) ([]byte, error)
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 }
 
@@ -53,10 +66,12 @@ var requestTypes = map[string]reflect.Type{
 	actionSeeded:        reflect.TypeOf(SeededRequest{}),
 	actionAccountExists: reflect.TypeOf(AccountExistsRequest{}),
 	actionPoolCreate:    reflect.TypeOf(PoolCreateRequest{}),
+	actionPoolJoin:      reflect.TypeOf(PoolJoinRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
 	actionSeeded:        reflect.TypeOf(SeededResponse{}),
 	actionAccountExists: reflect.TypeOf(AccountExistsResponse{}),
 	actionPoolCreate:    reflect.TypeOf(PoolCreateResponse{}),
+	actionPoolJoin:      reflect.TypeOf(PoolJoinResponse{}),
 }
