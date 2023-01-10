@@ -12,7 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest) ([]byte, error) {
+func (bl *FxBlockchain) PoolCreate(ctx context.Context, to peer.ID, r PoolCreateRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")
@@ -23,7 +23,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest)
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionSeeded, &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPoolCreate, &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest)
 	}
 }
 
-func (bl *FxBlockchain) AccountExists(ctx context.Context, to peer.ID, r AccountExistsRequest) ([]byte, error) {
+func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")
@@ -54,7 +54,7 @@ func (bl *FxBlockchain) AccountExists(ctx context.Context, to peer.ID, r Account
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionAccountExists, &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPoolJoin, &buf)
 	if err != nil {
 		return nil, err
 	}

@@ -183,7 +183,12 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(actionAccountExists, from, w, r)
 		},
 		actionPoolCreate: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
 			bl.handleAction(actionPoolCreate, from, w, r)
+		},
+		actionPoolJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			//TODO: We should check if from owns the blox
+			bl.handleAction(actionPoolJoin, from, w, r)
 		},
 		actionAuth: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAuthorization(from, w, r)
@@ -303,7 +308,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionSeeded, actionAccountExists, actionPoolCreate:
+	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
