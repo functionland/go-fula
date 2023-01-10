@@ -37,3 +37,44 @@ func (c *Client) PoolJoin(seed string, poolID int) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{Seed: seed, PoolID: poolID, PeerID: c.bloxPid.String()})
 }
+
+// PoolJoin requests blox at Config.BloxAddr to cancel a join request for a pool with the id.
+// the addr must be a valid multiaddr that includes peer ID.
+// Note that this call is only allowed on a user's own blox
+// TODO: This still needs rethink as someone should not be able to put another person PeerID in request
+func (c *Client) PoolCancelJoin(seed string, poolID int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolCancelJoin(ctx, c.bloxPid, blockchain.PoolCancelJoinRequest{Seed: seed, PoolID: poolID})
+}
+
+// PoolListRequests requests blox at Config.BloxAddr to list the join request for a pool with the id.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) PoolListRequests(poolID int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolListRequests(ctx, c.bloxPid, blockchain.PoolRequestsRequest{PoolID: poolID})
+}
+
+// PoolList requests blox at Config.BloxAddr to list the pools.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) PoolList() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolList(ctx, c.bloxPid, blockchain.PoolListRequest{})
+}
+
+// PoolVote requests blox at Config.BloxAddr to vote for a join request.
+// the addr must be a valid multiaddr that includes peer ID.
+// Note that this call is only allowed on a user's own blox
+// TODO: This still needs rethink as someone should not be able to put another person PeerID in request
+func (c *Client) PoolVote(seed string, poolID int, account string, voteValue bool) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolVote(ctx, c.bloxPid, blockchain.PoolVoteRequest{Seed: seed, PoolID: poolID, Account: account, VoteValue: voteValue})
+}
+
+// PoolLeave requests blox at Config.BloxAddr to leave a pool with the id.
+// the addr must be a valid multiaddr that includes peer ID.
+// Note that this call is only allowed on a user's own blox
+// TODO: This still needs rethink as someone should not be able to put another person PeerID in request
+func (c *Client) PoolLeave(seed string, poolID int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{Seed: seed, PoolID: poolID})
+}
