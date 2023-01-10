@@ -172,9 +172,6 @@ func (cfg *Config) init(mc *Client) error {
 		if err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		if mc.bloxPid != "" {
 			// Explicitly authorize the Blox ID if its address is specified.
 			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {

@@ -10,6 +10,7 @@ type (
 		authorizer               peer.ID
 		allowTransientConnection bool
 		blockchainEndPoint       string
+		timeout                  int
 	}
 )
 
@@ -40,6 +41,13 @@ func WithAllowTransientConnection(t bool) Option {
 func WithBlockchainEndPoint(b string) Option {
 	return func(o *options) error {
 		o.blockchainEndPoint = b
+		return nil
+	}
+}
+
+func WithTimeout(to int) Option {
+	return func(o *options) error {
+		o.timeout = to
 		return nil
 	}
 }

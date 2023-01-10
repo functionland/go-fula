@@ -53,7 +53,8 @@ func New(o ...Option) (*Blox, error) {
 	p.bl, err = blockchain.NewFxBlockchain(p.h,
 		blockchain.WithAuthorizer(p.authorizer),
 		blockchain.WithAllowTransientConnection(p.allowTransientConnection),
-		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"))
+		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
+		blockchain.WithTimeout(30))
 	if err != nil {
 		return nil, err
 	}
