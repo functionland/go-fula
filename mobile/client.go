@@ -234,7 +234,6 @@ func (c *Client) SetAuth(on string, subject string, allow bool) error {
 func (c *Client) Shutdown() error {
 	ctx := context.TODO()
 	xErr := c.ex.Shutdown(ctx)
-	bErr := c.bl.Shutdown(ctx)
 	hErr := c.h.Close()
 	fErr := c.Flush()
 	dsErr := c.ds.Close()
@@ -245,8 +244,6 @@ func (c *Client) Shutdown() error {
 		return fErr
 	case dsErr != nil:
 		return dsErr
-	case bErr != nil:
-		return bErr
 	default:
 		return xErr
 	}
