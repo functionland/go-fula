@@ -179,6 +179,12 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionSeeded: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(actionSeeded, from, w, r)
 		},
+		actionAccountExists: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(actionAccountExists, from, w, r)
+		},
+		actionPoolCreate: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(actionPoolCreate, from, w, r)
+		},
 		actionAuth: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAuthorization(from, w, r)
 		},
@@ -206,12 +212,12 @@ func (bl *FxBlockchain) handleAction(action string, from peer.ID, w http.Respons
 		return
 	}
 
-	//go func() {
-	ctx, cancel := context.WithTimeout(r.Context(), time.Second*30)
+	//TODO: Ensure it is optimized for long-running calls
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
 	response, err := bl.callBlockchain(ctx, action, req)
 	if err != nil {
-		log.Error("failed to process seeded request: %v", err)
+		log.Error("failed to process action request: %v", err)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -224,7 +230,6 @@ func (bl *FxBlockchain) handleAction(action string, from peer.ID, w http.Respons
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		log.Error("failed to write response: %v", err)
 	}
-	//}()
 }
 
 func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter, r *http.Request) {
@@ -298,7 +303,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionSeeded:
+	case actionSeeded, actionAccountExists, actionPoolCreate:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
