@@ -78,3 +78,18 @@ func (c *Client) PoolLeave(seed string, poolID int) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{Seed: seed, PoolID: poolID})
 }
+
+// PoolLeave requests blox at Config.BloxAddr to add a manifest(upload request)
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) ManifestUpload(seed string, poolID int, ReplicationFactor int, uri string) ([]byte, error) {
+	ctx := context.TODO()
+	manifestJob := blockchain.ManifestJob{
+		Work:   "IPFS",
+		Engine: "Storage",
+		Uri:    uri,
+	}
+	manifestMetadata := blockchain.ManifestMetadata{
+		Job: manifestJob,
+	}
+	return c.bl.ManifestUpload(ctx, c.bloxPid, blockchain.ManifestUploadRequest{Seed: seed, PoolID: poolID, ReplicationFactor: ReplicationFactor, ManifestMetadata: manifestMetadata})
+}
