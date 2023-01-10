@@ -17,6 +17,7 @@ const (
 	actionPoolList       = "fula-pool-all"
 	actionPoolVote       = "fula-pool-vote"
 	actionPoolLeave      = "fula-pool-leave"
+	actionManifestUpload = "manifest-upload"
 )
 
 type SeededRequest struct {
@@ -118,6 +119,30 @@ type PoolLeaveResponse struct {
 	PoolID  int    `json:"pool_id"`
 }
 
+type ManifestJob struct {
+	Work   string `json:"work"`
+	Engine string `json:"engine"`
+	Uri    string `json:"uri"`
+}
+
+type ManifestMetadata struct {
+	Job ManifestJob `json:"job"`
+}
+
+type ManifestUploadRequest struct {
+	Seed              string           `json:"seed"`
+	PoolID            int              `json:"pool_id"`
+	ReplicationFactor int              `json:"replication_factor"`
+	ManifestMetadata  ManifestMetadata `json:"manifest_metadata"`
+}
+
+type ManifestUploadResponse struct {
+	Uploader         string           `json:"uploader"`
+	Storage          int              `json:"storage"`
+	ManifestMetadata ManifestMetadata `json:"manifest_metadata"`
+	PoolID           int              `json:"pool_id"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -128,6 +153,7 @@ type Blockchain interface {
 	PoolList(context.Context, peer.ID, PoolListRequest) ([]byte, error)
 	PoolVote(context.Context, peer.ID, PoolVoteRequest) ([]byte, error)
 	PoolLeave(context.Context, peer.ID, PoolLeaveRequest) ([]byte, error)
+	ManifestUpload(context.Context, peer.ID, ManifestUploadRequest) ([]byte, error)
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 }
 
@@ -140,6 +166,7 @@ var requestTypes = map[string]reflect.Type{
 	actionPoolList:       reflect.TypeOf(PoolListRequest{}),
 	actionPoolVote:       reflect.TypeOf(PoolVoteRequest{}),
 	actionPoolLeave:      reflect.TypeOf(PoolLeaveRequest{}),
+	actionManifestUpload: reflect.TypeOf(ManifestUploadRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -151,4 +178,5 @@ var responseTypes = map[string]reflect.Type{
 	actionPoolList:       reflect.TypeOf(PoolListResponse{}),
 	actionPoolVote:       reflect.TypeOf(PoolVoteResponse{}),
 	actionPoolLeave:      reflect.TypeOf(PoolLeaveResponse{}),
+	actionManifestUpload: reflect.TypeOf(ManifestUploadResponse{}),
 }
