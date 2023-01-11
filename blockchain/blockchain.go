@@ -117,8 +117,7 @@ func (bl *FxBlockchain) putReq(req *http.Request) {
 	bl.reqPool.Put(req)
 }
 
-func (bl *FxBlockchain) callBlockchain(ctx context.Context, action string, p interface{}) ([]byte, error) {
-	method := http.MethodPost
+func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, action string, p interface{}) ([]byte, error) {
 	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
 
 	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
@@ -177,51 +176,51 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 	// Define a map of functions with the same signature as handleAction
 	actionMap := map[string]func(peer.ID, http.ResponseWriter, *http.Request){
 		actionSeeded: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionSeeded, from, w, r)
+			bl.handleAction(http.MethodPost, actionSeeded, from, w, r)
 		},
 		actionAccountExists: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionAccountExists, from, w, r)
+			bl.handleAction(http.MethodPost, actionAccountExists, from, w, r)
 		},
 		actionPoolCreate: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			//TODO: We should check if from owns the blox
-			bl.handleAction(actionPoolCreate, from, w, r)
+			bl.handleAction(http.MethodPost, actionPoolCreate, from, w, r)
 		},
 		actionPoolJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			//TODO: We should check if from owns the blox
-			bl.handleAction(actionPoolJoin, from, w, r)
+			bl.handleAction(http.MethodPost, actionPoolJoin, from, w, r)
 		},
 		actionPoolCancelJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionPoolCancelJoin, from, w, r)
+			bl.handleAction(http.MethodPost, actionPoolCancelJoin, from, w, r)
 		},
 		actionPoolRequests: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionPoolRequests, from, w, r)
+			bl.handleAction(http.MethodGet, actionPoolRequests, from, w, r)
 		},
 		actionPoolList: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionPoolList, from, w, r)
+			bl.handleAction(http.MethodGet, actionPoolList, from, w, r)
 		},
 		actionPoolVote: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionPoolVote, from, w, r)
+			bl.handleAction(http.MethodPost, actionPoolVote, from, w, r)
 		},
 		actionPoolLeave: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionPoolLeave, from, w, r)
+			bl.handleAction(http.MethodPost, actionPoolLeave, from, w, r)
 		},
 		actionManifestUpload: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionManifestUpload, from, w, r)
+			bl.handleAction(http.MethodPost, actionManifestUpload, from, w, r)
 		},
 		actionManifestStore: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionManifestStore, from, w, r)
+			bl.handleAction(http.MethodPost, actionManifestStore, from, w, r)
 		},
 		actionManifestAvailable: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionManifestAvailable, from, w, r)
+			bl.handleAction(http.MethodPost, actionManifestAvailable, from, w, r)
 		},
 		actionManifestRemove: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionManifestRemove, from, w, r)
+			bl.handleAction(http.MethodPost, actionManifestRemove, from, w, r)
 		},
 		actionManifestRemoveStorer: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionManifestRemoveStorer, from, w, r)
+			bl.handleAction(http.MethodPost, actionManifestRemoveStorer, from, w, r)
 		},
 		actionManifestRemoveStored: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(actionManifestRemoveStored, from, w, r)
+			bl.handleAction(http.MethodPost, actionManifestRemoveStored, from, w, r)
 		},
 		actionAuth: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAuthorization(from, w, r)
@@ -237,7 +236,7 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 	handleActionFunc(from, w, r)
 }
 
-func (bl *FxBlockchain) handleAction(action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
+func (bl *FxBlockchain) handleAction(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", action, "from", from)
 	req := reflect.New(requestTypes[action]).Interface()
 	res := reflect.New(responseTypes[action]).Interface()
@@ -253,7 +252,7 @@ func (bl *FxBlockchain) handleAction(action string, from peer.ID, w http.Respons
 	//TODO: Ensure it is optimized for long-running calls
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
-	response, err := bl.callBlockchain(ctx, action, req)
+	response, err := bl.callBlockchain(ctx, method, action, req)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Error("failed to process action request: %v", err)
