@@ -94,12 +94,16 @@ type PoolRequestsResponse struct {
 type PoolListRequest struct {
 }
 
-type PoolListResponse struct {
+type Pool struct {
 	PoolID       int      `json:"pool_id"`
 	Owner        string   `json:"owner"`
 	PoolName     string   `json:"pool_name"`
 	Parent       string   `json:"parent"`
 	Participants []string `json:"participants"`
+}
+
+type PoolListResponse struct {
+	Pools []Pool `json:"pools"`
 }
 
 type PoolVoteRequest struct {
