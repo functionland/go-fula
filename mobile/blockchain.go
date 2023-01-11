@@ -79,7 +79,7 @@ func (c *Client) PoolLeave(seed string, poolID int) ([]byte, error) {
 	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{Seed: seed, PoolID: poolID})
 }
 
-// PoolLeave requests blox at Config.BloxAddr to add a manifest(upload request)
+// ManifestUpload requests blox at Config.BloxAddr to add a manifest(upload request)
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) ManifestUpload(seed string, poolID int, ReplicationFactor int, uri string) ([]byte, error) {
 	ctx := context.TODO()
@@ -92,4 +92,39 @@ func (c *Client) ManifestUpload(seed string, poolID int, ReplicationFactor int, 
 		Job: manifestJob,
 	}
 	return c.bl.ManifestUpload(ctx, c.bloxPid, blockchain.ManifestUploadRequest{Seed: seed, PoolID: poolID, ReplicationFactor: ReplicationFactor, ManifestMetadata: manifestMetadata})
+}
+
+// ManifestStore requests blox at Config.BloxAddr to store a manifest(store request)
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) ManifestStore(seed string, poolID int, uploader string, cid string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ManifestStore(ctx, c.bloxPid, blockchain.ManifestStoreRequest{Seed: seed, PoolID: poolID, Uploader: uploader, Cid: cid})
+}
+
+// ManifestAvailable requests blox at Config.BloxAddr to list manifests
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) ManifestAvailable(poolID int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ManifestAvailable(ctx, c.bloxPid, blockchain.ManifestAvailableRequest{PoolID: poolID})
+}
+
+// ManifestRemove requests blox at Config.BloxAddr to remove a manifest
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) ManifestRemove(seed string, poolID int, cid string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ManifestRemove(ctx, c.bloxPid, blockchain.ManifestRemoveRequest{Seed: seed, Cid: cid, PoolID: poolID})
+}
+
+// The uploader or admin can remove an account that is storing a given manifest.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) ManifestRemoveStorer(seed string, storage string, poolID int, cid string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ManifestRemoveStorer(ctx, c.bloxPid, blockchain.ManifestRemoveStorerRequest{Seed: seed, Storage: storage, Cid: cid, PoolID: poolID})
+}
+
+// The storer can stop storing a given manifest
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) ManifestRemoveStored(seed string, uploader string, poolID int, cid string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ManifestRemoveStored(ctx, c.bloxPid, blockchain.ManifestRemoveStoredRequest{Seed: seed, Uploader: uploader, Cid: cid, PoolID: poolID})
 }
