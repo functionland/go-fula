@@ -255,10 +255,12 @@ func (bl *FxBlockchain) handleAction(action string, from peer.ID, w http.Respons
 	defer cancel()
 	response, err := bl.callBlockchain(ctx, action, req)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		log.Error("failed to process action request: %v", err)
 		return
+	} else {
+		w.WriteHeader(http.StatusAccepted)
 	}
-	w.WriteHeader(http.StatusAccepted)
 
 	err1 := json.Unmarshal(response, &res)
 	if err1 != nil {
