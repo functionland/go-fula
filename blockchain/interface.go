@@ -8,16 +8,21 @@ import (
 )
 
 const (
-	actionSeeded         = "account-seeded"
-	actionAccountExists  = "account-exists"
-	actionPoolCreate     = "fula-pool-create"
-	actionPoolJoin       = "fula-pool-join"
-	actionPoolCancelJoin = "fula-pool-cancel_join"
-	actionPoolRequests   = "fula-pool-requests"
-	actionPoolList       = "fula-pool-all"
-	actionPoolVote       = "fula-pool-vote"
-	actionPoolLeave      = "fula-pool-leave"
-	actionManifestUpload = "manifest-upload"
+	actionSeeded               = "account-seeded"
+	actionAccountExists        = "account-exists"
+	actionPoolCreate           = "fula-pool-create"
+	actionPoolJoin             = "fula-pool-join"
+	actionPoolCancelJoin       = "fula-pool-cancel_join"
+	actionPoolRequests         = "fula-pool-requests"
+	actionPoolList             = "fula-pool-all"
+	actionPoolVote             = "fula-pool-vote"
+	actionPoolLeave            = "fula-pool-leave"
+	actionManifestUpload       = "manifest-upload"
+	actionManifestStore        = "manifest-storage"
+	actionManifestAvailable    = "manifest-available"
+	actionManifestRemove       = "manifest-remove"
+	actionManifestRemoveStorer = "manifest-remove_storer"
+	actionManifestRemoveStored = "manifest-remove_storing_manifest"
 )
 
 type SeededRequest struct {
@@ -138,9 +143,73 @@ type ManifestUploadRequest struct {
 
 type ManifestUploadResponse struct {
 	Uploader         string           `json:"uploader"`
-	Storage          int              `json:"storage"`
+	Storage          []string         `json:"storage"`
 	ManifestMetadata ManifestMetadata `json:"manifest_metadata"`
 	PoolID           int              `json:"pool_id"`
+}
+
+type ManifestStoreRequest struct {
+	Uploader string `json:"uploader"`
+	Seed     string `json:"seed"`
+	Cid      string `json:"cid"`
+	PoolID   int    `json:"pool_id"`
+}
+
+type ManifestStoreResponse struct {
+	PoolID   int    `json:"pool_id"`
+	Storage  string `json:"storage"`
+	Uploader string `json:"uploader"`
+	Cid      string `json:"cid"`
+}
+
+type ManifestAvailableRequest struct {
+	PoolID int `json:"pool_id"`
+}
+
+type ManifestAvailableResponse struct {
+	ReplicationAvailable int              `json:"replication_available"`
+	ManifestMetadata     ManifestMetadata `json:"manifest_metadata"`
+	PoolID               int              `json:"pool_id"`
+}
+
+type ManifestRemoveRequest struct {
+	Seed   string `json:"seed"`
+	Cid    string `json:"cid"`
+	PoolID int    `json:"pool_id"`
+}
+
+type ManifestRemoveResponse struct {
+	Uploader string `json:"uploader"`
+	Cid      string `json:"cid"`
+	PoolID   int    `json:"pool_id"`
+}
+
+type ManifestRemoveStorerRequest struct {
+	Seed    string `json:"seed"`
+	Storage string `json:"storage"`
+	Cid     string `json:"cid"`
+	PoolID  int    `json:"pool_id"`
+}
+
+type ManifestRemoveStorerResponse struct {
+	Uploader string `json:"uploader"`
+	Storage  string `json:"storage"`
+	Cid      string `json:"cid"`
+	PoolID   int    `json:"pool_id"`
+}
+
+type ManifestRemoveStoredRequest struct {
+	Seed     string `json:"seed"`
+	Uploader string `json:"uploader"`
+	Cid      string `json:"cid"`
+	PoolID   int    `json:"pool_id"`
+}
+
+type ManifestRemoveStoredResponse struct {
+	Uploader string `json:"uploader"`
+	Storage  string `json:"storage"`
+	Cid      string `json:"cid"`
+	PoolID   int    `json:"pool_id"`
 }
 
 type Blockchain interface {
@@ -154,29 +223,44 @@ type Blockchain interface {
 	PoolVote(context.Context, peer.ID, PoolVoteRequest) ([]byte, error)
 	PoolLeave(context.Context, peer.ID, PoolLeaveRequest) ([]byte, error)
 	ManifestUpload(context.Context, peer.ID, ManifestUploadRequest) ([]byte, error)
+	ManifestStore(context.Context, peer.ID, ManifestStoreRequest) ([]byte, error)
+	ManifestAvailable(context.Context, peer.ID, ManifestAvailableRequest) ([]byte, error)
+	ManifestRemove(context.Context, peer.ID, ManifestRemoveRequest) ([]byte, error)
+	ManifestRemoveStorer(context.Context, peer.ID, ManifestRemoveStorerRequest) ([]byte, error)
+	ManifestRemoveStored(context.Context, peer.ID, ManifestRemoveStoredRequest) ([]byte, error)
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 }
 
 var requestTypes = map[string]reflect.Type{
-	actionSeeded:         reflect.TypeOf(SeededRequest{}),
-	actionAccountExists:  reflect.TypeOf(AccountExistsRequest{}),
-	actionPoolCreate:     reflect.TypeOf(PoolCreateRequest{}),
-	actionPoolJoin:       reflect.TypeOf(PoolJoinRequest{}),
-	actionPoolCancelJoin: reflect.TypeOf(PoolCancelJoinRequest{}),
-	actionPoolList:       reflect.TypeOf(PoolListRequest{}),
-	actionPoolVote:       reflect.TypeOf(PoolVoteRequest{}),
-	actionPoolLeave:      reflect.TypeOf(PoolLeaveRequest{}),
-	actionManifestUpload: reflect.TypeOf(ManifestUploadRequest{}),
+	actionSeeded:               reflect.TypeOf(SeededRequest{}),
+	actionAccountExists:        reflect.TypeOf(AccountExistsRequest{}),
+	actionPoolCreate:           reflect.TypeOf(PoolCreateRequest{}),
+	actionPoolJoin:             reflect.TypeOf(PoolJoinRequest{}),
+	actionPoolCancelJoin:       reflect.TypeOf(PoolCancelJoinRequest{}),
+	actionPoolList:             reflect.TypeOf(PoolListRequest{}),
+	actionPoolVote:             reflect.TypeOf(PoolVoteRequest{}),
+	actionPoolLeave:            reflect.TypeOf(PoolLeaveRequest{}),
+	actionManifestUpload:       reflect.TypeOf(ManifestUploadRequest{}),
+	actionManifestStore:        reflect.TypeOf(ManifestStoreRequest{}),
+	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableRequest{}),
+	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
+	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
+	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
-	actionSeeded:         reflect.TypeOf(SeededResponse{}),
-	actionAccountExists:  reflect.TypeOf(AccountExistsResponse{}),
-	actionPoolCreate:     reflect.TypeOf(PoolCreateResponse{}),
-	actionPoolJoin:       reflect.TypeOf(PoolJoinResponse{}),
-	actionPoolCancelJoin: reflect.TypeOf(PoolCancelJoinResponse{}),
-	actionPoolList:       reflect.TypeOf(PoolListResponse{}),
-	actionPoolVote:       reflect.TypeOf(PoolVoteResponse{}),
-	actionPoolLeave:      reflect.TypeOf(PoolLeaveResponse{}),
-	actionManifestUpload: reflect.TypeOf(ManifestUploadResponse{}),
+	actionSeeded:               reflect.TypeOf(SeededResponse{}),
+	actionAccountExists:        reflect.TypeOf(AccountExistsResponse{}),
+	actionPoolCreate:           reflect.TypeOf(PoolCreateResponse{}),
+	actionPoolJoin:             reflect.TypeOf(PoolJoinResponse{}),
+	actionPoolCancelJoin:       reflect.TypeOf(PoolCancelJoinResponse{}),
+	actionPoolList:             reflect.TypeOf(PoolListResponse{}),
+	actionPoolVote:             reflect.TypeOf(PoolVoteResponse{}),
+	actionPoolLeave:            reflect.TypeOf(PoolLeaveResponse{}),
+	actionManifestUpload:       reflect.TypeOf(ManifestUploadResponse{}),
+	actionManifestStore:        reflect.TypeOf(ManifestStoreResponse{}),
+	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableResponse{}),
+	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
+	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),
+	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
 }
