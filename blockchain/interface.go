@@ -46,7 +46,7 @@ type AccountExistsResponse struct {
 type PoolCreateRequest struct {
 	Seed     string `json:"seed"`
 	PoolName string `json:"pool_name"`
-	PeerID   string `json:"PeerIdTest"`
+	PeerID   string `json:"peer_id"`
 }
 
 type PoolCreateResponse struct {
