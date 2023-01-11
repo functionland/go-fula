@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
@@ -169,6 +170,14 @@ func (cfg *Config) init(mc *Client) error {
 		mc.ex, err = exchange.NewFxExchange(mc.h, mc.ls,
 			exchange.WithAuthorizer(mc.h.ID()),
 			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection))
+		if err != nil {
+			return err
+		}
+		mc.bl, err = blockchain.NewFxBlockchain(mc.h,
+			blockchain.WithAuthorizer(mc.h.ID()),
+			blockchain.WithAllowTransientConnection(cfg.AllowTransientConnection),
+			blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
+			blockchain.WithTimeout(30))
 		if err != nil {
 			return err
 		}
