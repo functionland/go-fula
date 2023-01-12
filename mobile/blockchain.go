@@ -49,9 +49,9 @@ func (c *Client) PoolCancelJoin(seed string, poolID int) ([]byte, error) {
 
 // PoolListRequests requests blox at Config.BloxAddr to list the join request for a pool with the id.
 // the addr must be a valid multiaddr that includes peer ID.
-func (c *Client) PoolListRequests(poolID int) ([]byte, error) {
+func (c *Client) PoolRequests(poolID int) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.PoolListRequests(ctx, c.bloxPid, blockchain.PoolRequestsRequest{PoolID: poolID})
+	return c.bl.PoolRequests(ctx, c.bloxPid, blockchain.PoolRequestsRequest{PoolID: poolID})
 }
 
 // PoolList requests blox at Config.BloxAddr to list the pools.

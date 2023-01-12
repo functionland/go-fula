@@ -105,7 +105,7 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 	}
 }
 
-func (bl *FxBlockchain) PoolListRequests(ctx context.Context, to peer.ID, r PoolRequestsRequest) ([]byte, error) {
+func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequestsRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")
@@ -116,7 +116,7 @@ func (bl *FxBlockchain) PoolListRequests(ctx context.Context, to peer.ID, r Pool
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPoolCancelJoin, &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPoolRequests, &buf)
 	if err != nil {
 		return nil, err
 	}
