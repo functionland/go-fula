@@ -13,7 +13,7 @@ const (
 	actionPoolCreate           = "fula-pool-create"
 	actionPoolJoin             = "fula-pool-join"
 	actionPoolCancelJoin       = "fula-pool-cancel_join"
-	actionPoolRequests         = "fula-pool-requests"
+	actionPoolRequests         = "fula-pool-poolrequests"
 	actionPoolList             = "fula-pool-all"
 	actionPoolVote             = "fula-pool-vote"
 	actionPoolLeave            = "fula-pool-leave"
@@ -170,10 +170,19 @@ type ManifestAvailableRequest struct {
 	PoolID int `json:"pool_id"`
 }
 
+type ManifestData struct {
+	Uploader         string           `json:"uploader"`
+	ManifestMetadata ManifestMetadata `json:"manifest_metadata"`
+}
+
+type Manifest struct {
+	PoolID               int          `json:"pool_id"`
+	ReplicationAvailable int          `json:"replication_available"`
+	ManifestData         ManifestData `json:"manifest_data"`
+}
+
 type ManifestAvailableResponse struct {
-	ReplicationAvailable int              `json:"replication_available"`
-	ManifestMetadata     ManifestMetadata `json:"manifest_metadata"`
-	PoolID               int              `json:"pool_id"`
+	Manifests []Manifest `json:"manifests"`
 }
 
 type ManifestRemoveRequest struct {
@@ -222,7 +231,7 @@ type Blockchain interface {
 	PoolCreate(context.Context, peer.ID, PoolCreateRequest) ([]byte, error)
 	PoolJoin(context.Context, peer.ID, PoolJoinRequest) ([]byte, error)
 	PoolCancelJoin(context.Context, peer.ID, PoolCancelJoinRequest) ([]byte, error)
-	PoolListRequests(context.Context, peer.ID, PoolRequestsRequest) ([]byte, error)
+	PoolRequests(context.Context, peer.ID, PoolRequestsRequest) ([]byte, error)
 	PoolList(context.Context, peer.ID, PoolListRequest) ([]byte, error)
 	PoolVote(context.Context, peer.ID, PoolVoteRequest) ([]byte, error)
 	PoolLeave(context.Context, peer.ID, PoolLeaveRequest) ([]byte, error)
@@ -240,6 +249,7 @@ var requestTypes = map[string]reflect.Type{
 	actionAccountExists:        reflect.TypeOf(AccountExistsRequest{}),
 	actionPoolCreate:           reflect.TypeOf(PoolCreateRequest{}),
 	actionPoolJoin:             reflect.TypeOf(PoolJoinRequest{}),
+	actionPoolRequests:         reflect.TypeOf(PoolRequestsRequest{}),
 	actionPoolCancelJoin:       reflect.TypeOf(PoolCancelJoinRequest{}),
 	actionPoolList:             reflect.TypeOf(PoolListRequest{}),
 	actionPoolVote:             reflect.TypeOf(PoolVoteRequest{}),
@@ -257,6 +267,7 @@ var responseTypes = map[string]reflect.Type{
 	actionAccountExists:        reflect.TypeOf(AccountExistsResponse{}),
 	actionPoolCreate:           reflect.TypeOf(PoolCreateResponse{}),
 	actionPoolJoin:             reflect.TypeOf(PoolJoinResponse{}),
+	actionPoolRequests:         reflect.TypeOf(PoolRequestsResponse{}),
 	actionPoolCancelJoin:       reflect.TypeOf(PoolCancelJoinResponse{}),
 	actionPoolList:             reflect.TypeOf(PoolListResponse{}),
 	actionPoolVote:             reflect.TypeOf(PoolVoteResponse{}),
