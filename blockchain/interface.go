@@ -17,12 +17,12 @@ const (
 	actionPoolList             = "fula-pool-all"
 	actionPoolVote             = "fula-pool-vote"
 	actionPoolLeave            = "fula-pool-leave"
-	actionManifestUpload       = "manifest-upload"
-	actionManifestStore        = "manifest-storage"
-	actionManifestAvailable    = "manifest-available"
-	actionManifestRemove       = "manifest-remove"
-	actionManifestRemoveStorer = "manifest-remove_storer"
-	actionManifestRemoveStored = "manifest-remove_storing_manifest"
+	actionManifestUpload       = "fula-manifest-upload"
+	actionManifestStore        = "fula-manifest-storage"
+	actionManifestAvailable    = "fula-manifest-available"
+	actionManifestRemove       = "fula-manifest-remove"
+	actionManifestRemoveStorer = "fula-manifest-remove_storer"
+	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
 )
 
 type SeededRequest struct {

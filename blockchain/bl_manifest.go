@@ -23,7 +23,7 @@ func (bl *FxBlockchain) ManifestUpload(ctx context.Context, to peer.ID, r Manife
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPoolLeave, &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionManifestUpload, &buf)
 	if err != nil {
 		return nil, err
 	}
