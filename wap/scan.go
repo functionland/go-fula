@@ -176,8 +176,8 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 			if errRun != nil {
 				log.Errorw("failed to enabled wifi interface", "errRun", errRun)
 			}
+			time.Sleep(3 * time.Second)
 		}
-		time.Sleep(3 * time.Second)
 	case "darwin":
 		os = "darwin"
 		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s"
