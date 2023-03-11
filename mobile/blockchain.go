@@ -20,6 +20,27 @@ func (c *Client) AccountExists(account string) ([]byte, error) {
 	return c.bl.AccountExists(ctx, c.bloxPid, blockchain.AccountExistsRequest{Account: account})
 }
 
+// AccountCreate requests blox at Config.BloxAddr to create a account.
+func (c *Client) AccountCreate() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AccountCreate(ctx, c.bloxPid)
+}
+
+// AccountFund requests blox at Config.BloxAddr to fund the account.
+// the addr must be a valid multiaddr that includes peer ID.
+// TODO: This still needs rethink as someone should not be able to put another person PeerID in request
+func (c *Client) AccountFund(seed string, amount blockchain.BigInt, to string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AccountFund(ctx, c.bloxPid, blockchain.AccountFundRequest{Seed: seed, Amount: amount, To: to})
+}
+
+// AccountBalance requests blox at Config.BloxAddr to get the balance of the account.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) AccountBalance(account string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AccountBalance(ctx, c.bloxPid, blockchain.AccountBalanceRequest{Account: account})
+}
+
 // PoolCreate requests blox at Config.BloxAddr to creates a pool with the name.
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
@@ -59,6 +80,13 @@ func (c *Client) PoolRequests(poolID int) ([]byte, error) {
 func (c *Client) PoolList() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.PoolList(ctx, c.bloxPid, blockchain.PoolListRequest{})
+}
+
+// PoolUserList requests blox at Config.BloxAddr to list the input pool users.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) PoolUserList(poolID int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolUserList(ctx, c.bloxPid, blockchain.PoolUserListRequest{PoolID: poolID})
 }
 
 // PoolVote requests blox at Config.BloxAddr to vote for a join request.
