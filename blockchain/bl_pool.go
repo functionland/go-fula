@@ -167,7 +167,7 @@ func (bl *FxBlockchain) PoolList(ctx context.Context, to peer.ID, r PoolListRequ
 	}
 }
 
-func (bl *FxBlockchain) PoolUsers(ctx context.Context, to peer.ID, r PoolUserListRequest) ([]byte, error) {
+func (bl *FxBlockchain) PoolUserList(ctx context.Context, to peer.ID, r PoolUserListRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")

@@ -11,6 +11,8 @@ const (
 	actionSeeded               = "account-seeded"
 	actionAccountExists        = "account-exists"
 	actionAccountCreate        = "account-create"
+	actionAccountFund          = "account-fund"
+	actionAccountBalance       = "account-balance"
 	actionPoolCreate           = "fula-pool-create"
 	actionPoolJoin             = "fula-pool-join"
 	actionPoolCancelJoin       = "fula-pool-cancel_join"
@@ -50,6 +52,24 @@ type AccountCreateRequest struct {
 
 type AccountCreateResponse struct {
 	Account string `json:"account"`
+}
+
+type AccountFundRequest struct {
+	Seed   string `json:"seed"`
+	Amount BigInt `json:"amount"`
+	To     string `json:"to"`
+}
+type AccountFundResponse struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Amount BigInt `json:"amount"`
+}
+
+type AccountBalanceRequest struct {
+	Account string `json:"account"`
+}
+type AccountBalanceResponse struct {
+	Amount BigInt `json:"amount"`
 }
 
 type PoolCreateRequest struct {
@@ -253,6 +273,8 @@ type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
 	AccountCreate(context.Context, peer.ID) ([]byte, error)
+	AccountFund(context.Context, peer.ID, AccountFundRequest) ([]byte, error)
+	AccountBalance(context.Context, peer.ID, AccountBalanceRequest) ([]byte, error)
 	PoolCreate(context.Context, peer.ID, PoolCreateRequest) ([]byte, error)
 	PoolJoin(context.Context, peer.ID, PoolJoinRequest) ([]byte, error)
 	PoolCancelJoin(context.Context, peer.ID, PoolCancelJoinRequest) ([]byte, error)
@@ -274,6 +296,7 @@ var requestTypes = map[string]reflect.Type{
 	actionSeeded:               reflect.TypeOf(SeededRequest{}),
 	actionAccountExists:        reflect.TypeOf(AccountExistsRequest{}),
 	actionAccountCreate:        reflect.TypeOf(AccountCreateRequest{}),
+	actionAccountFund:          reflect.TypeOf(AccountFundRequest{}),
 	actionPoolCreate:           reflect.TypeOf(PoolCreateRequest{}),
 	actionPoolJoin:             reflect.TypeOf(PoolJoinRequest{}),
 	actionPoolRequests:         reflect.TypeOf(PoolRequestsRequest{}),
@@ -294,6 +317,7 @@ var responseTypes = map[string]reflect.Type{
 	actionSeeded:               reflect.TypeOf(SeededResponse{}),
 	actionAccountExists:        reflect.TypeOf(AccountExistsResponse{}),
 	actionAccountCreate:        reflect.TypeOf(AccountCreateResponse{}),
+	actionAccountFund:          reflect.TypeOf(AccountFundResponse{}),
 	actionPoolCreate:           reflect.TypeOf(PoolCreateResponse{}),
 	actionPoolJoin:             reflect.TypeOf(PoolJoinResponse{}),
 	actionPoolRequests:         reflect.TypeOf(PoolRequestsResponse{}),
