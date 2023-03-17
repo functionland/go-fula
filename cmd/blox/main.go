@@ -31,7 +31,9 @@ var (
 	logger = logging.Logger("fula/cmd/blox")
 	app    struct {
 		cli.App
-		config struct {
+		initOnly   bool
+		configPath string
+		config     struct {
 			Identity                 string   `yaml:"identity"`
 			StoreDir                 string   `yaml:"storeDir"`
 			PoolName                 string   `yaml:"poolName"`
@@ -113,6 +115,12 @@ func init() {
 				Destination: &app.config.AllowTransientConnection,
 				Value:       true,
 			}),
+			&cli.BoolFlag{
+				Name:        "initOnly",
+				Usage:       "Weather to only initialise config and quit.",
+				Destination: &app.initOnly,
+				Value:       false,
+			},
 		},
 		Before:    before,
 		Action:    action,
@@ -126,15 +134,15 @@ func before(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	cp := ctx.Path("config")
-	if cp == "" {
-		cp = path.Join(homeDir, ".fula", "blox", "config.yaml")
-		if err := ctx.Set("config", cp); err != nil {
+	app.configPath = ctx.Path("config")
+	if app.configPath == "" {
+		app.configPath = path.Join(homeDir, ".fula", "blox", "config.yaml")
+		if err := ctx.Set("config", app.configPath); err != nil {
 			return err
 		}
 	}
-	if stats, err := os.Stat(cp); errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(path.Dir(cp), 0700); err != nil {
+	if stats, err := os.Stat(app.configPath); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(path.Dir(app.configPath), 0700); err != nil {
 			return err
 		}
 	} else if err != nil {
@@ -194,10 +202,11 @@ func before(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(cp, yc, 0700)
+	return os.WriteFile(app.configPath, yc, 0700)
 }
 
 func action(ctx *cli.Context) error {
+
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		return err
@@ -209,6 +218,16 @@ func action(ctx *cli.Context) error {
 	k, err := crypto.UnmarshalPrivateKey(km)
 	if err != nil {
 		return err
+	}
+
+	if app.initOnly {
+		fmt.Printf("Application config initialised at: %s\n", app.configPath)
+		pid, err := peer.IDFromPrivateKey(k)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("   blox peer ID: %s\n", pid.String())
+		return nil
 	}
 
 	hopts := []libp2p.Option{
