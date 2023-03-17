@@ -13,7 +13,7 @@ type Credentials struct {
 	Password string
 }
 
-func connectWifi(creds Credentials) error {
+func ConnectWifi(creds Credentials) error {
 	switch runtime.GOOS {
 	case "linux":
 		return connectLinux(creds)
@@ -46,4 +46,10 @@ func connectLinux(creds Credentials) error {
 
 	// Connect to the Wi-Fi network
 	cmdConnect := exec.Command("nmcli", "con", "up", connectionName)
-	output, err = cmdConnect
+	output, err = cmdConnect.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to connect: %s", string(output))
+	}
+
+	return nil
+}

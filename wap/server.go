@@ -76,7 +76,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 		SSID:     ssid,
 		Password: password,
 	}
-	err := connectWifi(credential)
+	err := ConnectWifi(credential)
 	if err != nil {
 		log.Errorw("failed to connect to wifi", "err", err)
 	}
