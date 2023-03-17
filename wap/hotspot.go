@@ -125,7 +125,7 @@ func startHotspot(forceReload bool) error {
 	case "darwin":
 		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/createbssid -n FxBlox"
 	default:
-		command = "nmcli dev wifi hotspot ifname wlan0 ssid FxBlox password"
+		command = "nmcli dev wifi hotspot ifname wlan0 ssid FxBlox password 00000000"
 	}
 	_, _, err = runCommand(TimeLimit, command)
 	if err != nil {
