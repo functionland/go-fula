@@ -59,6 +59,37 @@ func createHotspot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/wifi/connect" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Unsupported method type.", http.StatusMethodNotAllowed)
+		log.Errorw("Method is not supported.", "StatusNotFound", http.StatusMethodNotAllowed, "w", w)
+		return
+	}
+
+	ssid := r.FormValue("ssid")
+	password := r.FormValue("password")
+	credential := Credentials{
+		SSID:     ssid,
+		Password: password,
+	}
+	err := connectWifi(credential)
+	if err != nil {
+		log.Errorw("failed to connect to wifi", "err", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	jsonErr := json.NewEncoder(w).Encode("Wifi Connected")
+	if jsonErr != nil {
+		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(ip string, port string) {
@@ -66,6 +97,7 @@ func Serve(ip string, port string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/wifi/list", listWifiHandler)
 	mux.HandleFunc("/wifi/start", createHotspot)
+	mux.HandleFunc("/wifi/connect", connectWifiHandler)
 
 	listenAddr := ""
 
