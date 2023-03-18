@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -33,7 +33,7 @@ func getEnv(key, fallback string) string {
 func init() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		fmt.Printf("Error loading .env file\n")
 	}
 
 	PROJECT_NAME = getEnv("PROJECT_NAME", "Box Firmware")

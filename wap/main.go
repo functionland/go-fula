@@ -14,7 +14,6 @@ var log = logging.Logger("fula/wap/main")
 func main() {
 	ctx, cl := context.WithTimeout(context.Background(), time.Second*10)
 	defer cl()
-	go server.Serve("", "")
 	if wifi.CheckIfIsConnected(ctx) != nil {
 		log.Info("Wifi already connected")
 		if err := wifi.DisableAccessPoint(ctx); err != nil {
@@ -25,4 +24,5 @@ func main() {
 			log.Info("Access point enabled on startup")
 		}
 	}
+	server.Serve("", "")
 }

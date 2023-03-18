@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
@@ -14,7 +16,7 @@ import (
 var log = logging.Logger("fula/wap/server")
 
 func propertiesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/wifi/properties" {
+	if r.URL.Path != "/properties" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
 	}
@@ -70,7 +72,9 @@ func wifiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	connected := true
-	err := wifi.CheckIfIsConnected(r.Context())
+	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
+	defer cl()
+	err := wifi.CheckIfIsConnected(ctx)
 	if err != nil {
 		log.Errorw("failed to check the wifi status", "err", err)
 		connected = false
@@ -125,12 +129,23 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	ssid := r.FormValue("ssid")
 	password := r.FormValue("password")
 	credential := wifi.Credentials{
-		SSID:     ssid,
-		Password: password,
+		SSID:        ssid,
+		Password:    password,
+		CountryCode: config.COUNTRY,
 	}
-	err := wifi.ConnectWifi(r.Context(), credential)
+	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
+	defer cl()
+	err := wifi.ConnectWifi(ctx, credential)
 	if err != nil {
 		log.Errorw("failed to connect to wifi", "err", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		jsonErr := json.NewEncoder(w).Encode("Couldn't Connect")
+		if jsonErr != nil {
+			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			return
+		}
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -154,7 +169,9 @@ func enableAccessPoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := wifi.EnableAccessPoint(r.Context())
+	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
+	defer cl()
+	err := wifi.EnableAccessPoint(ctx)
 	if err != nil {
 		log.Errorw("failed to enable the access point", "err", err)
 	}
@@ -180,7 +197,9 @@ func disableAccessPoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := wifi.DisableAccessPoint(r.Context())
+	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
+	defer cl()
+	err := wifi.DisableAccessPoint(ctx)
 	if err != nil {
 		log.Errorw("failed to enable the access point", "err", err)
 	}

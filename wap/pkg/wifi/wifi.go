@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"text/template"
@@ -72,13 +71,13 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 
 func checkIfIsConnectedLinux(ctx context.Context) error {
 	// Check if iw is installed
-	_, err := exec.LookPath("iw")
-	if err != nil {
-		log.Fatal("iw not found")
-	}
+	// _, err := exec.LookPath("iw")
+	// if err != nil {
+	// 	log.Fatal("iw not found")
+	// }
 
 	// Check the connection
-	stdout, stderr, err := runCommand(ctx, fmt.Sprintf("iw %s link", config.IFFACE_CLIENT))
+	stdout, stderr, err := runCommand(ctx, fmt.Sprintf("sudo iw %s link", config.IFFACE_CLIENT))
 	if err != nil {
 		return err
 	}
@@ -91,10 +90,10 @@ func checkIfIsConnectedLinux(ctx context.Context) error {
 
 func disconnectLinux(ctx context.Context) error {
 	// Check if wpa_cli is installed
-	_, err := exec.LookPath("wpa_cli")
-	if err != nil {
-		return errors.New("wpa_cli not found")
-	}
+	// _, err := exec.LookPath("wpa_cli")
+	// if err != nil {
+	// 	return errors.New("wpa_cli not found")
+	// }
 
 	// Check the connection
 	_, stderr, err := runCommand(ctx, fmt.Sprintf("sudo wpa_cli -i %s DISCONNECT", config.IFFACE_CLIENT))

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/functionland/go-fula/wap/pkg/config"
 )
 
 // Wifi is the data structure containing the basic
@@ -152,9 +154,9 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s"
 	default:
 		os = "linux"
-		command = "iwlist wlan0 scan"
+		command = "sudo iwlist " + config.IFFACE_CLIENT + " scan"
 		if len(wifiInterface) > 0 && len(wifiInterface[0]) > 0 {
-			command = fmt.Sprintf("iwlist %s scan", wifiInterface[0])
+			command = fmt.Sprintf("sudo iwlist %s scan", wifiInterface[0])
 		}
 	}
 	ctx, cl := context.WithTimeout(context.Background(), TimeLimit)

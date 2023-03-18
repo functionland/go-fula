@@ -3,23 +3,24 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null  && pwd )
 
 # Update apt get
-sudo apt-get -y update
-sudo apt --fix-broken -y install
-sudo apt-get -y upgrade
+# sudo apt-get -y update
+# sudo apt --fix-broken -y install
+# sudo apt-get -y upgrade
 
-# Remove preexistent dependencies
-sudo apt-get --purge remove -y node
-sudo apt-get --purge remove -y nodejs
+# # Remove preexistent dependencies
+# sudo apt-get --purge remove -y node
+# sudo apt-get --purge remove -y nodejs
 
-# Install dependencies
-sudo apt-get install -y nodejs
-sudo apt-get install -y git
-sudo apt-get install -y build-essential
-sudo apt-get install -y libudev-dev
-sudo apt-get install -y hostapd
-sudo apt-get install -y dnsmasq
-sudo apt-get install -y iw
-sudo apt-get install -y npm
+# # Install dependencies
+# sudo apt-get install -y nodejs
+# sudo apt-get install -y git
+# sudo apt-get install -y build-essential
+# sudo apt-get install -y libsystemd-dev
+# sudo apt-get install -y libudev-dev
+# sudo apt-get install -y hostapd
+# sudo apt-get install -y dnsmasq
+# sudo apt-get install -y iw
+# sudo apt-get install -y npm
 
 # Install pm2
 sudo /usr/bin/npm install -g pm2
@@ -33,7 +34,7 @@ sudo rfkill unblock all
 sudo bash -c 'echo "" > /etc/wpa_supplicant/wpa_supplicant.conf'
 
 # Remove ssh
-sudo rm -rf /home/$SUDO_USER/.ssh
+# sudo rm -rf /home/$SUDO_USER/.ssh
 
 # Enable dhcpdcd
 sudo systemctl enable systemd-networkd
@@ -49,4 +50,4 @@ sudo pm2 startup
 sudo pm2 save
 
 # Reboot
-sudo reboot
+# sudo reboot
