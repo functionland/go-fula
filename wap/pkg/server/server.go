@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -14,6 +15,7 @@ import (
 )
 
 var log = logging.Logger("fula/wap/server")
+var peerFunction func(clientPeerId string) string
 
 func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/properties" {
@@ -126,8 +128,15 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	peerID := r.FormValue("peer_id")
+	if peerID == "" {
+		http.Error(w, "missing peer_id", http.StatusBadRequest)
+		return
+	}
+	bloxPeerID := peerFunction(peerID)
 	ssid := r.FormValue("ssid")
 	password := r.FormValue("password")
+
 	credential := wifi.Credentials{
 		SSID:        ssid,
 		Password:    password,
@@ -150,7 +159,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	jsonErr := json.NewEncoder(w).Encode("Wifi Connected")
+	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": bloxPeerID})
 	if jsonErr != nil {
 		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		return
@@ -215,8 +224,8 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
-func Serve(ip string, port string) {
-
+func Serve(peerFn func(clientPeerId string) string, ip string, port string) io.Closer {
+	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/wifi/list", listWifiHandler)
 	mux.HandleFunc("/wifi/status", wifiStatusHandler)
@@ -247,7 +256,10 @@ func Serve(ip string, port string) {
 	}
 
 	log.Info("Starting server at " + listenAddr)
-	if err := http.Serve(ln, mux); err != nil {
-		log.Errorw("Serve could not initialize", "err", err)
-	}
+	go func() {
+		if err := http.Serve(ln, mux); err != nil {
+			log.Errorw("Serve could not initialize", "err", err)
+		}
+	}()
+	return ln
 }

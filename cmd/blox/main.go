@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/functionland/go-fula/blox"
+	"github.com/functionland/go-fula/wap"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
@@ -32,6 +34,7 @@ var (
 	app    struct {
 		cli.App
 		initOnly   bool
+		wireless   bool
 		configPath string
 		config     struct {
 			Identity                 string   `yaml:"identity"`
@@ -119,6 +122,12 @@ func init() {
 				Name:        "initOnly",
 				Usage:       "Weather to only initialise config and quit.",
 				Destination: &app.initOnly,
+				Value:       false,
+			},
+			&cli.BoolFlag{
+				Name:        "wireless",
+				Usage:       "Start wireless controller in the background.",
+				Destination: &app.wireless,
 				Value:       false,
 			},
 		},
@@ -230,6 +239,18 @@ func action(ctx *cli.Context) error {
 		return nil
 	}
 
+	var cancelWap context.CancelFunc
+	var ctxWap context.Context
+	var closerWap io.Closer
+	if app.wireless {
+		ctxWap, cancelWap = context.WithCancel(context.Background())
+		defer cancelWap()
+		closerWap = wap.Run(ctxWap, func(clientPeerId string) string {
+			// TODO: return a blox peer id
+			return ""
+		})
+	}
+
 	hopts := []libp2p.Option{
 		libp2p.Identity(k),
 		libp2p.ListenAddrStrings(app.config.ListenAddrs...),
@@ -289,6 +310,8 @@ func action(ctx *cli.Context) error {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	logger.Info("Shutting down blox")
+	closerWap.Close()
+	cancelWap()
 	return bb.Shutdown(context.Background())
 }
 

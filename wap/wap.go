@@ -1,7 +1,8 @@
-package main
+package wap
 
 import (
 	"context"
+	"io"
 	"os"
 	"time"
 
@@ -12,9 +13,9 @@ import (
 
 var log = logging.Logger("fula/wap/main")
 
-func main() {
+func Run(globalCtx context.Context, peerFn func(clientPeerId string) string) io.Closer {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
-	ctx, cl := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cl := context.WithTimeout(globalCtx, time.Second*10)
 	defer cl()
 	if wifi.CheckIfIsConnected(ctx) != nil {
 		if err := wifi.StartHotspot(ctx, true); err != nil {
@@ -29,5 +30,6 @@ func main() {
 		// }
 		// log.Info("Access point disabled on startup")
 	}
-	server.Serve("", "")
+
+	return server.Serve(peerFn, "", "")
 }
