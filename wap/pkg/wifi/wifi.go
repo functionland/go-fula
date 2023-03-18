@@ -89,7 +89,7 @@ func disconnectLinux(ctx context.Context) error {
 	c1 := strings.Join([]string{"nmcli", "con", "down", "type",
 		"wifi"}, "")
 
-	err := runJournalCtlCommands(ctx, []string{c1})
+	err := runCommands(ctx, []string{c1})
 	if err != nil {
 		return err
 	}

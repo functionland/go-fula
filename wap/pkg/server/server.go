@@ -157,7 +157,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func enableAccessPoint(w http.ResponseWriter, r *http.Request) {
+func enableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/ap/enable" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
@@ -171,7 +171,7 @@ func enableAccessPoint(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
 	defer cl()
-	err := wifi.EnableAccessPoint(ctx)
+	err := wifi.StartHotspot(ctx, true)
 	if err != nil {
 		log.Errorw("failed to enable the access point", "err", err)
 	}
@@ -185,7 +185,7 @@ func enableAccessPoint(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func disableAccessPoint(w http.ResponseWriter, r *http.Request) {
+func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/ap/disable" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
@@ -199,7 +199,7 @@ func disableAccessPoint(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
 	defer cl()
-	err := wifi.DisableAccessPoint(ctx)
+	err := wifi.StopHotspot(ctx)
 	if err != nil {
 		log.Errorw("failed to enable the access point", "err", err)
 	}
@@ -221,8 +221,8 @@ func Serve(ip string, port string) {
 	mux.HandleFunc("/wifi/list", listWifiHandler)
 	mux.HandleFunc("/wifi/status", wifiStatusHandler)
 	mux.HandleFunc("/wifi/connect", connectWifiHandler)
-	mux.HandleFunc("/ap/enable", enableAccessPoint)
-	mux.HandleFunc("/ap/disable", disableAccessPoint)
+	mux.HandleFunc("/ap/enable", enableAccessPointHandler)
+	mux.HandleFunc("/ap/disable", disableAccessPointHandler)
 	mux.HandleFunc("/properties", propertiesHandler)
 
 	listenAddr := ""
