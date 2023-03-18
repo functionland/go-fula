@@ -1,0 +1,9 @@
+interface={{ .WifiInterface }}
+country_code=US
+ssid={{ .SSID }}
+channel=11
+hw_mode=g
+ignore_broadcast_ssid=0
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1

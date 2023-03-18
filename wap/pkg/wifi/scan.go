@@ -1,19 +1,14 @@
-package wap
+package wifi
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
-
-	logging "github.com/ipfs/go-log/v2"
 )
-
-var log = logging.Logger("fula/wap")
 
 // Wifi is the data structure containing the basic
 // elements
@@ -127,36 +122,6 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 	return
 }
 
-func runCommand(tDuration time.Duration, commands string) (stdout, stderr string, err error) {
-	log.Infow("running", "commands", commands, "tDuration", tDuration)
-	command := strings.Fields(commands)
-	cmd := exec.Command(command[0])
-	if len(command) > 0 {
-		cmd = exec.Command(command[0], command[1:]...)
-	}
-	var outb, errb bytes.Buffer
-	cmd.Stdout = &outb
-	cmd.Stderr = &errb
-	err = cmd.Start()
-	if err != nil {
-		return
-	}
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-	select {
-	case <-time.After(tDuration):
-		err = cmd.Process.Kill()
-	case err = <-done:
-		stdout = outb.String()
-		stderr = errb.String()
-	}
-	return
-}
-
-var TimeLimit = 10 * time.Second
-
 // Scan can be used to get the list of available wifis and their strength
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
 // wifiInterface is the name of interface that it should look for in Linux. Default is wlan0
@@ -168,11 +133,15 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 		os = "windows"
 		command = "netsh.exe wlan show networks mode=Bssid"
 		if forceReload {
-			_, _, errRun := runCommand(TimeLimit, "netsh interface set interface name=Wi-Fi admin=disabled")
+			ctx, cl1 := context.WithTimeout(context.Background(), TimeLimit)
+			defer cl1()
+			_, _, errRun := runCommand(ctx, "netsh interface set interface name=Wi-Fi admin=disabled")
 			if errRun != nil {
 				log.Errorw("failed to disable wifi interface", "errRun", errRun)
 			}
-			_, _, errRun = runCommand(TimeLimit, "netsh interface set interface name=Wi-Fi admin=enabled")
+			ctx, cl2 := context.WithTimeout(context.Background(), TimeLimit)
+			defer cl2()
+			_, _, errRun = runCommand(ctx, "netsh interface set interface name=Wi-Fi admin=enabled")
 			if errRun != nil {
 				log.Errorw("failed to enabled wifi interface", "errRun", errRun)
 			}
@@ -188,7 +157,9 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 			command = fmt.Sprintf("iwlist %s scan", wifiInterface[0])
 		}
 	}
-	stdout, _, err := runCommand(TimeLimit, command)
+	ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
+	defer cl()
+	stdout, _, err := runCommand(ctx, command)
 	if err != nil {
 		log.Errorw("failed to list interfaces", "command", command, "err", err)
 		return
