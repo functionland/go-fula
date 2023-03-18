@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
-	"text/template"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
 )
@@ -46,36 +44,34 @@ func DisconnectWifi(ctx context.Context) error {
 }
 
 func connectLinux(ctx context.Context, creds Credentials) error {
-	f, err := os.OpenFile("/etc/wpa_supplicant/wpa_supplicant.conf", os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("open file for write: %v", err)
-	}
-
-	tmpl := template.Must(template.ParseFiles(workingDirectory + "/templates/wpa_supplicant.tpl"))
-	tmpl.Execute(f, creds)
-
-	err = runJournalCtlCommands(ctx, connectCommandsLinux)
+	// Create a connection
+	connectionName := strings.ReplaceAll(creds.SSID, " ", "_")
+	c1 := strings.Join([]string{"nmcli", "con", "add", "type",
+		"wifi", "ifname", "*", "con-name", connectionName, "bssid", creds.SSID}, " ")
+	// Set the Wi-Fi password
+	c2 := strings.Join([]string{"nmcli", "con", "modify", connectionName,
+		"wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", creds.Password}, " ")
+	// Connect to the Wi-Fi network
+	c3 := strings.Join([]string{"nmcli", "con", "up", connectionName}, " ")
+	err := runCommands(ctx, []string{c1, c2, c3})
 	if err != nil {
 		return err
 	}
-	if CheckIfIsConnected(ctx) != nil {
-		// Retry
-		err = runJournalCtlCommands(ctx, connectRetryCommandsLinux)
-		if err != nil {
-			return err
-		}
+	if err := CheckIfIsConnected(ctx); err != nil {
+		return err
 	}
-
+	if err := config.WriteProperties(map[string]interface{}{
+		"ssid":         creds.SSID,
+		"password":     creds.Password,
+		"connection":   connectionName,
+		"country_code": creds.CountryCode,
+	}); err != nil {
+		log.Errorf("Couldn't write the properties file: %v", err)
+	}
 	return nil
 }
 
 func checkIfIsConnectedLinux(ctx context.Context) error {
-	// Check if iw is installed
-	// _, err := exec.LookPath("iw")
-	// if err != nil {
-	// 	log.Fatal("iw not found")
-	// }
-
 	// Check the connection
 	stdout, stderr, err := runCommand(ctx, fmt.Sprintf("sudo iw %s link", config.IFFACE_CLIENT))
 	if err != nil {
@@ -88,17 +84,18 @@ func checkIfIsConnectedLinux(ctx context.Context) error {
 	return nil
 }
 
+// TODO: unused, complete the c1 command
 func disconnectLinux(ctx context.Context) error {
-	// Check if wpa_cli is installed
-	// _, err := exec.LookPath("wpa_cli")
-	// if err != nil {
-	// 	return errors.New("wpa_cli not found")
-	// }
+	c1 := strings.Join([]string{"nmcli", "con", "down", "type",
+		"wifi"}, "")
 
-	// Check the connection
-	_, stderr, err := runCommand(ctx, fmt.Sprintf("sudo wpa_cli -i %s DISCONNECT", config.IFFACE_CLIENT))
+	err := runJournalCtlCommands(ctx, []string{c1})
 	if err != nil {
-		return fmt.Errorf("failed to disconnect: %s", string(stderr))
+		return err
+	}
+	if err := CheckIfIsConnected(ctx); err != nil {
+		return err
+
 	}
 	return nil
 }

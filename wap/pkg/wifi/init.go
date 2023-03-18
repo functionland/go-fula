@@ -24,15 +24,20 @@ var conclusionMessages = map[string]string{}
 var j *sdjournal.Journal
 var workingDirectory string
 
+/*
+// TODO: unused
 var connectCommandsLinux = []string{
 	`sudo killall wpa_supplicant`,
 	fmt.Sprintf("sudo wpa_supplicant -B -i %s -c /etc/wpa_supplicant/wpa_supplicant.conf", config.IFFACE_CLIENT),
 }
 
+// TODO: unused
 var connectRetryCommandsLinux = []string{
 	fmt.Sprintf("sudo wpa_cli -i %s RECONFIGURE", config.IFFACE_CLIENT),
 	fmt.Sprintf("sudo ifconfig %s up", config.IFFACE_CLIENT),
 }
+*/
+
 var disableCommands = []string{
 	"sudo systemctl stop dnsmasq",
 	"sudo systemctl stop hostapd",
@@ -71,18 +76,28 @@ func init() {
 		log.Fatalf("Error opening journal: %s", err)
 	}
 
+	// Check if NetworkManager is installed
+	_, err = exec.LookPath("nmcli")
+	if err != nil {
+		log.Fatal("nmcli (NetworkManager) not found")
+	}
+	// Check if iw is installed
+	// _, err := exec.LookPath("iw")
+	// if err != nil {
+	// 	log.Fatal("iw not found")
+	// }
+
 }
 func runJournalCtlCommands(ctx context.Context, commands []string) error {
-	var err error
 	for i := 0; i <= maxRetries; i++ {
 		closers := []context.CancelFunc{}
 		var errJournal error
-		for _, cmd := range disableCommands {
+		for _, cmd := range commands {
 			ctxJournal, close := context.WithCancel(ctx)
 			closers = append(closers, close)
 			errJournal = execWithJournalctlCallback(ctxJournal, cmd, nil)
 			if errJournal != nil {
-				log.Error(err)
+				log.Errorf("executing systemd command: %v", errJournal)
 				break
 			}
 			select {
@@ -110,8 +125,44 @@ func runJournalCtlCommands(ctx context.Context, commands []string) error {
 	return nil
 }
 
+func runCommands(ctx context.Context, commands []string) error {
+	for i := 0; i <= maxRetries; i++ {
+		closers := []context.CancelFunc{}
+		var err error
+		for _, cmd := range commands {
+			ctxJournal, close := context.WithCancel(ctx)
+			closers = append(closers, close)
+			_, _, err = runCommand(ctxJournal, cmd)
+			if err != nil {
+				log.Errorf("executing multiple commands all at once: %v", err)
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("context error: %v", ctx.Err())
+			default:
+			}
+		}
+
+		if err == nil {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			for _, closer := range closers {
+				if closer != nil {
+					closer()
+				}
+			}
+			return fmt.Errorf("context error: %v", ctx.Err())
+		default:
+		}
+	}
+	return nil
+}
 func runCommand(ctx context.Context, commands string) (stdout, stderr string, err error) {
-	log.Errorw("running", "commands", commands)
+	log.Infow("running", "commands", commands)
 	command := strings.Fields(commands)
 	cmd := exec.Command(command[0])
 	if len(command) > 0 {

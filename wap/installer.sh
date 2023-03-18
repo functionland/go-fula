@@ -29,6 +29,7 @@ sudo /usr/bin/npm install -g node-gyp
 # Activate rf interfaces
 sudo rfkill unblock wifi
 sudo rfkill unblock all
+nmcli networking on
 
 # Remove wpa_supplicant
 sudo bash -c 'echo "" > /etc/wpa_supplicant/wpa_supplicant.conf'

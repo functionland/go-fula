@@ -15,8 +15,9 @@ import (
 // Wifi is the data structure containing the basic
 // elements
 type Wifi struct {
-	SSID string `json:"ssid"`
-	RSSI int    `json:"rssi"`
+	ESSID string `json:"essid"`
+	SSID  string `json:"ssid"`
+	RSSI  int    `json:"rssi"`
 }
 
 func parse(output, os string) (wifis []Wifi, err error) {
@@ -105,7 +106,10 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 				continue
 			}
 		} else {
-			if strings.Contains(line, "Signal level=") {
+			if strings.Contains(line, "ESSID") {
+				essid := strings.Split(line, ":")[1]
+				w.ESSID = essid
+			} else if strings.Contains(line, "Signal level=") {
 				level, errParse := strconv.Atoi(strings.Split(strings.Split(strings.Split(line, "level=")[1], "/")[0], " dB")[0])
 				if errParse != nil {
 					continue
@@ -116,7 +120,7 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 				w.RSSI = level
 			}
 		}
-		if w.SSID != "" && w.RSSI != 0 {
+		if w.SSID != "" && w.RSSI != 0 && w.ESSID != "" {
 			wifis = append(wifis, w)
 			w = Wifi{}
 		}
