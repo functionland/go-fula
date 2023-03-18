@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -13,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/functionland/go-fula/blox"
-	"github.com/functionland/go-fula/wap"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
@@ -124,12 +122,6 @@ func init() {
 				Destination: &app.initOnly,
 				Value:       false,
 			},
-			&cli.BoolFlag{
-				Name:        "wireless",
-				Usage:       "Start wireless controller in the background.",
-				Destination: &app.wireless,
-				Value:       false,
-			},
 		},
 		Before:    before,
 		Action:    action,
@@ -215,7 +207,6 @@ func before(ctx *cli.Context) error {
 }
 
 func action(ctx *cli.Context) error {
-
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		return err
@@ -237,18 +228,6 @@ func action(ctx *cli.Context) error {
 		}
 		fmt.Printf("   blox peer ID: %s\n", pid.String())
 		return nil
-	}
-
-	var cancelWap context.CancelFunc
-	var ctxWap context.Context
-	var closerWap io.Closer
-	if app.wireless {
-		ctxWap, cancelWap = context.WithCancel(context.Background())
-		defer cancelWap()
-		closerWap = wap.Run(ctxWap, func(clientPeerId string) string {
-			// TODO: return a blox peer id
-			return ""
-		})
 	}
 
 	hopts := []libp2p.Option{
@@ -310,8 +289,6 @@ func action(ctx *cli.Context) error {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	logger.Info("Shutting down blox")
-	closerWap.Close()
-	cancelWap()
 	return bb.Shutdown(context.Background())
 }
 

@@ -15,7 +15,7 @@ import (
 )
 
 var log = logging.Logger("fula/wap/server")
-var peerFunction func(clientPeerId string) string
+var peerFunction func(clientPeerId string) (string, error)
 
 func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/properties" {
@@ -117,11 +117,12 @@ func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/wifi/connect" {
+func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/peer/exchange" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
 	}
+
 	if r.Method != "POST" {
 		http.Error(w, "Unsupported method type.", http.StatusMethodNotAllowed)
 		log.Errorw("Method is not supported.", "StatusNotFound", http.StatusMethodNotAllowed, "w", w)
@@ -133,7 +134,32 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing peer_id", http.StatusBadRequest)
 		return
 	}
-	bloxPeerID := peerFunction(peerID)
+	bloxPeerID, err := peerFunction(peerID)
+	if err != nil {
+		http.Error(w, "error while exchanging peers", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": bloxPeerID})
+	if jsonErr != nil {
+		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/wifi/connect" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Unsupported method type.", http.StatusMethodNotAllowed)
+		log.Errorw("Method is not supported.", "StatusNotFound", http.StatusMethodNotAllowed, "w", w)
+		return
+	}
+
 	ssid := r.FormValue("ssid")
 	password := r.FormValue("password")
 
@@ -159,7 +185,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": bloxPeerID})
+	jsonErr := json.NewEncoder(w).Encode("Wifi connected!")
 	if jsonErr != nil {
 		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		return
@@ -224,7 +250,7 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
-func Serve(peerFn func(clientPeerId string) string, ip string, port string) io.Closer {
+func Serve(peerFn func(clientPeerId string) (string, error), ip string, port string) io.Closer {
 	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/wifi/list", listWifiHandler)
@@ -233,6 +259,7 @@ func Serve(peerFn func(clientPeerId string) string, ip string, port string) io.C
 	mux.HandleFunc("/ap/enable", enableAccessPointHandler)
 	mux.HandleFunc("/ap/disable", disableAccessPointHandler)
 	mux.HandleFunc("/properties", propertiesHandler)
+	mux.HandleFunc("/peer/exchange", exchangePeersHandler)
 
 	listenAddr := ""
 
