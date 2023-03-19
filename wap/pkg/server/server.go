@@ -268,7 +268,7 @@ func Serve(peerFn func(clientPeerId string) (string, error), ip string, port str
 	}
 
 	if port == "" {
-		port = "3500"
+		port = config.API_PORT
 	}
 
 	listenAddr = ip + ":" + port
