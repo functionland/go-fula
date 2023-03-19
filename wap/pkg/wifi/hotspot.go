@@ -127,13 +127,13 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 	case "darwin":
 		commands = []string{"/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/createbssid -n FxBlox"}
 	default:
-		commands = []string{"nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared", "nmcli connection up FxBlox"}
+		commands = []string{"nmcli connection delete FxBlox", "nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared", "nmcli connection up FxBlox"}
 	}
 	for _, command := range commands {
 		_, _, err = runCommand(ctx, command)
+		time.Sleep(2 * time.Second)
 		if err != nil {
 			log.Errorw("failed to stop wifi hotspot", "command", command, "err", err)
-			return err
 		}
 	}
 	if err != nil {
