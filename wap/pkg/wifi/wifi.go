@@ -79,7 +79,7 @@ func checkIfIsConnectedLinux(ctx context.Context) error {
 	}
 	if strings.Contains(string(stdout), "Not connected") ||
 		strings.Contains(string(stderr), "Not connected") {
-		return fmt.Errorf("Wifi not connected!")
+		return errors.New("Wifi not connected")
 	}
 	return nil
 }

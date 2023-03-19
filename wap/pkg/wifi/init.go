@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -17,15 +16,10 @@ var log = logging.Logger("fula/wap/wifi")
 const maxRetries = 4
 
 var TimeLimit = 10 * time.Second
-var workingDirectory string
 
 func init() {
 	// Working Directory
 	var err error
-	workingDirectory, err = os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	// Check if NetworkManager is installed
 	_, err = exec.LookPath("nmcli")
