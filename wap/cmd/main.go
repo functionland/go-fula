@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"os"
 	"os/signal"
 	"syscall"
 
+	blox "github.com/functionland/go-fula/wap/cmd/blox"
 	"github.com/functionland/go-fula/wap/pkg/server"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var log = logging.Logger("fula/wap/main")
@@ -33,27 +31,7 @@ func main() {
 		// log.Info("Access point disabled on startup")
 	}
 
-	closer := server.Serve(func(clientPeerId string) (string, error) {
-		authorizer, err := peer.Decode(clientPeerId)
-		if err != nil {
-			return "", err
-		}
-		km, err := base64.StdEncoding.DecodeString("identitiy?!")
-		if err != nil {
-			return "", err
-		}
-		k, err := crypto.UnmarshalPrivateKey(km)
-		if err != nil {
-			return "", err
-		}
-
-		pid, err := peer.IDFromPrivateKey(k)
-		if err != nil {
-			return "", err
-		}
-		return pid.String(), nil
-
-	}, "", "")
+	closer := server.Serve(blox.BloxCommandInitOnly, "", "")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig

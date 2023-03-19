@@ -80,6 +80,12 @@ func runCommands(ctx context.Context, commands []string) error {
 	}
 	return nil
 }
+
+// exported
+func RunCommand(ctx context.Context, commands string) (stdout, stderr string, err error) {
+	return runCommand(ctx, commands)
+}
+
 func runCommand(ctx context.Context, commands string) (stdout, stderr string, err error) {
 	log.Infow("running", "commands", commands)
 	command := strings.Fields(commands)

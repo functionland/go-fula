@@ -9,6 +9,7 @@ import (
 
 var (
 	PROJECT_NAME           string
+	PROJECT_ROOT           string
 	CUSTOM_PROPERTIES_FILE string
 	API_URL                string
 	API_PORT               string
@@ -21,6 +22,7 @@ var (
 	NETMASK                string
 	FORCE_ACCESSPOINT      string
 	COUNTRY                string
+	BLOX_COMMAND           string
 )
 
 func getEnv(key, fallback string) string {
@@ -54,4 +56,6 @@ func init() {
 	NETMASK = getEnv("NETMASK", "255.255.255.0")
 	FORCE_ACCESSPOINT = getEnv("FORCE_ACCESSPOINT", "1")
 	COUNTRY = getEnv("COUNTRY", "GB")
+	PROJECT_ROOT = getEnv("PROJECT_ROOT", "../..")
+	BLOX_COMMAND = getEnv("BLOX_COMMAND", "go run "+PROJECT_ROOT+"/cmd/blox --authorizer %s --initOnly true")
 }
