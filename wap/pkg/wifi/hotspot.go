@@ -96,7 +96,7 @@ func CheckHotspotSupported(ctx context.Context) (supported bool, err error) {
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
 // wifiInterface is the name of interface that it should look for in Linux. Default is wlan0
 func StartHotspot(ctx context.Context, forceReload bool) error {
-	command := ""
+	commands := []string{}
 	var err error
 	// supported, err := CheckHotspotSupported(ctx)
 	// if err != nil {
@@ -108,7 +108,7 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 	// }
 	switch runtime.GOOS {
 	case "windows":
-		command = "netsh wlan start hostednetwork"
+		commands = []string{"netsh wlan start hostednetwork"}
 		_, _, errRun := runCommand(ctx, "netsh wlan set hostednetwork mode=allow ssid=FxBlox")
 		if errRun != nil {
 			log.Errorw("failed to set hostednetwork", "errRun", errRun)
@@ -125,14 +125,19 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 			time.Sleep(3 * time.Second)
 		}
 	case "darwin":
-		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/createbssid -n FxBlox"
+		commands = []string{"/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/createbssid -n FxBlox"}
 	default:
-		command = "nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared & nmcli connection up FxBlox"
-		//command = "nmcli dev wifi hotspot ifname " + config.IFFACE_CLIENT + " ssid FxBlox password 00000000"
+		commands = []string{"nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared", "nmcli connection up FxBlox"}
 	}
-	_, _, err = runCommand(ctx, command)
+	for _, command := range commands {
+		_, _, err = runCommand(ctx, command)
+		if err != nil {
+			log.Errorw("failed to stop wifi hotspot", "command", command, "err", err)
+			return err
+		}
+	}
 	if err != nil {
-		log.Errorw("failed to start wifi hotspot", "command", command, "err", err)
+		log.Errorw("failed to start wifi hotspot", "command", commands, "err", err)
 		return err
 	}
 	return nil
