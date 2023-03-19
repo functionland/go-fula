@@ -264,7 +264,7 @@ func Serve(peerFn func(clientPeerId string) (string, error), ip string, port str
 	listenAddr := ""
 
 	if ip == "" {
-		ip = "192.168.88.1"
+		ip = config.IPADDRESS
 	}
 
 	if port == "" {
