@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/functionland/go-fula/wap/pkg/config"
 )
 
 func parseHotspot(output, os string) (supported bool, err error) {
@@ -129,7 +127,8 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 	case "darwin":
 		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/createbssid -n FxBlox"
 	default:
-		command = "nmcli dev wifi hotspot ifname " + config.IFFACE_CLIENT + " ssid FxBlox password 00000000"
+		command = "nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared & nmcli connection up FxBlox"
+		//command = "nmcli dev wifi hotspot ifname " + config.IFFACE_CLIENT + " ssid FxBlox password 00000000"
 	}
 	_, _, err = runCommand(ctx, command)
 	if err != nil {
