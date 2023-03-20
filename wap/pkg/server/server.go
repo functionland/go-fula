@@ -220,6 +220,27 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// This finds the ip address of the device
+func getNonLoopbackIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+
+	for _, addr := range addrs {
+		ip, _, err := net.ParseCIDR(addr.String())
+		if err != nil {
+			continue
+		}
+
+		if !ip.IsLoopback() && ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+
+	return "", fmt.Errorf("No non-loopback IP address found")
+}
+
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(peerFn func(clientPeerId string) (string, error), ip string, port string) io.Closer {
@@ -235,7 +256,13 @@ func Serve(peerFn func(clientPeerId string) (string, error), ip string, port str
 	listenAddr := ""
 
 	if ip == "" {
-		ip = config.IPADDRESS
+		device_ip, err := getNonLoopbackIP()
+		if err != nil {
+			log.Errorw("Failed to get non-loopback IP address", "err", err)
+			ip = config.IPADDRESS
+		} else {
+			ip = device_ip
+		}
 	}
 
 	if port == "" {
