@@ -256,13 +256,7 @@ func Serve(peerFn func(clientPeerId string) (string, error), ip string, port str
 	listenAddr := ""
 
 	if ip == "" {
-		device_ip, err := getNonLoopbackIP()
-		if err != nil {
-			log.Errorw("Failed to get non-loopback IP address", "err", err)
-			ip = config.IPADDRESS
-		} else {
-			ip = device_ip
-		}
+		ip = config.IPADDRESS
 	}
 
 	if port == "" {
@@ -273,10 +267,20 @@ func Serve(peerFn func(clientPeerId string) (string, error), ip string, port str
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		listenAddr = "0.0.0.0:" + port
+		ip, err = getNonLoopbackIP()
+		if err != nil {
+			log.Errorw("Failed to get non-loopback IP address", "err", err)
+			ip = "0.0.0.0"
+		}
+		listenAddr = ip + ":" + port
+
 		ln, err = net.Listen("tcp", listenAddr)
 		if err != nil {
-			log.Errorw("Listen could not initialize", "err", err)
+			listenAddr = "0.0.0.0:" + port
+			ln, err = net.Listen("tcp", listenAddr)
+			if err != nil {
+				log.Errorw("Listen could not initialize", "err", err)
+			}
 		}
 	}
 
