@@ -55,9 +55,11 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	c3 := strings.Join([]string{"nmcli", "con", "up", connectionName}, " ")
 	err := runCommands(ctx, []string{c1, c2, c3})
 	if err != nil {
+		runCommand(ctx, "nmcli connection up FxBlox")
 		return err
 	}
 	if err := CheckIfIsConnected(ctx); err != nil {
+		runCommand(ctx, "nmcli connection up FxBlox")
 		return err
 	}
 	if err := config.WriteProperties(map[string]interface{}{
