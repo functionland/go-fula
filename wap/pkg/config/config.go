@@ -57,5 +57,5 @@ func init() {
 	FORCE_ACCESSPOINT = getEnv("FORCE_ACCESSPOINT", "1")
 	COUNTRY = getEnv("COUNTRY", "GB")
 	PROJECT_ROOT = getEnv("PROJECT_ROOT", "../..")
-	BLOX_COMMAND = getEnv("BLOX_COMMAND", "go run "+PROJECT_ROOT+"/cmd/blox --authorizer %s --initOnly true")
+	BLOX_COMMAND = getEnv("BLOX_COMMAND", "/app --authorizer %s --initOnly true")
 }
