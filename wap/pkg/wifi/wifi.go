@@ -47,7 +47,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	// Create a connection
 	connectionName := strings.ReplaceAll(creds.SSID, " ", "_")
 	c1 := strings.Join([]string{"nmcli", "con", "add", "type",
-		"wifi", "ifname", "*", "con-name", connectionName, "bssid", creds.SSID}, " ")
+		"wifi", "ifname", "*", "con-name", connectionName, "ssid", creds.SSID}, " ")
 	// Set the Wi-Fi password
 	c2 := strings.Join([]string{"nmcli", "con", "modify", connectionName,
 		"wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", creds.Password}, " ")
