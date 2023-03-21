@@ -47,6 +47,7 @@ func DisconnectWifi(ctx context.Context) error {
 func connectLinux(ctx context.Context, creds Credentials) error {
 	// Create a connection
 	connectionName := strings.ReplaceAll(creds.SSID, " ", "_")
+	c0 := strings.Join([]string{"nmcli", "con", "delete", connectionName}, " ")
 	c1 := strings.Join([]string{"nmcli", "con", "add", "type",
 		"wifi", "ifname", "*", "con-name", connectionName, "ssid", creds.SSID}, " ")
 	// Set the Wi-Fi password
@@ -54,7 +55,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 		"wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", creds.Password}, " ")
 	// Connect to the Wi-Fi network
 	c3 := strings.Join([]string{"nmcli", "con", "up", connectionName}, " ")
-	commands := []string{c1, c2, c3}
+	commands := []string{c0, c1, c2, c3}
 	/*err := runCommands(ctx, []string{c1, c2, c3})
 	if err != nil {
 		runCommand(ctx, "nmcli connection up FxBlox")
