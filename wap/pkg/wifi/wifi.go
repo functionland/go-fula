@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
 )
@@ -53,10 +54,18 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 		"wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", creds.Password}, " ")
 	// Connect to the Wi-Fi network
 	c3 := strings.Join([]string{"nmcli", "con", "up", connectionName}, " ")
-	err := runCommands(ctx, []string{c1, c2, c3})
+	commands := []string{c1, c2, c3}
+	/*err := runCommands(ctx, []string{c1, c2, c3})
 	if err != nil {
 		runCommand(ctx, "nmcli connection up FxBlox")
 		return err
+	}*/
+	for _, command := range commands {
+		_, _, err := runCommand(ctx, command)
+		time.Sleep(3 * time.Second)
+		if err != nil {
+			log.Errorw("failed to finish wifi setup", "command", command, "err", err)
+		}
 	}
 	if err := CheckIfIsConnected(ctx); err != nil {
 		runCommand(ctx, "nmcli connection up FxBlox")
