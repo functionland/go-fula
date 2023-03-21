@@ -82,7 +82,7 @@ func CheckHotspotSupported(ctx context.Context) (supported bool, err error) {
 		command = "networksetup -listallhardwareports"
 	default:
 		os = "linux"
-		command = "sudo iw list | grep -i AP"
+		command = "iw list | grep -i AP"
 	}
 	stdout, stderr, err := runCommand(ctx, command)
 	if err != nil {

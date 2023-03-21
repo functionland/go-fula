@@ -158,9 +158,9 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s"
 	default:
 		os = "linux"
-		command = "sudo iwlist " + config.IFFACE_CLIENT + " scan"
+		command = "iwlist " + config.IFFACE_CLIENT + " scan"
 		if len(wifiInterface) > 0 && len(wifiInterface[0]) > 0 {
-			command = fmt.Sprintf("sudo iwlist %s scan", wifiInterface[0])
+			command = fmt.Sprintf("iwlist %s scan", wifiInterface[0])
 		}
 	}
 	ctx, cl := context.WithTimeout(context.Background(), TimeLimit)

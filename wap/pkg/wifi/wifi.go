@@ -73,7 +73,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 
 func checkIfIsConnectedLinux(ctx context.Context) error {
 	// Check the connection
-	stdout, stderr, err := runCommand(ctx, fmt.Sprintf("sudo iw %s link", config.IFFACE_CLIENT))
+	stdout, stderr, err := runCommand(ctx, fmt.Sprintf("iw %s link", config.IFFACE_CLIENT))
 	if err != nil {
 		return err
 	}
