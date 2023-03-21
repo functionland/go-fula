@@ -32,6 +32,7 @@ var (
 	app    struct {
 		cli.App
 		initOnly   bool
+		wireless   bool
 		configPath string
 		config     struct {
 			Identity                 string   `yaml:"identity"`
@@ -206,7 +207,6 @@ func before(ctx *cli.Context) error {
 }
 
 func action(ctx *cli.Context) error {
-
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		return err
