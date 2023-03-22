@@ -69,7 +69,16 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 		}
 	}
 	if err := CheckIfIsConnected(ctx); err != nil {
-		runCommand(ctx, "nmcli connection up FxBlox")
+		c4 := strings.Join([]string{"nmcli", "con", "delete", connectionName}, " ")
+		c5 := strings.Join([]string{"nmcli", "connection", "up", "FxBlox"}, " ")
+		commands2 := []string{c4, c5}
+		for _, command := range commands2 {
+			_, _, err := runCommand(ctx, command)
+			time.Sleep(3 * time.Second)
+			if err != nil {
+				log.Errorw("failed to finish wifi setup", "command", command, "err", err)
+			}
+		}
 		return err
 	}
 	if err := config.WriteProperties(map[string]interface{}{
