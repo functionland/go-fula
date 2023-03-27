@@ -24,7 +24,7 @@ func init() {
 	// Check if NetworkManager is installed
 	_, err = exec.LookPath("nmcli")
 	if err != nil {
-		log.Fatal("nmcli (NetworkManager) not found")
+		//log.Fatal("nmcli (NetworkManager) not found")
 	}
 	// Check if iw is installed
 	// _, err := exec.LookPath("iw")
