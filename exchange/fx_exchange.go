@@ -56,6 +56,7 @@ type (
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
+		pub                 *ipniPublisher
 	}
 	pushRequest struct {
 		Link cid.Cid `json:"link"`
@@ -94,12 +95,28 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 			return nil, err
 		}
 	}
+	if !e.ipniPublishDisabled {
+		e.pub, err = newIpniPublisher(h, opts)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return e, nil
 }
 
 func (e *FxExchange) Start(ctx context.Context) error {
 	gsn := gsnet.NewFromLibp2pHost(e.h)
 	e.gx = gs.New(ctx, gsn, e.ls)
+
+	if !e.ipniPublishDisabled {
+		if err := e.pub.Start(ctx); err != nil {
+			return err
+		}
+		e.gx.RegisterIncomingBlockHook(func(p peer.ID, responseData graphsync.ResponseData, blockData graphsync.BlockData, hookActions graphsync.IncomingBlockHookActions) {
+			e.pub.notifyReceivedLink(blockData.Link())
+		})
+	}
+
 	e.gx.RegisterIncomingRequestHook(
 		func(p peer.ID, r graphsync.RequestData, ha graphsync.IncomingRequestHookActions) {
 			if e.authorized(p, actionPull) {
@@ -305,6 +322,11 @@ func (e *FxExchange) authorized(pid peer.ID, action string) bool {
 }
 
 func (e *FxExchange) Shutdown(ctx context.Context) error {
+	if !e.ipniPublishDisabled {
+		if err := e.pub.shutdown(); err != nil {
+			log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
+		}
+	}
 	e.c.CloseIdleConnections()
 	return e.s.Shutdown(ctx)
 }
