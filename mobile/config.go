@@ -75,10 +75,7 @@ func (cfg *Config) init(mc *Client) error {
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
 	}
-	var relays autorelay.Option
-	if len(cfg.StaticRelays) == 0 {
-		relays = autorelay.WithDefaultStaticRelays()
-	} else {
+	if len(cfg.StaticRelays) != 0 {
 		sr := make([]peer.AddrInfo, 0, len(cfg.StaticRelays))
 		for _, relay := range cfg.StaticRelays {
 			rma, err := multiaddr.NewMultiaddr(relay)
@@ -91,9 +88,8 @@ func (cfg *Config) init(mc *Client) error {
 			}
 			sr = append(sr, *rai)
 		}
-		relays = autorelay.WithStaticRelays(sr)
+		libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1))
 	}
-	libp2p.EnableAutoRelay(relays, autorelay.WithNumRelays(1))
 
 	if cfg.ForceReachabilityPrivate {
 		hopts = append(hopts, libp2p.ForceReachabilityPrivate())
@@ -168,7 +164,9 @@ func (cfg *Config) init(mc *Client) error {
 	default:
 		mc.ex, err = exchange.NewFxExchange(mc.h, mc.ls,
 			exchange.WithAuthorizer(mc.h.ID()),
-			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection))
+			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection),
+			exchange.WithIpniPublishDisabled(true),
+		)
 		if mc.bloxPid != "" {
 			// Explicitly authorize the Blox ID if its address is specified.
 			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {

@@ -42,9 +42,7 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
-	p.ex, err = exchange.NewFxExchange(p.h, p.ls,
-		exchange.WithAuthorizer(p.authorizer),
-		exchange.WithAllowTransientConnection(p.allowTransientConnection))
+	p.ex, err = exchange.NewFxExchange(p.h, p.ls, p.exchangeOpts...)
 	if err != nil {
 		return nil, err
 	}

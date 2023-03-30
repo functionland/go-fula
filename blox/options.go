@@ -8,6 +8,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/ipld/go-ipld-prime"
@@ -20,14 +21,14 @@ import (
 type (
 	Option  func(*options) error
 	options struct {
-		h                        host.Host
-		name                     string
-		topicName                string
-		announceInterval         time.Duration
-		ds                       datastore.Batching
-		ls                       *ipld.LinkSystem
-		authorizer               peer.ID
-		allowTransientConnection bool
+		h                host.Host
+		name             string
+		topicName        string
+		announceInterval time.Duration
+		ds               datastore.Batching
+		ls               *ipld.LinkSystem
+		authorizer       peer.ID
+		exchangeOpts     []exchange.Option
 	}
 )
 
@@ -133,18 +134,9 @@ func WithLinkSystem(ls *ipld.LinkSystem) Option {
 	}
 }
 
-// WithAuthorizer sets the peer ID that has permission to configure DAG exchange authorization.
-// Defaults to the blox libp2p host ID if unset.
-func WithAuthorizer(pid peer.ID) Option {
+func WithExchangeOpts(eo ...exchange.Option) Option {
 	return func(o *options) error {
-		o.authorizer = pid
-		return nil
-	}
-}
-
-func WithAllowTransientConnection(t bool) Option {
-	return func(o *options) error {
-		o.allowTransientConnection = t
+		o.exchangeOpts = eo
 		return nil
 	}
 }
