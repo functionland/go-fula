@@ -27,6 +27,7 @@ const (
 	actionManifestRemove       = "fula-manifest-remove"
 	actionManifestRemoveStorer = "fula-manifest-remove_storer"
 	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
+	actionBloxFreeSpace        = "blox-free-space"
 )
 
 type SeededRequest struct {
@@ -269,6 +270,15 @@ type ManifestRemoveStoredResponse struct {
 	PoolID   int    `json:"pool_id"`
 }
 
+type BloxFreeSpaceRequest struct {
+}
+type BloxFreeSpaceResponse struct {
+	Size          float32 `json:"size"`
+	Used          float32 `json:"used"`
+	Avail         float32 `json:"avail"`
+	UsePercentage float32 `json:"use_percentage"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -290,6 +300,7 @@ type Blockchain interface {
 	ManifestRemoveStorer(context.Context, peer.ID, ManifestRemoveStorerRequest) ([]byte, error)
 	ManifestRemoveStored(context.Context, peer.ID, ManifestRemoveStoredRequest) ([]byte, error)
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
+	BloxFreeSpace(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -311,6 +322,7 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
+	actionBloxFreeSpace:        reflect.TypeOf(BloxFreeSpaceRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -332,4 +344,5 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
+	actionBloxFreeSpace:        reflect.TypeOf(BloxFreeSpaceResponse{}),
 }
