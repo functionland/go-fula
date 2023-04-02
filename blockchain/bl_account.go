@@ -39,6 +39,9 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest)
 	case resp.StatusCode != http.StatusAccepted:
 		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
+		if err := bl.simpleKeyStorer.SaveKey(ctx, []byte(r.Seed)); err != nil {
+			return nil, err
+		}
 		return b, nil
 	}
 }

@@ -43,8 +43,9 @@ type (
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
 
-		bufPool *sync.Pool
-		reqPool *sync.Pool
+		bufPool         *sync.Pool
+		reqPool         *sync.Pool
+		simpleKeyStorer *SimpleKeyStorer
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -52,7 +53,7 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, o ...Option) (*FxBlockchain, error) {
+func NewFxBlockchain(h host.Host, simpleKeyStorer *SimpleKeyStorer, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
@@ -89,6 +90,7 @@ func NewFxBlockchain(h host.Host, o ...Option) (*FxBlockchain, error) {
 				return new(http.Request)
 			},
 		},
+		simpleKeyStorer: simpleKeyStorer,
 	}
 	if bl.authorizer != "" {
 		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
