@@ -31,7 +31,7 @@ func (c *Client) AccountCreate() ([]byte, error) {
 // TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) AccountFund(seed string, amount blockchain.BigInt, to string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.AccountFund(ctx, c.bloxPid, blockchain.AccountFundRequest{Seed: seed, Amount: amount, To: to})
+	return c.bl.AccountFund(ctx, c.bloxPid, blockchain.AccountFundRequest{Amount: amount, To: to})
 }
 
 // AccountBalance requests blox at Config.BloxAddr to get the balance of the account.
@@ -47,7 +47,7 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 // TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolCreate(seed string, poolName string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.PoolCreate(ctx, c.bloxPid, blockchain.PoolCreateRequest{Seed: seed, PoolName: poolName, PeerID: c.bloxPid.String()})
+	return c.bl.PoolCreate(ctx, c.bloxPid, blockchain.PoolCreateRequest{PoolName: poolName, PeerID: c.bloxPid.String()})
 }
 
 // PoolJoin requests blox at Config.BloxAddr to join a pool with the id.
@@ -56,7 +56,7 @@ func (c *Client) PoolCreate(seed string, poolName string) ([]byte, error) {
 // TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolJoin(seed string, poolID int) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{Seed: seed, PoolID: poolID, PeerID: c.bloxPid.String()})
+	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{PoolID: poolID, PeerID: c.bloxPid.String()})
 }
 
 // PoolJoin requests blox at Config.BloxAddr to cancel a join request for a pool with the id.
@@ -65,7 +65,7 @@ func (c *Client) PoolJoin(seed string, poolID int) ([]byte, error) {
 // TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolCancelJoin(seed string, poolID int) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.PoolCancelJoin(ctx, c.bloxPid, blockchain.PoolCancelJoinRequest{Seed: seed, PoolID: poolID})
+	return c.bl.PoolCancelJoin(ctx, c.bloxPid, blockchain.PoolCancelJoinRequest{PoolID: poolID})
 }
 
 // PoolListRequests requests blox at Config.BloxAddr to list the join request for a pool with the id.
@@ -95,7 +95,7 @@ func (c *Client) PoolUserList(poolID int) ([]byte, error) {
 // TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolVote(seed string, poolID int, account string, voteValue bool) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.PoolVote(ctx, c.bloxPid, blockchain.PoolVoteRequest{Seed: seed, PoolID: poolID, Account: account, VoteValue: voteValue})
+	return c.bl.PoolVote(ctx, c.bloxPid, blockchain.PoolVoteRequest{PoolID: poolID, Account: account, VoteValue: voteValue})
 }
 
 // PoolLeave requests blox at Config.BloxAddr to leave a pool with the id.
@@ -104,7 +104,7 @@ func (c *Client) PoolVote(seed string, poolID int, account string, voteValue boo
 // TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolLeave(seed string, poolID int) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{Seed: seed, PoolID: poolID})
+	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{PoolID: poolID})
 }
 
 // ManifestUpload requests blox at Config.BloxAddr to add a manifest(upload request)
@@ -119,14 +119,14 @@ func (c *Client) ManifestUpload(seed string, poolID int, ReplicationFactor int, 
 	manifestMetadata := blockchain.ManifestMetadata{
 		Job: manifestJob,
 	}
-	return c.bl.ManifestUpload(ctx, c.bloxPid, blockchain.ManifestUploadRequest{Seed: seed, PoolID: poolID, ReplicationFactor: ReplicationFactor, ManifestMetadata: manifestMetadata})
+	return c.bl.ManifestUpload(ctx, c.bloxPid, blockchain.ManifestUploadRequest{PoolID: poolID, ReplicationFactor: ReplicationFactor, ManifestMetadata: manifestMetadata})
 }
 
 // ManifestStore requests blox at Config.BloxAddr to store a manifest(store request)
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) ManifestStore(seed string, poolID int, uploader string, cid string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.ManifestStore(ctx, c.bloxPid, blockchain.ManifestStoreRequest{Seed: seed, PoolID: poolID, Uploader: uploader, Cid: cid})
+	return c.bl.ManifestStore(ctx, c.bloxPid, blockchain.ManifestStoreRequest{PoolID: poolID, Uploader: uploader, Cid: cid})
 }
 
 // ManifestAvailable requests blox at Config.BloxAddr to list manifests
@@ -140,19 +140,19 @@ func (c *Client) ManifestAvailable(poolID int) ([]byte, error) {
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) ManifestRemove(seed string, poolID int, cid string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.ManifestRemove(ctx, c.bloxPid, blockchain.ManifestRemoveRequest{Seed: seed, Cid: cid, PoolID: poolID})
+	return c.bl.ManifestRemove(ctx, c.bloxPid, blockchain.ManifestRemoveRequest{Cid: cid, PoolID: poolID})
 }
 
 // The uploader or admin can remove an account that is storing a given manifest.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) ManifestRemoveStorer(seed string, storage string, poolID int, cid string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.ManifestRemoveStorer(ctx, c.bloxPid, blockchain.ManifestRemoveStorerRequest{Seed: seed, Storage: storage, Cid: cid, PoolID: poolID})
+	return c.bl.ManifestRemoveStorer(ctx, c.bloxPid, blockchain.ManifestRemoveStorerRequest{Storage: storage, Cid: cid, PoolID: poolID})
 }
 
 // The storer can stop storing a given manifest
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) ManifestRemoveStored(seed string, uploader string, poolID int, cid string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.ManifestRemoveStored(ctx, c.bloxPid, blockchain.ManifestRemoveStoredRequest{Seed: seed, Uploader: uploader, Cid: cid, PoolID: poolID})
+	return c.bl.ManifestRemoveStored(ctx, c.bloxPid, blockchain.ManifestRemoveStoredRequest{Uploader: uploader, Cid: cid, PoolID: poolID})
 }

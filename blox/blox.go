@@ -51,6 +51,7 @@ func New(o ...Option) (*Blox, error) {
 		return nil, err
 	}
 	p.bl, err = blockchain.NewFxBlockchain(p.h,
+		blockchain.NewSimpleKeyStorer(),
 		blockchain.WithAuthorizer(p.authorizer),
 		blockchain.WithAllowTransientConnection(p.allowTransientConnection),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
