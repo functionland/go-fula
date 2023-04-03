@@ -130,7 +130,8 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 		bl.putReq(req)
 	}()
 
-	if err := json.NewEncoder(buf).Encode(p); err != nil {
+	preparedRequest := bl.PlugSeedIfNeeded(ctx, action, p)
+	if err := json.NewEncoder(buf).Encode(preparedRequest); err != nil {
 		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, method, addr, buf)
@@ -162,7 +163,29 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 	}
 }
 
+type ReqInterface interface{}
+
+func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
+	switch action {
+	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+		seed, err := bl.simpleKeyStorer.LoadKey(ctx)
+		if err != nil {
+			log.Errorw("seed is empty", "err", err)
+			seed = []byte{}
+		}
+		return struct {
+			ReqInterface
+			Seed string
+		}{
+			ReqInterface: req,
+			Seed:         string(seed),
+		}
+	default:
+		return req
+	}
+}
 func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
+
 	from, err := peer.Decode(r.RemoteAddr)
 	if err != nil {
 		log.Debug("cannot parse remote addr as peer ID: %v", err)

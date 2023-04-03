@@ -55,7 +55,6 @@ type AccountCreateResponse struct {
 }
 
 type AccountFundRequest struct {
-	Seed   string `json:"seed"`
 	Amount BigInt `json:"amount"`
 	To     string `json:"to"`
 }
@@ -73,7 +72,6 @@ type AccountBalanceResponse struct {
 }
 
 type PoolCreateRequest struct {
-	Seed     string `json:"seed"`
 	PoolName string `json:"pool_name"`
 	PeerID   string `json:"peer_id"`
 }
@@ -84,7 +82,6 @@ type PoolCreateResponse struct {
 }
 
 type PoolJoinRequest struct {
-	Seed   string `json:"seed"`
 	PoolID int    `json:"pool_id"`
 	PeerID string `json:"peer_id"`
 }
@@ -95,8 +92,7 @@ type PoolJoinResponse struct {
 }
 
 type PoolCancelJoinRequest struct {
-	Seed   string `json:"seed"`
-	PoolID int    `json:"pool_id"`
+	PoolID int `json:"pool_id"`
 }
 
 type PoolCancelJoinResponse struct {
@@ -151,7 +147,6 @@ type PoolUserListResponse struct {
 }
 
 type PoolVoteRequest struct {
-	Seed      string `json:"seed"`
 	PoolID    int    `json:"pool_id"`
 	Account   string `json:"account"`
 	VoteValue bool   `json:"vote_value"`
@@ -163,8 +158,7 @@ type PoolVoteResponse struct {
 }
 
 type PoolLeaveRequest struct {
-	Seed   string `json:"seed"`
-	PoolID int    `json:"pool_id"`
+	PoolID int `json:"pool_id"`
 }
 
 type PoolLeaveResponse struct {
@@ -183,7 +177,6 @@ type ManifestMetadata struct {
 }
 
 type ManifestUploadRequest struct {
-	Seed              string           `json:"seed"`
 	PoolID            int              `json:"pool_id"`
 	ReplicationFactor int              `json:"replication_factor"`
 	ManifestMetadata  ManifestMetadata `json:"manifest_metadata"`
@@ -198,7 +191,6 @@ type ManifestUploadResponse struct {
 
 type ManifestStoreRequest struct {
 	Uploader string `json:"uploader"`
-	Seed     string `json:"seed"`
 	Cid      string `json:"cid"`
 	PoolID   int    `json:"pool_id"`
 }
@@ -230,7 +222,6 @@ type ManifestAvailableResponse struct {
 }
 
 type ManifestRemoveRequest struct {
-	Seed   string `json:"seed"`
 	Cid    string `json:"cid"`
 	PoolID int    `json:"pool_id"`
 }
@@ -242,7 +233,6 @@ type ManifestRemoveResponse struct {
 }
 
 type ManifestRemoveStorerRequest struct {
-	Seed    string `json:"seed"`
 	Storage string `json:"storage"`
 	Cid     string `json:"cid"`
 	PoolID  int    `json:"pool_id"`
@@ -256,7 +246,6 @@ type ManifestRemoveStorerResponse struct {
 }
 
 type ManifestRemoveStoredRequest struct {
-	Seed     string `json:"seed"`
 	Uploader string `json:"uploader"`
 	Cid      string `json:"cid"`
 	PoolID   int    `json:"pool_id"`
