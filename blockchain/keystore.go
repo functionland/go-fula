@@ -15,12 +15,9 @@ type SimpleKeyStorer struct {
 	dbPath string
 }
 
-func NewSimpleKeyStorer(dbPath string) *SimpleKeyStorer {
-	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
-		log.Error("SimpleKeyStorer: can't make the required dirs, fallback to local dir")
-		dbPath = "."
-	}
-	return &SimpleKeyStorer{dbPath: dbPath}
+func NewSimpleKeyStorer() *SimpleKeyStorer {
+	// Saving the db in the local dir
+	return &SimpleKeyStorer{dbPath: "."}
 }
 
 func (s *SimpleKeyStorer) SaveKey(ctx context.Context, key []byte) error {
