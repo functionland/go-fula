@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
@@ -204,9 +205,22 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing peer_id", http.StatusBadRequest)
 		return
 	}
+	seed := r.FormValue("seed")
+	if seed == "" {
+		http.Error(w, "missing seed", http.StatusBadRequest)
+		return
+	}
+	keySotre := blockchain.NewSimpleKeyStorer()
+	if err := keySotre.SaveKey(r.Context(), []byte(seed)); err != nil {
+		http.Error(w, "saving the seed", http.StatusBadRequest)
+		log.Errorw("saving the seed", "err", err)
+		return
+	}
+
 	bloxPeerID, err := peerFunction(peerID)
 	if err != nil {
 		http.Error(w, "error while exchanging peers", http.StatusBadRequest)
+
 		return
 	}
 
