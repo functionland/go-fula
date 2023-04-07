@@ -43,9 +43,9 @@ type (
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
 
-		bufPool         *sync.Pool
-		reqPool         *sync.Pool
-		simpleKeyStorer *SimpleKeyStorer
+		bufPool   *sync.Pool
+		reqPool   *sync.Pool
+		keyStorer KeyStorer
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -53,7 +53,7 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, simpleKeyStorer *SimpleKeyStorer, o ...Option) (*FxBlockchain, error) {
+func NewFxBlockchain(h host.Host, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func NewFxBlockchain(h host.Host, simpleKeyStorer *SimpleKeyStorer, o ...Option)
 				return new(http.Request)
 			},
 		},
-		simpleKeyStorer: simpleKeyStorer,
+		keyStorer: keyStorer,
 	}
 	if bl.authorizer != "" {
 		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
@@ -168,7 +168,7 @@ type ReqInterface interface{}
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
 	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
-		seed, err := bl.simpleKeyStorer.LoadKey(ctx)
+		seed, err := bl.keyStorer.LoadKey(ctx)
 		if err != nil {
 			log.Errorw("seed is empty", "err", err)
 			seed = []byte{}
