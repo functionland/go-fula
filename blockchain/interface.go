@@ -262,10 +262,10 @@ type ManifestRemoveStoredResponse struct {
 type BloxFreeSpaceRequest struct {
 }
 type BloxFreeSpaceResponse struct {
-	Size          float32 `json:"size"`
-	Used          float32 `json:"used"`
-	Avail         float32 `json:"avail"`
-	UsePercentage float32 `json:"use_percentage"`
+	Size           float32 `json:"size"`
+	Used           float32 `json:"used"`
+	Avail          float32 `json:"avail"`
+	UsedPercentage float32 `json:"used_percentage"`
 }
 
 type Blockchain interface {
