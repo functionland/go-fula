@@ -156,3 +156,9 @@ func (c *Client) ManifestRemoveStored(seed string, uploader string, poolID int, 
 	ctx := context.TODO()
 	return c.bl.ManifestRemoveStored(ctx, c.bloxPid, blockchain.ManifestRemoveStoredRequest{Uploader: uploader, Cid: cid, PoolID: poolID})
 }
+
+// BloxFreeSpace requests the blox avail/used free space information.
+func (c *Client) BloxFreeSpace() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.BloxFreeSpace(ctx, c.bloxPid)
+}
