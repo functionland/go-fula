@@ -157,8 +157,16 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ssid := r.FormValue("ssid")
+	if ssid == "" {
+		http.Error(w, "missing ssid", http.StatusBadRequest)
+		return
+	}
 	password := r.FormValue("password")
 
+	if password == "" {
+		http.Error(w, "missing password", http.StatusBadRequest)
+		return
+	}
 	credential := wifi.Credentials{
 		SSID:        ssid,
 		Password:    password,
@@ -169,13 +177,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	err := wifi.ConnectWifi(ctx, credential)
 	if err != nil {
 		log.Errorw("failed to connect to wifi", "err", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		jsonErr := json.NewEncoder(w).Encode("Couldn't Connect")
-		if jsonErr != nil {
-			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "coudn't connect", http.StatusBadRequest)
 		return
 	}
 
