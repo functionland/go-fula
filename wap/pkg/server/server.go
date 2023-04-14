@@ -169,7 +169,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Errorw("failed to connect to wifi", "err", err)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusInternalServerError)
 		jsonErr := json.NewEncoder(w).Encode("Couldn't Connect")
 		if jsonErr != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
