@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
@@ -156,28 +157,41 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ssid := r.FormValue("ssid")
-	if ssid == "" {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "reading response body", http.StatusBadRequest)
+		log.Errorw("reading response body", "w", w, "err", err)
+		return
+	}
+	var t struct {
+		Ssid     string
+		Password string
+	}
+	err = json.Unmarshal(body, &t)
+	if err != nil {
+		http.Error(w, "decoding response body", http.StatusBadRequest)
+		log.Errorw("decoding response body", "w", w, "err", err)
+		return
+	}
+	if t.Ssid == "" {
 		http.Error(w, "missing ssid", http.StatusBadRequest)
 		return
 	}
-	password := r.FormValue("password")
-
-	if password == "" {
+	if t.Password == "" {
 		http.Error(w, "missing password", http.StatusBadRequest)
 		return
 	}
 	credential := wifi.Credentials{
-		SSID:        ssid,
-		Password:    password,
+		SSID:        t.Ssid,
+		Password:    t.Password,
 		CountryCode: config.COUNTRY,
 	}
 	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
 	defer cl()
-	err := wifi.ConnectWifi(ctx, credential)
+	err = wifi.ConnectWifi(ctx, credential)
 	if err != nil {
 		log.Errorw("failed to connect to wifi", "err", err)
-		http.Error(w, "coudn't connect", http.StatusBadRequest)
+		http.Error(w, "couldn't connect", http.StatusBadRequest)
 		return
 	}
 
