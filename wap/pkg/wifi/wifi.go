@@ -66,6 +66,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 		time.Sleep(3 * time.Second)
 		if err != nil {
 			log.Errorw("failed to finish wifi setup", "command", command, "err", err)
+			return err
 		}
 	}
 	if err := CheckIfIsConnected(ctx); err != nil {
@@ -87,7 +88,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 		"connection":   connectionName,
 		"country_code": creds.CountryCode,
 	}); err != nil {
-		log.Errorf("Couldn't write the properties file: %v", err)
+		log.Warnf("Couldn't write the properties file: %v", err)
 	}
 	return nil
 }

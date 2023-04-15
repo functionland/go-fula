@@ -2,3 +2,4 @@ dist
 .vscode
 **.env
 */**/tmp
+wap/wap
