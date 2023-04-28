@@ -2,12 +2,12 @@ package blockchain
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
+	"io"
+	"net/http"
 
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -18,18 +18,28 @@ const (
 )
 
 func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
-	var stat unix.Statfs_t
-	unix.Statfs(os.Getenv("FULA_BLOX_STORE_DIR"), &stat)
-
-	var Size float32 = float32(stat.Blocks * uint64(stat.Bsize))
-	var Avail float32 = float32(stat.Bfree * uint64(stat.Bsize))
-	var Used float32 = float32(Size - Avail)
-	out := BloxFreeSpaceResponse{
-		Size:           Size / float32(GB),
-		Avail:          Avail / float32(GB),
-		Used:           Used / float32(GB),
-		UsedPercentage: Used / Size * 100.0,
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
 	}
-	fmt.Fprintf(os.Stdout, "out: %v", out)
-	return json.Marshal(out)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionBloxFreeSpace, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+	default:
+		return b, nil
+	}
+
 }
