@@ -20,7 +20,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -328,34 +327,20 @@ func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter,
 
 func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", actionBloxFreeSpace, "from", from)
-	stat := unix.Statfs_t{}
 
-	err := unix.Statfs(os.Getenv("FULA_BLOX_STORE_DIR"), &stat)
+	bloxFreeSpace, err := getBloxFreeSpace()
 	if err != nil {
-		log.Errorw("calling unix.Statfs", "storeDir", os.Getenv("FULA_BLOX_STORE_DIR"))
-		http.Error(w, "calling unix.Statfs", http.StatusInternalServerError)
+		log.Errorw("calling getBloxFreeSpace", "storeDir", os.Getenv("FULA_BLOX_STORE_DIR"), "err", err)
+		http.Error(w, "error while getting the blox free space information", http.StatusInternalServerError)
 		return
 	}
-	var Size float32 = float32(stat.Blocks * uint64(stat.Bsize))
-	var Avail float32 = float32(stat.Bfree * uint64(stat.Bsize))
-	var Used float32 = float32(Size - Avail)
-	var UsedPercentage float32 = 0.0
-	if Size > 0.0 {
-		UsedPercentage = Used / Size * 100.0
-	}
-	out := BloxFreeSpaceResponse{
-		Size:           Size / float32(GB),
-		Avail:          Avail / float32(GB),
-		Used:           Used / float32(GB),
-		UsedPercentage: UsedPercentage,
-	}
+
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(out); err != nil {
+	if err := json.NewEncoder(w).Encode(bloxFreeSpace); err != nil {
 		log.Error("failed to write response: %v", err)
 		http.Error(w, "failed to write response", http.StatusInternalServerError)
 		return
 	}
-
 }
 
 func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
