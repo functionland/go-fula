@@ -16,7 +16,7 @@ import (
 )
 
 var log = logging.Logger("fula/wap/server")
-var peerFunction func(clientPeerId string) (string, error)
+var peerFunction func(clientPeerId string, bloxSeed string) (string, error)
 
 func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/properties" {
@@ -25,15 +25,23 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		p, err := config.ReadProperties()
+		hardwareID, err := wifi.GetHardwareID()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("error getting hardwareID, %v", err), http.StatusInternalServerError)
 			return
 		}
-		p["name"] = config.PROJECT_NAME
+
+		p, err := config.ReadProperties()
+		response := make(map[string]interface{})
+		if err == nil {
+			response = p
+			response["name"] = config.PROJECT_NAME
+		}
+		response["hardwareID"] = hardwareID
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		jsonErr := json.NewEncoder(w).Encode(p)
+		jsonErr := json.NewEncoder(w).Encode(response)
 		if jsonErr != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			return
@@ -207,11 +215,33 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing peer_id", http.StatusBadRequest)
 		return
 	}
+
 	seed := r.FormValue("seed")
 	if seed == "" {
 		http.Error(w, "missing seed", http.StatusBadRequest)
 		return
 	}
+
+	hardwareID, err := wifi.GetHardwareID()
+	if err != nil || hardwareID == "" {
+		hardwareID, err = wifi.GenerateRandomString(32)
+		if err != nil || hardwareID == "" {
+			http.Error(w, "failed to create a random ID or get hardwareID", http.StatusBadRequest)
+			return
+		}
+	}
+
+	seedByte := []byte(seed)
+	// Convert byte slice to string
+	seedString := string(seedByte)
+
+	combinedSeed := hardwareID + seedString
+	bloxPrivKey, err := wifi.GeneratePrivateKeyFromSeed(combinedSeed)
+	if err != nil {
+		http.Error(w, "failed to create bloxPrivKey", http.StatusBadRequest)
+		return
+	}
+
 	keySotre := blockchain.NewSimpleKeyStorer()
 	if err := keySotre.SaveKey(r.Context(), []byte(seed)); err != nil {
 		http.Error(w, "saving the seed", http.StatusBadRequest)
@@ -219,7 +249,7 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bloxPeerID, err := peerFunction(peerID)
+	bloxPeerID, err := peerFunction(peerID, bloxPrivKey)
 	if err != nil {
 		http.Error(w, "error while exchanging peers", http.StatusBadRequest)
 
@@ -323,7 +353,7 @@ func getNonLoopbackIP() (string, error) {
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
-func Serve(peerFn func(clientPeerId string) (string, error), ip string, port string) io.Closer {
+func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string) io.Closer {
 	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readiness", readinessHandler)

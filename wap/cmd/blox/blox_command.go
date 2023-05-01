@@ -13,8 +13,8 @@ import (
 
 var log = logging.Logger("fula/wap/blox")
 
-func BloxCommandInitOnly(clientPeerId string) (string, error) {
-	command := fmt.Sprintf(config.BLOX_COMMAND, clientPeerId)
+func BloxCommandInitOnly(clientPeerId string, bloxSeed string) (string, error) {
+	command := fmt.Sprintf(config.BLOX_COMMAND, clientPeerId, bloxSeed)
 	log.Infof("trying to run the blox command: %s", command)
 	ctxCommand, cl := context.WithTimeout(context.Background(), time.Second*10)
 	defer cl()
