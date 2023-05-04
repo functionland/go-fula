@@ -43,7 +43,10 @@ loop:
 		timeout2 := time.After(30 * time.Second)
 		ticker2 := time.NewTicker(3 * time.Second)
 		log.Info("Wi-Fi is not connected")
-		_ = wifi.ConnectToSavedWifi(ctx)
+		err := wifi.ConnectToSavedWifi(ctx)
+		if err != nil {
+			log.Errorw("Connectin to saved wifi failed with error", "err", err)
+		}
 	loop2:
 		for {
 			select {
