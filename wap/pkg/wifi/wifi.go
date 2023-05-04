@@ -166,7 +166,14 @@ func connectToFirstWifi(ctx context.Context, connections []string) error {
 	}
 
 	_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection up %s passwd-file %s", connection, tempFile.Name()))
-	return err
+
+	if err != nil {
+		DeleteConnection(ctx, connection)
+		createConnection(ctx, connection, connection, passwd)
+		err = connectToNetwork(ctx, connection)
+		return err
+	}
+	return nil
 }
 
 func ConnectToSavedWifi(ctx context.Context) error {
