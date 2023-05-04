@@ -24,20 +24,16 @@ func main() {
 	ticker := time.NewTicker(2 * time.Second)
 
 	var isConnected bool
-
+loop:
 	for {
 		select {
 		case <-timeout:
-			break // Exit the loop when the timeout is reached
+			break loop
 		case <-ticker.C:
 			if wifi.CheckIfIsConnected(ctx) == nil {
 				isConnected = true
-				break // Exit the loop when the Wi-Fi connection is established
+				break loop
 			}
-		}
-
-		if isConnected {
-			break // Exit the loop when the Wi-Fi connection is established
 		}
 	}
 
