@@ -153,7 +153,22 @@ func connectToNetwork(ctx context.Context, connectionName string) error {
 	}
 
 	time.Sleep(10 * time.Second)
-	return CheckIfIsConnected(ctx)
+	if err := CheckIfIsConnected(ctx); err != nil {
+		return err
+
+	} else {
+		setAutoconnect := fmt.Sprintf("nmcli connection modify %s connection.autoconnect yes", connectionName)
+		setPriority := fmt.Sprintf("nmcli connection modify %s connection.autoconnect-priority 20", connectionName)
+		_, _, err := runCommand(ctx, setAutoconnect)
+		if err != nil {
+			return err
+		}
+		_, _, err = runCommand(ctx, setPriority)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
 func activateHotspot(ctx context.Context) {

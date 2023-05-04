@@ -19,9 +19,8 @@ func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
 	log.Info("Waiting for the system to connect to Wi-Fi")
-	_ = wifi.ConnectToSavedWifi(ctx)
 
-	timeout := time.After(60 * time.Second)
+	timeout := time.After(45 * time.Second)
 	ticker := time.NewTicker(2 * time.Second)
 
 	var isConnected bool
@@ -42,6 +41,25 @@ loop:
 
 	if !isConnected {
 		log.Info("Wi-Fi is not connected")
+		_ = wifi.ConnectToSavedWifi(ctx)
+	loop2:
+		for {
+			select {
+			case <-timeout:
+				log.Info("Waiting for the system to connect to saved Wi-Fi timeout passed")
+				break loop2
+			case <-ticker.C:
+				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
+				if wifi.CheckIfIsConnected(ctx) == nil {
+					isConnected = true
+					break loop2
+				}
+			}
+		}
+	}
+
+	if !isConnected {
+		log.Info("Wi-Fi is still not connected and system is activating hte hotspot mode")
 		if err := wifi.StartHotspot(ctx, true); err != nil {
 			log.Errorw("start hotspot on startup", "err", err)
 		}
