@@ -21,7 +21,7 @@ func main() {
 	log.Info("Waiting for the system to connect to Wi-Fi")
 
 	timeout := time.After(45 * time.Second)
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 
 	var isConnected bool
 loop:
@@ -40,15 +40,17 @@ loop:
 	}
 
 	if !isConnected {
+		timeout2 := time.After(30 * time.Second)
+		ticker2 := time.NewTicker(3 * time.Second)
 		log.Info("Wi-Fi is not connected")
 		_ = wifi.ConnectToSavedWifi(ctx)
 	loop2:
 		for {
 			select {
-			case <-timeout:
+			case <-timeout2:
 				log.Info("Waiting for the system to connect to saved Wi-Fi timeout passed")
 				break loop2
-			case <-ticker.C:
+			case <-ticker2.C:
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
