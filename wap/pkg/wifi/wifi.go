@@ -1,6 +1,7 @@
 package wifi
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -103,6 +104,45 @@ func createConnection(ctx context.Context, connectionName, ssid, password string
 	}
 
 	return nil
+}
+
+func getWifiConnections(ctx context.Context) ([]string, error) {
+	stdout, _, err := runCommand(ctx, "nmcli --terse --fields TYPE,NAME connection")
+	if err != nil {
+		return nil, err
+	}
+
+	lines := bufio.NewScanner(strings.NewReader(stdout))
+	var connections []string
+	for lines.Scan() {
+		line := lines.Text()
+		parts := strings.Split(line, ":")
+		if len(parts) == 2 && parts[0] == "802-11-wireless" && parts[1] != "FxBlox" {
+			connections = append(connections, parts[1])
+		}
+	}
+
+	return connections, nil
+}
+
+func connectToFirstWifi(ctx context.Context, connections []string) error {
+	if len(connections) == 0 {
+		return fmt.Errorf("no Wi-Fi connections available")
+	}
+
+	connection := connections[0]
+	_, _, err := runCommand(ctx, fmt.Sprintf("nmcli connection up %s", connection))
+	return err
+}
+
+func ConnectToSavedWifi(ctx context.Context) error {
+	connections, err := getWifiConnections(ctx)
+	if err != nil {
+		fmt.Println("Error getting Wi-Fi connections:", err)
+		return err
+	}
+
+	return connectToFirstWifi(ctx, connections)
 }
 
 func connectToNetwork(ctx context.Context, connectionName string) error {

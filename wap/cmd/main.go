@@ -19,6 +19,7 @@ func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
 	log.Info("Waiting for the system to connect to Wi-Fi")
+	wifi.ConnectToSavedWifi(ctx)
 
 	timeout := time.After(30 * time.Second)
 	ticker := time.NewTicker(2 * time.Second)
