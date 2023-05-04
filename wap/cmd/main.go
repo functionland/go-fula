@@ -19,8 +19,8 @@ func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
 	log.Info("Waiting for the system to connect to Wi-Fi")
-
-	timeout := time.After(45 * time.Second)
+	wifi.DeleteConnection(ctx, "FxBlox")
+	timeout := time.After(60 * time.Second)
 	ticker := time.NewTicker(5 * time.Second)
 
 	var isConnected bool
@@ -45,7 +45,7 @@ loop:
 		log.Info("Wi-Fi is not connected")
 		err := wifi.ConnectToSavedWifi(ctx)
 		if err != nil {
-			log.Errorw("Connectin to saved wifi failed with error", "err", err)
+			log.Errorw("Connecting to saved wifi failed with error", "err", err)
 		}
 	loop2:
 		for {

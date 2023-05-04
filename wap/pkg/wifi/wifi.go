@@ -51,7 +51,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	connectionName := strings.ReplaceAll(creds.SSID, " ", "_")
 
 	// Delete existing connection with the same name
-	deleteConnection(ctx, connectionName)
+	DeleteConnection(ctx, connectionName)
 
 	// Create a new connection
 	if err := createConnection(ctx, connectionName, creds.SSID, creds.Password); err != nil {
@@ -63,13 +63,13 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	// Try connecting to the Wi-Fi network
 	if err := connectToNetwork(ctx, connectionName); err != nil {
 		log.Errorf("failed to connect to Wi-Fi: %v", err)
-		deleteConnection(ctx, connectionName)
+		DeleteConnection(ctx, connectionName)
 		activateHotspot(ctx)
 		return err
 	}
 
 	// If connected successfully, delete the hotspot
-	deleteConnection(ctx, "FxBlox")
+	DeleteConnection(ctx, "FxBlox")
 
 	// Save connection properties
 	if err := config.WriteProperties(map[string]interface{}{
@@ -84,7 +84,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	return nil
 }
 
-func deleteConnection(ctx context.Context, connectionName string) {
+func DeleteConnection(ctx context.Context, connectionName string) {
 	command := fmt.Sprintf("nmcli con delete %s", connectionName)
 	_, _, err := runCommand(ctx, command)
 	if err != nil {
