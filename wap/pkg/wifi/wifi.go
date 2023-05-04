@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -145,7 +147,25 @@ func connectToFirstWifi(ctx context.Context, connections []string) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection up %s passwd-file <(printf %s:%s)>.txt", connection, "802-11-wireless-security.psk", passwd))
+
+	// Create a temporary file
+	tempFile, err := ioutil.TempFile("", "passwd-")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	// Write the password to the temporary file
+	_, err = tempFile.WriteString(fmt.Sprintf("802-11-wireless-security.psk:%s", passwd))
+	if err != nil {
+		return fmt.Errorf("failed to write password to temporary file: %w", err)
+	}
+	err = tempFile.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+
+	_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection up %s passwd-file %s", connection, tempFile.Name()))
 	return err
 }
 
