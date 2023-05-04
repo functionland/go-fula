@@ -125,13 +125,27 @@ func getWifiConnections(ctx context.Context) ([]string, error) {
 	return connections, nil
 }
 
+func getWiFiPassword(connectionName string) (string, error) {
+	ctx := context.Background()
+	command := fmt.Sprintf("nmcli -s -g 802-11-wireless-security.psk connection show %s | tr -d '\n'", connectionName)
+	stdout, stderr, err := runCommand(ctx, command)
+	if err != nil {
+		return "", fmt.Errorf("error running command: %w; stderr: %s", err, stderr)
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
 func connectToFirstWifi(ctx context.Context, connections []string) error {
 	if len(connections) == 0 {
 		return fmt.Errorf("no Wi-Fi connections available")
 	}
 
 	connection := connections[0]
-	_, _, err := runCommand(ctx, fmt.Sprintf("nmcli connection up %s", connection))
+	passwd, err := getWiFiPassword(connection)
+	if err != nil {
+		return err
+	}
+	_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection up %s passwd-file <(printf %s:%s)>.txt", connection, "802-11-wireless-security.psk", passwd))
 	return err
 }
 
