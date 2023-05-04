@@ -18,21 +18,37 @@ var log = logging.Logger("fula/wap/main")
 func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
-	log.Info("waiting 10s for system to connect to wifi")
-	time.Sleep(10 * time.Second)
-	if wifi.CheckIfIsConnected(ctx) != nil {
-		log.Info("Wifi is not connected")
+	log.Info("Waiting for the system to connect to Wi-Fi")
+
+	timeout := time.After(30 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
+
+	var isConnected bool
+
+	for {
+		select {
+		case <-timeout:
+			break // Exit the loop when the timeout is reached
+		case <-ticker.C:
+			if wifi.CheckIfIsConnected(ctx) == nil {
+				isConnected = true
+				break // Exit the loop when the Wi-Fi connection is established
+			}
+		}
+
+		if isConnected {
+			break // Exit the loop when the Wi-Fi connection is established
+		}
+	}
+
+	if !isConnected {
+		log.Info("Wi-Fi is not connected")
 		if err := wifi.StartHotspot(ctx, true); err != nil {
 			log.Errorw("start hotspot on startup", "err", err)
 		}
 		log.Info("Access point enabled on startup")
 	} else {
-		// TODO: this code seems unused while using nmcli
-		log.Info("Wifi already connected")
-		// if err := wifi.StopHotspot(ctx); err != nil {
-		// 	log.Errorw("stop hotspot on startup", "err", err)
-		// }
-		// log.Info("Access point disabled on startup")
+		log.Info("Wi-Fi already connected")
 	}
 
 	closer := server.Serve(blox.BloxCommandInitOnly, "", "")

@@ -45,51 +45,30 @@ func DisconnectWifi(ctx context.Context) error {
 }
 
 func connectLinux(ctx context.Context, creds Credentials) error {
-	// Create a connection
 	connectionName := strings.ReplaceAll(creds.SSID, " ", "_")
-	c0 := strings.Join([]string{"nmcli", "con", "delete", connectionName}, " ")
-	c1 := strings.Join([]string{"nmcli", "con", "add", "type",
-		"wifi", "ifname", "*", "con-name", connectionName, "ssid", creds.SSID}, " ")
-	// Set the Wi-Fi password
-	c2 := strings.Join([]string{"nmcli", "con", "modify", connectionName,
-		"wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", creds.Password}, " ")
-	// Connect to the Wi-Fi network
-	c3 := strings.Join([]string{"nmcli", "con", "up", connectionName}, " ")
-	commands := []string{c0, c1, c2, c3}
-	/*err := runCommands(ctx, []string{c1, c2, c3})
-	if err != nil {
-		runCommand(ctx, "nmcli connection up FxBlox")
+
+	// Delete existing connection with the same name
+	deleteConnection(ctx, connectionName)
+
+	// Create a new connection
+	if err := createConnection(ctx, connectionName, creds.SSID, creds.Password); err != nil {
+		log.Errorf("failed to create Wi-Fi connection: %v", err)
+		activateHotspot(ctx)
 		return err
-	}*/
-	for _, command := range commands {
-		_, _, err := runCommand(ctx, command)
-		time.Sleep(3 * time.Second)
-		if err != nil {
-			log.Errorw("failed to finish wifi setup", "command", command, "err", err)
-			return err
-		}
 	}
-	time.Sleep(5 * time.Second)
-	if err := CheckIfIsConnected(ctx); err != nil {
-		c4 := strings.Join([]string{"nmcli", "con", "delete", connectionName}, " ")
-		c5 := strings.Join([]string{"nmcli", "connection", "up", "FxBlox"}, " ")
-		commands2 := []string{c4, c5}
-		for _, command := range commands2 {
-			_, _, err := runCommand(ctx, command)
-			time.Sleep(3 * time.Second)
-			if err != nil {
-				log.Errorw("failed to finish wifi setup", "command", command, "err", err)
-			}
-		}
+
+	// Try connecting to the Wi-Fi network
+	if err := connectToNetwork(ctx, connectionName); err != nil {
+		log.Errorf("failed to connect to Wi-Fi: %v", err)
+		deleteConnection(ctx, connectionName)
+		activateHotspot(ctx)
 		return err
-	} else {
-		c6 := strings.Join([]string{"nmcli", "con", "delete", "FxBlox"}, " ")
-		_, _, err := runCommand(ctx, c6)
-		time.Sleep(3 * time.Second)
-		if err != nil {
-			log.Errorw("failed to finish wifi setup", "command", c6, "err", err)
-		}
 	}
+
+	// If connected successfully, delete the hotspot
+	deleteConnection(ctx, "FxBlox")
+
+	// Save connection properties
 	if err := config.WriteProperties(map[string]interface{}{
 		"ssid":         creds.SSID,
 		"password":     creds.Password,
@@ -98,7 +77,51 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	}); err != nil {
 		log.Warnf("Couldn't write the properties file: %v", err)
 	}
+
 	return nil
+}
+
+func deleteConnection(ctx context.Context, connectionName string) {
+	command := fmt.Sprintf("nmcli con delete %s", connectionName)
+	_, _, err := runCommand(ctx, command)
+	if err != nil {
+		log.Warnf("failed to delete connection %s: %v", connectionName, err)
+	}
+}
+
+func createConnection(ctx context.Context, connectionName, ssid, password string) error {
+	// Create a connection
+	c1 := fmt.Sprintf("nmcli con add type wifi ifname * con-name %s ssid %s", connectionName, ssid)
+	c2 := fmt.Sprintf("nmcli con modify %s wifi-sec.key-mgmt wpa-psk wifi-sec.psk %s", connectionName, password)
+
+	commands := []string{c1, c2}
+	for _, command := range commands {
+		_, _, err := runCommand(ctx, command)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func connectToNetwork(ctx context.Context, connectionName string) error {
+	c3 := fmt.Sprintf("nmcli con up %s", connectionName)
+	_, _, err := runCommand(ctx, c3)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(10 * time.Second)
+	return CheckIfIsConnected(ctx)
+}
+
+func activateHotspot(ctx context.Context) {
+	c5 := "nmcli connection up FxBlox"
+	_, _, err := runCommand(ctx, c5)
+	if err != nil {
+		log.Warnf("failed to activate hotspot: %v", err)
+	}
 }
 
 func checkIfIsConnectedLinux(ctx context.Context) error {
