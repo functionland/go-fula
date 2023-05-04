@@ -19,9 +19,9 @@ func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
 	log.Info("Waiting for the system to connect to Wi-Fi")
-	wifi.ConnectToSavedWifi(ctx)
+	_ = wifi.ConnectToSavedWifi(ctx)
 
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(60 * time.Second)
 	ticker := time.NewTicker(2 * time.Second)
 
 	var isConnected bool
@@ -29,8 +29,10 @@ loop:
 	for {
 		select {
 		case <-timeout:
+			log.Info("Waiting for the system to connect to Wi-Fi timeout passed")
 			break loop
 		case <-ticker.C:
+			log.Info("Waiting for the system to connect to Wi-Fi periodic check")
 			if wifi.CheckIfIsConnected(ctx) == nil {
 				isConnected = true
 				break loop
