@@ -95,7 +95,7 @@ func DeleteConnection(ctx context.Context, connectionName string) {
 
 func createConnection(ctx context.Context, connectionName, ssid, password string) error {
 	// Create a connection
-	c1 := fmt.Sprintf("nmcli con add type wifi ifname * con-name %s ssid %s", connectionName, ssid)
+	c1 := fmt.Sprintf("nmcli con add type wifi con-name %s autoconnect yes wifi.ssid %s ipv4.method shared ipv6.method shared", connectionName, ssid)
 	c2 := fmt.Sprintf("nmcli con modify %s wifi-sec.key-mgmt wpa-psk wifi-sec.psk %s", connectionName, password)
 
 	commands := []string{c1, c2}
