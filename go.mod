@@ -24,6 +24,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require gopkg.in/ini.v1 v1.67.0 // indirect
+
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect

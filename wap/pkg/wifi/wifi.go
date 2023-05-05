@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
+	"gopkg.in/ini.v1"
 )
 
 type Credentials struct {
@@ -127,12 +128,26 @@ func getWifiConnections(ctx context.Context) ([]string, error) {
 	return connections, nil
 }
 
+func readWiFiPasswordFromFile(connectionName string) (string, error) {
+	cfg, err := ini.Load(fmt.Sprintf("/etc/NetworkManager/system-connections/%s.nmconnection", connectionName))
+	if err != nil {
+		return "", fmt.Errorf("Failed to read file: %v", err)
+	}
+
+	psk := cfg.Section("wifi-security").Key("psk").String()
+	return psk, nil
+}
+
 func getWiFiPassword(connectionName string) (string, error) {
 	ctx := context.Background()
 	command := fmt.Sprintf("nmcli -s -g 802-11-wireless-security.psk connection show %s | tr -d '\n'", connectionName)
 	stdout, stderr, err := runCommand(ctx, command)
 	if err != nil {
-		return "", fmt.Errorf("error running command: %w; stderr: %s", err, stderr)
+		// Try reading the password from the file
+		stdout, err = readWiFiPasswordFromFile(connectionName)
+		if err != nil {
+			return "", fmt.Errorf("error running command: %w; stderr: %s", err, stderr)
+		}
 	}
 	return strings.TrimSpace(stdout), nil
 }
