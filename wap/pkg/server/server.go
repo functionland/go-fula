@@ -31,6 +31,12 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		bloxFreeSpace, err := wifi.GetBloxFreeSpace()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
+			return
+		}
+
 		p, err := config.ReadProperties()
 		response := make(map[string]interface{})
 		if err == nil {
@@ -38,6 +44,7 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 			response["name"] = config.PROJECT_NAME
 		}
 		response["hardwareID"] = hardwareID
+		response["bloxFreeSpace"] = bloxFreeSpace
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
