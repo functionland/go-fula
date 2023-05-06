@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,7 +25,7 @@ func main() {
 	// Check if "/internal/config.yaml" file exists
 	configExists := true
 	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
-		log.Error("File /internal/config.yaml does not exist")
+		log.Info("File /internal/config.yaml does not exist")
 		configExists = false
 	} else {
 		log.Info("File /internal/config.yaml exists")
@@ -40,6 +41,16 @@ func main() {
 	} else {
 		log.Info("Wi-Fi already connected")
 	}
+
+	// Start the server in a separate goroutine
+	serverCloser := make(chan io.Closer, 1)
+	stopServer := make(chan struct{}, 1)
+	go func() {
+		closer := server.Serve(blox.BloxCommandInitOnly, "", "")
+		serverCloser <- closer
+		<-stopServer
+		closer.Close()
+	}()
 
 	if !isConnected && configExists {
 		timeout2 := time.After(30 * time.Second)
@@ -59,13 +70,17 @@ func main() {
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
+					stopServer <- struct{}{}
 					break loop2
 				}
 			}
 		}
+	} else if isConnected {
+		log.Info("Wi-Fi is already connected")
+		stopServer <- struct{}{}
 	}
 
-	ticker3 := time.NewTicker(300 * time.Second) // Check the connection every 300 seconds
+	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 300 seconds
 
 	for range ticker3.C {
 		err := wifi.CheckConnection(5 * time.Second)
@@ -79,10 +94,17 @@ func main() {
 		}
 	}
 
-	closer := server.Serve(blox.BloxCommandInitOnly, "", "")
+	// Wait for the signal to terminate
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	log.Info("Shutting down wap")
-	closer.Close()
+
+	// Close the server
+	select {
+	case closer := <-serverCloser:
+		closer.Close()
+	default:
+		log.Info("Server not started, nothing to close")
+	}
 }
