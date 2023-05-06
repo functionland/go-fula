@@ -21,6 +21,15 @@ func main() {
 
 	isConnected := false
 
+	// Check if "/internal/config.yaml" file exists
+	configExists := true
+	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
+		log.Error("File /internal/config.yaml does not exist")
+		configExists = false
+	} else {
+		log.Info("File /internal/config.yaml exists")
+	}
+
 	log.Info("Waiting for the system to connect to Wi-Fi")
 	if !isConnected {
 		log.Info("Wi-Fi is still not connected and system is activating the hotspot mode")
@@ -32,7 +41,7 @@ func main() {
 		log.Info("Wi-Fi already connected")
 	}
 
-	if !isConnected {
+	if !isConnected && configExists {
 		timeout2 := time.After(30 * time.Second)
 		ticker2 := time.NewTicker(3 * time.Second)
 		log.Info("Wi-Fi is not connected")
