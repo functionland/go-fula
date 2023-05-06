@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/sys/unix"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -33,6 +35,11 @@ var (
 
 	log = logging.Logger("fula/blockchain")
 )
+
+type Config struct {
+	StoreDir string `yaml:"storeDir"`
+	// other fields
+}
 
 type (
 	FxBlockchain struct {
@@ -330,9 +337,29 @@ func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter,
 	log := log.With("action", actionBloxFreeSpace, "from", from)
 	stat := unix.Statfs_t{}
 
-	err := unix.Statfs(os.Getenv("FULA_BLOX_STORE_DIR"), &stat)
+	storeDir := os.Getenv("FULA_BLOX_STORE_DIR")
+
+	if storeDir == "" {
+		configFile := "/internal/config.yaml"
+		if _, err := os.Stat(configFile); !os.IsNotExist(err) {
+			data, err := ioutil.ReadFile(configFile)
+			if err != nil {
+				log.Error("failed to read config file")
+			} else {
+				var config Config
+				err = yaml.Unmarshal(data, &config)
+				if err != nil {
+					log.Error("failed to unmarshal config")
+				} else {
+					storeDir = config.StoreDir
+				}
+			}
+		}
+	}
+
+	err := unix.Statfs(storeDir, &stat)
 	if err != nil {
-		log.Errorw("calling unix.Statfs", "storeDir", os.Getenv("FULA_BLOX_STORE_DIR"))
+		log.Errorw("calling unix.Statfs", "storeDir", storeDir)
 		http.Error(w, "calling unix.Statfs", http.StatusInternalServerError)
 		return
 	}
