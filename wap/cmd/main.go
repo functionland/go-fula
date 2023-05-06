@@ -65,7 +65,7 @@ func main() {
 		}
 	}
 
-	ticker3 := time.NewTicker(5 * time.Second) // Check the connection every 5 seconds
+	ticker3 := time.NewTicker(300 * time.Second) // Check the connection every 300 seconds
 
 	for range ticker3.C {
 		err := wifi.CheckConnection(5 * time.Second)
