@@ -85,9 +85,12 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	log := log.With("action", "GetBloxFreeSpace")
 	stat := unix.Statfs_t{}
 
-	storeDir := os.Getenv("FULA_BLOX_STORE_DIR")
+	storeDir := "/uniondrive" // Set the default value
 
-	if storeDir == "" {
+	envStoreDir := os.Getenv("FULA_BLOX_STORE_DIR")
+	if envStoreDir != "" {
+		storeDir = envStoreDir
+	} else {
 		configFile := "/internal/config.yaml"
 		if _, err := os.Stat(configFile); !os.IsNotExist(err) {
 			data, err := ioutil.ReadFile(configFile)
@@ -98,7 +101,7 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 				err = yaml.Unmarshal(data, &config)
 				if err != nil {
 					log.Error("failed to unmarshal config")
-				} else {
+				} else if config.StoreDir != "" {
 					storeDir = config.StoreDir
 				}
 			}
