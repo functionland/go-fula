@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -112,7 +111,13 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	if err != nil {
 		log.Errorw("calling unix.Statfs", "storeDir", storeDir)
 
-		return BloxFreeSpaceResponse{}, fmt.Errorf("Error calling unix.Statfs with storeDir: %s, error: %v", storeDir, err)
+		// Return zero values in the BloxFreeSpaceResponse fields
+		return BloxFreeSpaceResponse{
+			Size:           0,
+			Avail:          0,
+			Used:           0,
+			UsedPercentage: 0,
+		}, nil
 	}
 	var Size float32 = float32(stat.Blocks * uint64(stat.Bsize))
 	var Avail float32 = float32(stat.Bfree * uint64(stat.Bsize))
