@@ -143,6 +143,22 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 	return nil
 }
 
+func CheckConnection(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	stdout, _, err := runCommand(ctx, "nmcli -t -f DEVICE,STATE device status")
+	if err != nil {
+		return fmt.Errorf("failed to run nmcli command: %w", err)
+	}
+
+	if strings.Contains(stdout, "wlan0:connected") {
+		return nil
+	}
+
+	return fmt.Errorf("Wi-Fi not connected")
+}
+
 func StopHotspot(ctx context.Context) error {
 	commands := []string{""}
 	var err error
