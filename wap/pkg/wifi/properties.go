@@ -91,30 +91,33 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 		return BloxFreeSpaceResponse{}, fmt.Errorf("unexpected output format")
 	}
 
-	size, err := strconv.ParseFloat(parts[1], 64)
-	if err != nil {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing size: %v", err)
+	size, errSize := strconv.ParseFloat(parts[1], 32)
+	used, errUsed := strconv.ParseFloat(parts[2], 32)
+	avail, errAvail := strconv.ParseFloat(parts[3], 32)
+	usedPercentage, errUsedPercentage := strconv.ParseFloat(parts[4], 32)
+
+	var errors []string
+	if errSize != nil {
+		errors = append(errors, fmt.Sprintf("error parsing size: %v", errSize))
+	}
+	if errUsed != nil {
+		errors = append(errors, fmt.Sprintf("error parsing used: %v", errUsed))
+	}
+	if errAvail != nil {
+		errors = append(errors, fmt.Sprintf("error parsing avail: %v", errAvail))
+	}
+	if errUsedPercentage != nil {
+		errors = append(errors, fmt.Sprintf("error parsing used_percentage: %v", errUsedPercentage))
 	}
 
-	used, err := strconv.ParseFloat(parts[2], 64)
-	if err != nil {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing used: %v", err)
-	}
-
-	avail, err := strconv.ParseFloat(parts[3], 64)
-	if err != nil {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing avail: %v", err)
-	}
-
-	usedPercentage, err := strconv.ParseFloat(parts[4], 64)
-	if err != nil {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing used_percentage: %v", err)
+	if len(errors) > 0 {
+		return BloxFreeSpaceResponse{}, fmt.Errorf(strings.Join(errors, "; "))
 	}
 
 	return BloxFreeSpaceResponse{
-		Size:           size,
-		Used:           used,
-		Avail:          avail,
-		UsedPercentage: usedPercentage,
+		Size:           float32(size),
+		Used:           float32(used),
+		Avail:          float32(avail),
+		UsedPercentage: float32(usedPercentage),
 	}, nil
 }
