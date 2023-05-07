@@ -19,6 +19,7 @@ import (
 // Assuming config.ReadProperties() and config.PROJECT_NAME are defined in your code
 
 type BloxFreeSpaceResponse struct {
+	DeviceCount    int     `json:"device_count"`
 	Size           float32 `json:"size"`
 	Used           float32 `json:"used"`
 	Avail          float32 `json:"avail"`
@@ -103,12 +104,16 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 		return BloxFreeSpaceResponse{}, fmt.Errorf("unexpected output format")
 	}
 
+	deviceCount, errCount := strconv.Atoi(parts[0])
 	size, errSize := strconv.ParseFloat(parts[1], 32)
 	used, errUsed := strconv.ParseFloat(parts[2], 32)
 	avail, errAvail := strconv.ParseFloat(parts[3], 32)
 	usedPercentage, errUsedPercentage := strconv.ParseFloat(parts[4], 32)
 
 	var errors []string
+	if errCount != nil {
+		errors = append(errors, fmt.Sprintf("error parsing count: %v", errCount))
+	}
 	if errSize != nil {
 		errors = append(errors, fmt.Sprintf("error parsing size: %v", errSize))
 	}
@@ -127,6 +132,7 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	}
 
 	return BloxFreeSpaceResponse{
+		DeviceCount:    deviceCount,
 		Size:           float32(size),
 		Used:           float32(used),
 		Avail:          float32(avail),
