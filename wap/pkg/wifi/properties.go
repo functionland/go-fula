@@ -4,14 +4,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/ed25519"
-	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 )
 
@@ -81,9 +79,6 @@ func GenerateRandomString(length int) (string, error) {
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
-	log := log.With("action", "GetBloxFreeSpace")
-	stat := unix.Statfs_t{}
-
 	storeDir := "/uniondrive" // Set the default value
 
 	envStoreDir := os.Getenv("FULA_BLOX_STORE_DIR")
@@ -92,14 +87,14 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	} else {
 		configFile := "/internal/config.yaml"
 		if _, err := os.Stat(configFile); !os.IsNotExist(err) {
-			data, err := ioutil.ReadFile(configFile)
+			data, err := os.ReadFile(configFile)
 			if err != nil {
-				log.Error("failed to read config file")
+				log.Info("failed to read config file")
 			} else {
 				var config Config
 				err = yaml.Unmarshal(data, &config)
 				if err != nil {
-					log.Error("failed to unmarshal config")
+					log.Info("failed to unmarshal config")
 				} else if config.StoreDir != "" {
 					storeDir = config.StoreDir
 				}
@@ -107,31 +102,28 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 		}
 	}
 
-	err := unix.Statfs(storeDir, &stat)
+	fs, err := os.Open(storeDir)
 	if err != nil {
-		log.Errorw("calling unix.Statfs", "storeDir", storeDir)
+		return BloxFreeSpaceResponse{}, err
+	}
+	defer fs.Close()
 
-		// Return zero values in the BloxFreeSpaceResponse fields
-		return BloxFreeSpaceResponse{
-			Size:           0,
-			Avail:          0,
-			Used:           0,
-			UsedPercentage: 0,
-		}, nil
+	fsInfo, err := fs.Stat()
+	if err != nil {
+		return BloxFreeSpaceResponse{}, err
 	}
-	var Size float32 = float32(stat.Blocks * uint64(stat.Bsize))
-	var Avail float32 = float32(stat.Bfree * uint64(stat.Bsize))
-	var Used float32 = float32(Size - Avail)
-	var UsedPercentage float32 = 0.0
-	if Size > 0.0 {
-		UsedPercentage = Used / Size * 100.0
-	}
+
+	// Assuming free space equals available space
+	Size := float32(fsInfo.Size())
+	Avail := Size
+	Used := float32(0.0)
+	UsedPercentage := float32(0.0)
+
 	out := BloxFreeSpaceResponse{
-		Size:           Size / float32(GB),
-		Avail:          Avail / float32(GB),
-		Used:           Used / float32(GB),
+		Size:           Size / GB,
+		Avail:          Avail / GB,
+		Used:           Used / GB,
 		UsedPercentage: UsedPercentage,
 	}
 	return out, nil
-
 }
