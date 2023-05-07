@@ -1,7 +1,6 @@
 package wifi
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -9,7 +8,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/ed25519"
@@ -81,35 +79,42 @@ func GenerateRandomString(length int) (string, error) {
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := "df /dev/null | grep -n /storage | awk '{ print $2, $3, $4, $5 }'"
-	stdout, stderr, err := runCommand(ctx, cmd)
+	cmd := `df -h 2>/dev/null | grep -n /storage/usb | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
+	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error running command: %v", err)
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error executing shell command: %v", err)
 	}
 
-	if stderr != "" {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error output: %s", stderr)
+	parts := strings.Split(strings.TrimSpace(string(out)), ",")
+
+	if len(parts) != 5 {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("unexpected output format")
 	}
 
-	output := strings.TrimSpace(stdout)
-	if output != "" {
-		fields := strings.Fields(output)
-		if len(fields) == 4 {
-			size, _ := strconv.ParseFloat(fields[1], 32)
-			used, _ := strconv.ParseFloat(fields[2], 32)
-			avail, _ := strconv.ParseFloat(fields[3], 32)
-
-			response := BloxFreeSpaceResponse{
-				Size:           float32(size),
-				Used:           float32(used),
-				Avail:          float32(avail),
-				UsedPercentage: float32(used) / float32(size) * 100.0,
-			}
-			return response, nil
-		}
+	size, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing size: %v", err)
 	}
-	return BloxFreeSpaceResponse{}, fmt.Errorf("no output found")
+
+	used, err := strconv.ParseFloat(parts[2], 64)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing used: %v", err)
+	}
+
+	avail, err := strconv.ParseFloat(parts[3], 64)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing avail: %v", err)
+	}
+
+	usedPercentage, err := strconv.ParseFloat(parts[4], 64)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error parsing used_percentage: %v", err)
+	}
+
+	return BloxFreeSpaceResponse{
+		Size:           size,
+		Used:           used,
+		Avail:          avail,
+		UsedPercentage: usedPercentage,
+	}, nil
 }
