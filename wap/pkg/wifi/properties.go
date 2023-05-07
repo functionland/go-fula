@@ -1,6 +1,7 @@
 package wifi
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/ed25519"
 )
@@ -120,4 +123,32 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 		Avail:          float32(avail),
 		UsedPercentage: float32(usedPercentage),
 	}, nil
+}
+
+func GetContainerInfo(containerName string) (map[string]interface{}, error) {
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, container := range containers {
+		if container.Names[0] == "/"+containerName {
+			result := map[string]interface{}{
+				"Image":   container.Image,
+				"Version": container.ImageID,
+				"Id":      container.ID,
+				"Created": container.Created,
+				"Labels":  container.Labels,
+			}
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("container not found")
 }

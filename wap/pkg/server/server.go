@@ -36,6 +36,41 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
 			return
 		}
+		fulaContainerInfo, err := wifi.GetContainerInfo("fula_go")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
+			fulaContainerInfo = map[string]interface{}{
+				"Image":   "",
+				"Version": "",
+				"Id":      "",
+				"Created": "",
+				"Labels":  "",
+			}
+		}
+
+		fxsupportContainerInfo, err := wifi.GetContainerInfo("fula_fxsupport")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
+			fulaContainerInfo = map[string]interface{}{
+				"Image":   "",
+				"Version": "",
+				"Id":      "",
+				"Created": "",
+				"Labels":  "",
+			}
+		}
+
+		nodeContainerInfo, err := wifi.GetContainerInfo("fula_node")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
+			nodeContainerInfo = map[string]interface{}{
+				"Image":   "",
+				"Version": "",
+				"Id":      "",
+				"Created": "",
+				"Labels":  "",
+			}
+		}
 
 		p, err := config.ReadProperties()
 		response := make(map[string]interface{})
@@ -45,6 +80,9 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		response["hardwareID"] = hardwareID
 		response["bloxFreeSpace"] = bloxFreeSpace
+		response["containerInfo_fula"] = fulaContainerInfo
+		response["containerInfo_fxsupport"] = fxsupportContainerInfo
+		response["containerInfo_node"] = nodeContainerInfo
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

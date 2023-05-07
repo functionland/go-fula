@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
+	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +21,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"golang.org/x/sys/unix"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -335,47 +333,57 @@ func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter,
 
 func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", actionBloxFreeSpace, "from", from)
-	stat := unix.Statfs_t{}
+	error := false
+	cmd := `df -h 2>/dev/null | grep -n /storage/usb | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
+	output, err := exec.Command("sh", "-c", cmd).Output()
+	out := BloxFreeSpaceResponse{
+		Size:           float32(0),
+		Used:           float32(0),
+		Avail:          float32(0),
+		UsedPercentage: float32(0),
+	}
+	if err != nil {
+		error = true
+	}
 
-	storeDir := os.Getenv("FULA_BLOX_STORE_DIR")
+	parts := strings.Split(strings.TrimSpace(string(output)), ",")
 
-	if storeDir == "" {
-		configFile := "/internal/config.yaml"
-		if _, err := os.Stat(configFile); !os.IsNotExist(err) {
-			data, err := ioutil.ReadFile(configFile)
-			if err != nil {
-				log.Error("failed to read config file")
-			} else {
-				var config Config
-				err = yaml.Unmarshal(data, &config)
-				if err != nil {
-					log.Error("failed to unmarshal config")
-				} else {
-					storeDir = config.StoreDir
-				}
-			}
+	if len(parts) != 5 {
+		error = true
+	}
+
+	size, errSize := strconv.ParseFloat(parts[1], 32)
+	used, errUsed := strconv.ParseFloat(parts[2], 32)
+	avail, errAvail := strconv.ParseFloat(parts[3], 32)
+	usedPercentage, errUsedPercentage := strconv.ParseFloat(parts[4], 32)
+
+	var errors []string
+	if errSize != nil {
+		errors = append(errors, fmt.Sprintf("error parsing size: %v", errSize))
+	}
+	if errUsed != nil {
+		errors = append(errors, fmt.Sprintf("error parsing used: %v", errUsed))
+	}
+	if errAvail != nil {
+		errors = append(errors, fmt.Sprintf("error parsing avail: %v", errAvail))
+	}
+	if errUsedPercentage != nil {
+		errors = append(errors, fmt.Sprintf("error parsing used_percentage: %v", errUsedPercentage))
+	}
+
+	if len(errors) > 0 {
+		error = true
+	}
+	if !error {
+
+		out = BloxFreeSpaceResponse{
+			Size:           float32(size),
+			Used:           float32(used),
+			Avail:          float32(avail),
+			UsedPercentage: float32(usedPercentage),
 		}
 	}
 
-	err := unix.Statfs(storeDir, &stat)
-	if err != nil {
-		log.Errorw("calling unix.Statfs", "storeDir", storeDir)
-		http.Error(w, "calling unix.Statfs", http.StatusInternalServerError)
-		return
-	}
-	var Size float32 = float32(stat.Blocks * uint64(stat.Bsize))
-	var Avail float32 = float32(stat.Bfree * uint64(stat.Bsize))
-	var Used float32 = float32(Size - Avail)
-	var UsedPercentage float32 = 0.0
-	if Size > 0.0 {
-		UsedPercentage = Used / Size * 100.0
-	}
-	out := BloxFreeSpaceResponse{
-		Size:           Size / float32(GB),
-		Avail:          Avail / float32(GB),
-		Used:           Used / float32(GB),
-		UsedPercentage: UsedPercentage,
-	}
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		log.Error("failed to write response: %v", err)
