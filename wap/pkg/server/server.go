@@ -27,18 +27,21 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		hardwareID, err := wifi.GetHardwareID()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error getting hardwareID, %v", err), http.StatusInternalServerError)
-			return
+			hardwareID = ""
 		}
 
 		bloxFreeSpace, err := wifi.GetBloxFreeSpace()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
-			return
+			bloxFreeSpace = wifi.BloxFreeSpaceResponse{
+				DeviceCount:    0,
+				Size:           0,
+				Used:           0,
+				Avail:          0,
+				UsedPercentage: 0,
+			}
 		}
 		fulaContainerInfo, err := wifi.GetContainerInfo("fula_go")
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
 			fulaContainerInfo = wifi.DockerInfo{
 				Image:       "",
 				Version:     "",
@@ -51,7 +54,6 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 
 		fxsupportContainerInfo, err := wifi.GetContainerInfo("fula_fxsupport")
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
 			fulaContainerInfo = wifi.DockerInfo{
 				Image:       "",
 				Version:     "",
@@ -64,7 +66,6 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 
 		nodeContainerInfo, err := wifi.GetContainerInfo("fula_node")
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
 			nodeContainerInfo = wifi.DockerInfo{
 				Image:       "",
 				Version:     "",
