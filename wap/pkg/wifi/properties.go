@@ -1,16 +1,18 @@
 package wifi
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"os"
+	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/ed25519"
-	"gopkg.in/yaml.v2"
 )
 
 // Assuming config.ReadProperties() and config.PROJECT_NAME are defined in your code
@@ -79,51 +81,35 @@ func GenerateRandomString(length int) (string, error) {
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
-	storeDir := "/uniondrive" // Set the default value
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	envStoreDir := os.Getenv("FULA_BLOX_STORE_DIR")
-	if envStoreDir != "" {
-		storeDir = envStoreDir
-	} else {
-		configFile := "/internal/config.yaml"
-		if _, err := os.Stat(configFile); !os.IsNotExist(err) {
-			data, err := os.ReadFile(configFile)
-			if err != nil {
-				log.Info("failed to read config file")
-			} else {
-				var config Config
-				err = yaml.Unmarshal(data, &config)
-				if err != nil {
-					log.Info("failed to unmarshal config")
-				} else if config.StoreDir != "" {
-					storeDir = config.StoreDir
-				}
+	cmd := "df /dev/null | grep -n /storage | awk '{ print $2, $3, $4, $5 }'"
+	stdout, stderr, err := runCommand(ctx, cmd)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error running command: %v", err)
+	}
+
+	if stderr != "" {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error output: %s", stderr)
+	}
+
+	output := strings.TrimSpace(stdout)
+	if output != "" {
+		fields := strings.Fields(output)
+		if len(fields) == 4 {
+			size, _ := strconv.ParseFloat(fields[1], 32)
+			used, _ := strconv.ParseFloat(fields[2], 32)
+			avail, _ := strconv.ParseFloat(fields[3], 32)
+
+			response := BloxFreeSpaceResponse{
+				Size:           float32(size),
+				Used:           float32(used),
+				Avail:          float32(avail),
+				UsedPercentage: float32(used) / float32(size) * 100.0,
 			}
+			return response, nil
 		}
 	}
-
-	fs, err := os.Open(storeDir)
-	if err != nil {
-		return BloxFreeSpaceResponse{}, err
-	}
-	defer fs.Close()
-
-	fsInfo, err := fs.Stat()
-	if err != nil {
-		return BloxFreeSpaceResponse{}, err
-	}
-
-	// Assuming free space equals available space
-	Size := float32(fsInfo.Size())
-	Avail := Size
-	Used := float32(0.0)
-	UsedPercentage := float32(0.0)
-
-	out := BloxFreeSpaceResponse{
-		Size:           Size / GB,
-		Avail:          Avail / GB,
-		Used:           Used / GB,
-		UsedPercentage: UsedPercentage,
-	}
-	return out, nil
+	return BloxFreeSpaceResponse{}, fmt.Errorf("no output found")
 }
