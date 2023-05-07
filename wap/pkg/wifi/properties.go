@@ -25,6 +25,15 @@ type BloxFreeSpaceResponse struct {
 	UsedPercentage float32 `json:"used_percentage"`
 }
 
+type DockerInfo struct {
+	Image       string            `json:"image"`
+	Version     string            `json:"version"`
+	ID          string            `json:"id"`
+	Labels      map[string]string `json:"labels"`
+	Created     string            `json:"created"`
+	RepoDigests []string          `json:"repo_digests"`
+}
+
 type Config struct {
 	StoreDir string `yaml:"storeDir"`
 	// other fields
@@ -125,30 +134,49 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	}, nil
 }
 
-func GetContainerInfo(containerName string) (map[string]interface{}, error) {
-	ctx := context.Background()
+func GetContainerInfo(containerName string) (DockerInfo, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, err
+		return DockerInfo{}, err
 	}
 
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
 	if err != nil {
-		return nil, err
+		return DockerInfo{}, err
 	}
 
+	var containerID string
 	for _, container := range containers {
-		if container.Names[0] == "/"+containerName {
-			result := map[string]interface{}{
-				"Image":   container.Image,
-				"Version": container.ImageID,
-				"Id":      container.ID,
-				"Created": container.Created,
-				"Labels":  container.Labels,
+		for _, name := range container.Names {
+			if name == "/"+containerName {
+				containerID = container.ID
+				break
 			}
-			return result, nil
 		}
 	}
 
-	return nil, fmt.Errorf("container not found")
+	if containerID == "" {
+		return DockerInfo{}, fmt.Errorf("container not found: %s", containerName)
+	}
+
+	containerJSON, err := cli.ContainerInspect(context.Background(), containerID)
+	if err != nil {
+		return DockerInfo{}, err
+	}
+
+	imageJSON, _, err := cli.ImageInspectWithRaw(context.Background(), containerJSON.Image)
+	if err != nil {
+		return DockerInfo{}, err
+	}
+
+	info := DockerInfo{
+		Image:       containerJSON.Config.Image,
+		Version:     containerJSON.Image,
+		ID:          containerJSON.ID,
+		Labels:      containerJSON.Config.Labels,
+		Created:     containerJSON.Created,
+		RepoDigests: imageJSON.RepoDigests,
+	}
+
+	return info, nil
 }

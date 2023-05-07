@@ -39,36 +39,39 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		fulaContainerInfo, err := wifi.GetContainerInfo("fula_go")
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
-			fulaContainerInfo = map[string]interface{}{
-				"Image":   "",
-				"Version": "",
-				"Id":      "",
-				"Created": "",
-				"Labels":  "",
+			fulaContainerInfo = wifi.DockerInfo{
+				Image:       "",
+				Version:     "",
+				ID:          "",
+				Labels:      map[string]string{},
+				Created:     "",
+				RepoDigests: []string{},
 			}
 		}
 
 		fxsupportContainerInfo, err := wifi.GetContainerInfo("fula_fxsupport")
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
-			fulaContainerInfo = map[string]interface{}{
-				"Image":   "",
-				"Version": "",
-				"Id":      "",
-				"Created": "",
-				"Labels":  "",
+			fulaContainerInfo = wifi.DockerInfo{
+				Image:       "",
+				Version:     "",
+				ID:          "",
+				Labels:      map[string]string{},
+				Created:     "",
+				RepoDigests: []string{},
 			}
 		}
 
 		nodeContainerInfo, err := wifi.GetContainerInfo("fula_node")
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error getting bloxFreeSpace, %v", err), http.StatusInternalServerError)
-			nodeContainerInfo = map[string]interface{}{
-				"Image":   "",
-				"Version": "",
-				"Id":      "",
-				"Created": "",
-				"Labels":  "",
+			nodeContainerInfo = wifi.DockerInfo{
+				Image:       "",
+				Version:     "",
+				ID:          "",
+				Labels:      map[string]string{},
+				Created:     "",
+				RepoDigests: []string{},
 			}
 		}
 
