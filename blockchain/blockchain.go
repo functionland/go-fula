@@ -8,14 +8,13 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os/exec"
 	"path"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -333,54 +332,14 @@ func (bl *FxBlockchain) handleAuthorization(from peer.ID, w http.ResponseWriter,
 
 func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", actionBloxFreeSpace, "from", from)
-	error := false
-	cmd := `df -h 2>/dev/null | grep -n /storage/usb | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
-	output, err := exec.Command("sh", "-c", cmd).Output()
-	out := BloxFreeSpaceResponse{
-		Size:           float32(0),
-		Used:           float32(0),
-		Avail:          float32(0),
-		UsedPercentage: float32(0),
-	}
+	out, err := wifi.GetBloxFreeSpace()
 	if err != nil {
-		error = true
-	}
-
-	parts := strings.Split(strings.TrimSpace(string(output)), ",")
-
-	if len(parts) != 5 {
-		error = true
-	}
-
-	size, errSize := strconv.ParseFloat(parts[1], 32)
-	used, errUsed := strconv.ParseFloat(parts[2], 32)
-	avail, errAvail := strconv.ParseFloat(parts[3], 32)
-	usedPercentage, errUsedPercentage := strconv.ParseFloat(parts[4], 32)
-
-	var errors []string
-	if errSize != nil {
-		errors = append(errors, fmt.Sprintf("error parsing size: %v", errSize))
-	}
-	if errUsed != nil {
-		errors = append(errors, fmt.Sprintf("error parsing used: %v", errUsed))
-	}
-	if errAvail != nil {
-		errors = append(errors, fmt.Sprintf("error parsing avail: %v", errAvail))
-	}
-	if errUsedPercentage != nil {
-		errors = append(errors, fmt.Sprintf("error parsing used_percentage: %v", errUsedPercentage))
-	}
-
-	if len(errors) > 0 {
-		error = true
-	}
-	if !error {
-
-		out = BloxFreeSpaceResponse{
-			Size:           float32(size),
-			Used:           float32(used),
-			Avail:          float32(avail),
-			UsedPercentage: float32(usedPercentage),
+		out = wifi.BloxFreeSpaceResponse{
+			DeviceCount:    0,
+			Size:           0,
+			Used:           0,
+			Avail:          0,
+			UsedPercentage: 0,
 		}
 	}
 
