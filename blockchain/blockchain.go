@@ -334,6 +334,7 @@ func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter,
 	log := log.With("action", actionBloxFreeSpace, "from", from)
 	out, err := wifi.GetBloxFreeSpace()
 	if err != nil {
+		log.Error("failed to getBloxFreeSpace: %v", err)
 		out = wifi.BloxFreeSpaceResponse{
 			DeviceCount:    0,
 			Size:           0,
