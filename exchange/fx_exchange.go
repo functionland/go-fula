@@ -104,6 +104,10 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 	return e, nil
 }
 
+func (e *FxExchange) GetAuth(ctx context.Context) (peer.ID, error) {
+	return e.authorizer, nil
+}
+
 func (e *FxExchange) Start(ctx context.Context) error {
 	gsn := gsnet.NewFromLibp2pHost(e.h)
 	e.gx = gs.New(ctx, gsn, e.ls)

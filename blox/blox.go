@@ -48,9 +48,13 @@ func New(o ...Option) (*Blox, error) {
 	if err != nil {
 		return nil, err
 	}
+	authorizer, err := p.ex.GetAuth(p.ctx)
+	if err != nil {
+		authorizer = opts.authorizer
+	}
 	p.bl, err = blockchain.NewFxBlockchain(p.h,
 		blockchain.NewSimpleKeyStorer(),
-		blockchain.WithAuthorizer(p.authorizer),
+		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
 		blockchain.WithTimeout(30))
 	return &p, nil
