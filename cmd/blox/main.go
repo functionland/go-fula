@@ -10,10 +10,15 @@ import (
 	"os/signal"
 	"path"
 	"syscall"
+	"time"
 
 	"github.com/functionland/go-fula/blox"
+	"github.com/functionland/go-fula/exchange"
+	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -35,18 +40,22 @@ var (
 		wireless   bool
 		configPath string
 		config     struct {
-			Identity                 string   `yaml:"identity"`
-			StoreDir                 string   `yaml:"storeDir"`
-			PoolName                 string   `yaml:"poolName"`
-			LogLevel                 string   `yaml:"logLevel"`
-			ListenAddrs              []string `yaml:"listenAddrs"`
-			Authorizer               string   `yaml:"authorizer"`
-			StaticRelays             []string `yaml:"staticRelays"`
-			ForceReachabilityPrivate bool     `yaml:"forceReachabilityPrivate"`
-			AllowTransientConnection bool     `yaml:"allowTransientConnection"`
+			Identity                  string        `yaml:"identity"`
+			StoreDir                  string        `yaml:"storeDir"`
+			PoolName                  string        `yaml:"poolName"`
+			LogLevel                  string        `yaml:"logLevel"`
+			ListenAddrs               []string      `yaml:"listenAddrs"`
+			Authorizer                string        `yaml:"authorizer"`
+			StaticRelays              []string      `yaml:"staticRelays"`
+			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
+			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
+			IpniPublishDisabled       bool          `yaml:"ipniPublishDisabled"`
+			IpniPublishInterval       time.Duration `yaml:"ipniPublishInterval"`
+			IpniPublishDirectAnnounce []string      `yaml:"IpniPublishDirectAnnounce"`
 
-			listenAddrs  cli.StringSlice
-			staticRelays cli.StringSlice
+			listenAddrs    cli.StringSlice
+			staticRelays   cli.StringSlice
+			directAnnounce cli.StringSlice
 		}
 	}
 )
@@ -115,6 +124,23 @@ func init() {
 				Usage:       "Weather to allow transient connection to other participants.",
 				Destination: &app.config.AllowTransientConnection,
 				Value:       true,
+			}),
+			altsrc.NewBoolFlag(&cli.BoolFlag{
+				Name:        "ipniPublisherDisabled",
+				Usage:       "Weather to disable IPNI publisher.",
+				Destination: &app.config.IpniPublishDisabled,
+			}),
+			altsrc.NewDurationFlag(&cli.DurationFlag{
+				Name:        "ipniPublishInterval",
+				Usage:       "The interval at which IPNI advertisements are published.",
+				Destination: &app.config.IpniPublishInterval,
+				Value:       10 * time.Second,
+			}),
+			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
+				Name:        "ipniPublishDirectAnnounce",
+				Usage:       "The list of IPNI URLs to which make direct announcements.",
+				Destination: &app.config.directAnnounce,
+				Value:       cli.NewStringSlice("https://cid.contact/ingest/announce"),
 			}),
 			&cli.BoolFlag{
 				Name:        "initOnly",
@@ -199,6 +225,7 @@ func before(ctx *cli.Context) error {
 	}
 	app.config.ListenAddrs = app.config.listenAddrs.Value()
 	app.config.StaticRelays = app.config.staticRelays.Value()
+	app.config.IpniPublishDirectAnnounce = app.config.directAnnounce.Value()
 	yc, err := yaml.Marshal(app.config)
 	if err != nil {
 		return err
@@ -255,13 +282,9 @@ func action(ctx *cli.Context) error {
 		}
 		sr = append(sr, *rai)
 	}
-	var relays autorelay.Option
 	if len(sr) != 0 {
-		relays = autorelay.WithStaticRelays(sr)
-	} else {
-		relays = autorelay.WithDefaultStaticRelays()
+		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1)))
 	}
-	hopts = append(hopts, libp2p.EnableAutoRelay(relays, autorelay.WithNumRelays(1)))
 
 	h, err := libp2p.New(hopts...)
 	if err != nil {
@@ -275,8 +298,19 @@ func action(ctx *cli.Context) error {
 		blox.WithHost(h),
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
-		blox.WithAuthorizer(authorizer),
-		blox.WithAllowTransientConnection(app.config.AllowTransientConnection))
+		blox.WithExchangeOpts(
+			exchange.WithAuthorizer(authorizer),
+			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
+			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
+			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
+			exchange.WithIpniProviderEngineOptions(
+				engine.WithHost(h),
+				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
+				engine.WithPublisherKind(engine.DataTransferPublisher),
+				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
+			),
+		),
+	)
 	if err != nil {
 		return err
 	}

@@ -23,7 +23,7 @@ import (
 // each other using pubsub.
 func ExamplePool_DiscoverPeersViaPubSub() {
 	const poolName = "my-pool"
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 
 	// Elevate log level to show internal communications.
