@@ -71,6 +71,12 @@ The default generated config goes to a YAML file in home directory, under /.fula
 goreleaser --rm-dist --snapshot
 ```
 
+## Build for the iOS platform (using gomobile)
+This process includes some iOS specific preparation.
+```sh
+make fula-xcframework
+```
+
 
 ## License
 
