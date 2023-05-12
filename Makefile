@@ -2,7 +2,7 @@ GO_MOD_REPLACEMENT=replace github.com/raulk/go-watchdog => ./tmp-fula-build/go-w
 all:
 	go test ./...
 
-fula-xcframework: patch-go-watchdog prepare-gomobile build-fula-xcframework bundles clean-up
+fula-xcframework: patch-go-watchdog prepare-gomobile build-fula-xcframework bundles
 patch-go-watchdog:
 	mkdir -p tmp-fula-build &&\
 	cd tmp-fula-build &&\
