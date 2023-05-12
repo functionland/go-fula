@@ -6,10 +6,11 @@ on:
     - '*'
 
 jobs:
-  check:
+  build:
     name: Build & check fula mobile for ios
     runs-on: macos-latest
-
+    permissions:
+  	contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
