@@ -4,7 +4,6 @@ all:
 
 fula-xcframework: patch-go-watchdog prepare-gomobile build-fula-xcframework bundles
 
-
 patch-go-watchdog:
 	mkdir -p tmp-fula-build &&\
 	cd tmp-fula-build &&\
