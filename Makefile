@@ -20,6 +20,7 @@ prepare-gomobile:
 	go get -u golang.org/x/mobile/bind && go install golang.org/x/mobile/bind 
 
 build-fula-xcframework:
+	gomobile init &&\
 	gomobile bind -v -o Fula.xcframework -target=ios github.com/functionland/go-fula/mobile
 
 bundles:
