@@ -16,9 +16,25 @@ import (
 
 var log = logging.Logger("fula/wap/main")
 
+func CheckAndSendNewIP(ipChange chan<- string, currentIP string) string {
+	newIP, err := server.GetNonLoopbackIP() // Assuming this function gets the current non-loopback IP
+	if err != nil {
+		log.Errorw("Failed to get non-loopback IP", "err", err)
+		return currentIP
+	}
+	// Only send the new IP if it's different from the current one
+	if newIP != currentIP {
+		ipChange <- newIP // Send the new IP to the ipChange channel
+		return newIP
+	}
+	return currentIP
+}
+
 func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
+
+	currentIP, _ := server.GetNonLoopbackIP()
 
 	isConnected := false
 
@@ -43,13 +59,23 @@ func main() {
 	}
 
 	// Start the server in a separate goroutine
+	ipChange := make(chan string, 1) // Create the channel
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
 	go func() {
-		closer := server.Serve(blox.BloxCommandInitOnly, "", "")
-		serverCloser <- closer
-		<-stopServer
-		closer.Close()
+		for {
+			closer := server.Serve(blox.BloxCommandInitOnly, "", "")
+			serverCloser <- closer
+			select {
+			case <-stopServer:
+				closer.Close()
+				return
+			case newIP := <-ipChange:
+				log.Info("Detected IP change: " + newIP)
+				closer.Close() // Closing the old server
+				log.Info("Restarting the server due to IP change...")
+			}
+		}
 	}()
 
 	if !isConnected && configExists {
@@ -70,22 +96,23 @@ func main() {
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
-					stopServer <- struct{}{}
+					currentIP = CheckAndSendNewIP(ipChange, currentIP)
 					break loop2
 				}
 			}
 		}
 	} else if isConnected {
 		log.Info("Wi-Fi is already connected")
-		stopServer <- struct{}{}
+		currentIP = CheckAndSendNewIP(ipChange, currentIP)
 	}
 
-	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 300 seconds
+	ticker3 := time.NewTicker(60 * time.Second) // Check the connection every 60 seconds
 
 	for range ticker3.C {
 		err := wifi.CheckConnection(5 * time.Second)
 		if err == nil {
 			log.Info("Connected to a wifi network")
+			currentIP = CheckAndSendNewIP(ipChange, currentIP)
 		} else {
 			log.Info("Not connected to a wifi network")
 			if err := wifi.StartHotspot(ctx, true); err != nil {
