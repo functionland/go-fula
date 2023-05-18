@@ -65,12 +65,14 @@ func main() {
 			select {
 			case <-timeout2:
 				log.Info("Waiting for the system to connect to saved Wi-Fi timeout passed")
+				ticker2.Stop()
 				break loop2
 			case <-ticker2.C:
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
 					stopServer <- struct{}{}
+					ticker2.Stop()
 					break loop2
 				}
 			}
@@ -80,12 +82,13 @@ func main() {
 		stopServer <- struct{}{}
 	}
 
-	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 300 seconds
+	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 600 seconds
 
 	for range ticker3.C {
 		err := wifi.CheckConnection(5 * time.Second)
 		if err == nil {
 			log.Info("Connected to a wifi network")
+			ticker3.Stop()
 		} else {
 			log.Info("Not connected to a wifi network")
 			if err := wifi.StartHotspot(ctx, true); err != nil {
