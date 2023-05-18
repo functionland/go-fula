@@ -70,14 +70,14 @@ func main() {
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
-					stopServer <- struct{}{}
+					//stopServer <- struct{}{} //Stopping server
 					break loop2
 				}
 			}
 		}
 	} else if isConnected {
 		log.Info("Wi-Fi is already connected")
-		stopServer <- struct{}{}
+		//stopServer <- struct{}{} //Stopping server
 	}
 
 	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 300 seconds
