@@ -380,7 +380,7 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // This finds the ip address of the device
-func getNonLoopbackIP() (string, error) {
+func GetNonLoopbackIP() (string, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return "", err
@@ -428,7 +428,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		ip, err = getNonLoopbackIP()
+		ip, err = GetNonLoopbackIP()
 		if err != nil {
 			log.Errorw("Failed to get non-loopback IP address", "err", err)
 			ip = "0.0.0.0"
