@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	noopExchange = "noop"
-	devRelay     = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
+	noopExchange    = "noop"
+	devRelay        = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
+	BloxServiceName = "_blox._udp.local"
 )
 
 type Config struct {

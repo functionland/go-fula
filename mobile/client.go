@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
@@ -16,8 +17,10 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	ipldmc "github.com/ipld/go-ipld-prime/multicodec"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/multiformats/go-multicodec"
 )
 
@@ -35,11 +38,18 @@ import (
 var rootDatastoreKey = datastore.NewKey("/")
 
 type Client struct {
-	h       host.Host
-	ds      datastore.Batching
-	ls      ipld.LinkSystem
-	ex      exchange.Exchange
-	bl      blockchain.Blockchain
+	h  host.Host
+	ds datastore.Batching
+	ls ipld.LinkSystem
+	ex exchange.Exchange
+
+	//The below is added for blockchain
+	bl blockchain.Blockchain
+
+	//The below is added for mdns discovery
+	bloxMdns  mdns.Service
+	bloxPeers map[peer.ID]struct{} // Keep track of discovered Blox peers
+
 	bloxPid peer.ID
 }
 
@@ -48,7 +58,34 @@ func NewClient(cfg *Config) (*Client, error) {
 	if err := cfg.init(&mc); err != nil {
 		return nil, err
 	}
+
+	// Create a new mDNS service
+	mc.bloxMdns = mdns.NewMdnsService(mc.h, BloxServiceName, &mc)
+	if err := mc.bloxMdns.Start(); err != nil {
+		return nil, err
+	}
+
 	return &mc, nil
+}
+
+func (c *Client) HandlePeerFound(info peer.AddrInfo) {
+	// Add the new peer to the peerstore
+	c.h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.AddressTTL)
+
+	// As we only expect Blox devices to advertise their peerIDs through mDNS,
+	// any peer found through mDNS can be assumed to be a Blox device
+	c.bloxPeers[info.ID] = struct{}{}
+
+	// Proceed to interact with the Blox device as necessary...
+}
+
+func (c *Client) ListPeersFound() string {
+	peers := c.h.Peerstore().PeersWithAddrs()
+	peerIDs := make([]string, len(peers))
+	for i, p := range peers {
+		peerIDs[i] = p.String()
+	}
+	return strings.Join(peerIDs, ",")
 }
 
 // ConnectToBlox attempts to connect to blox via the configured address. This function can be used

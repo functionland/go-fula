@@ -14,9 +14,16 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 )
 
 var log = logging.Logger("fula/blox")
+
+const BloxServiceName = "_blox._udp.local"
+
+type discoveryNotifee struct {
+	PeerChan chan peer.AddrInfo
+}
 
 type (
 	Blox struct {
@@ -29,7 +36,12 @@ type (
 		topic *pubsub.Topic
 		ls    ipld.LinkSystem
 		ex    *exchange.FxExchange
-		bl    *blockchain.FxBlockchain
+
+		//Below is added for blockchain communications
+		bl *blockchain.FxBlockchain
+
+		//Below are added for mdns discovery
+		bloxMdns mdns.Service
 	}
 )
 
@@ -60,6 +72,14 @@ func New(o ...Option) (*Blox, error) {
 	return &p, nil
 }
 
+func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
+	n.PeerChan <- pi
+}
+
+func (p *Blox) listenForPeers(peerChan chan peer.AddrInfo) {
+
+}
+
 func (p *Blox) Start(ctx context.Context) error {
 	if err := p.ex.Start(ctx); err != nil {
 		return err
@@ -83,6 +103,20 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Initialize mDNS
+	notifee := &discoveryNotifee{
+		PeerChan: make(chan peer.AddrInfo),
+	}
+	service := mdns.NewMdnsService(p.h, BloxServiceName, notifee) // Use default service name
+	if err := service.Start(); err != nil {
+		return err
+	}
+	p.bloxMdns = service
+
+	// Start listening for peers in a separate goroutine.
+	go p.listenForPeers(notifee.PeerChan)
+
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	go p.announceIExistPeriodically()
 	go p.handleAnnouncements()
