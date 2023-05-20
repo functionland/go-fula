@@ -17,6 +17,7 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	ipldmc "github.com/ipld/go-ipld-prime/multicodec"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
@@ -68,6 +69,9 @@ func NewClient(cfg *Config) (*Client, error) {
 }
 
 func (c *Client) HandlePeerFound(info peer.AddrInfo) {
+	// Add the new peer to the peerstore
+	c.h.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.AddressTTL)
+
 	// As we only expect Blox devices to advertise their peerIDs through mDNS,
 	// any peer found through mDNS can be assumed to be a Blox device
 	c.bloxPeers[info.ID] = struct{}{}
@@ -76,12 +80,10 @@ func (c *Client) HandlePeerFound(info peer.AddrInfo) {
 }
 
 func (c *Client) ListPeersFound() string {
-	peers := c.bloxPeers
+	peers := c.h.Peerstore().PeersWithAddrs()
 	peerIDs := make([]string, len(peers))
-	i := 0
-	for p := range peers {
+	for i, p := range peers {
 		peerIDs[i] = p.String()
-		i++
 	}
 	return strings.Join(peerIDs, ",")
 }
