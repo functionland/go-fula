@@ -1,0 +1,27 @@
+diff --git a/mobile/golang-issue-no-40569-workaround/netlink_linux.go b/mobile/golang-issue-no-40569-workaround/netlink_linux.go
+index 2d81070..c16229b 100644
+--- a/mobile/golang-issue-no-40569-workaround/netlink_linux.go
++++ b/mobile/golang-issue-no-40569-workaround/netlink_linux.go
+@@ -6,7 +6,10 @@
+ 
+ package syscall
+ 
+-import "unsafe"
++import (
++	"runtime"
++	"unsafe"
++)
+ 
+ // Round the length of a netlink message up to align it properly.
+ func nlmAlignOf(msglen int) int {
+@@ -57,7 +60,9 @@ func NetlinkRIB(proto, family int) ([]byte, error) {
+ 	defer Close(s)
+ 	sa := &SockaddrNetlink{Family: AF_NETLINK}
+ 	if err := Bind(s, sa); err != nil {
+-		return nil, err
++		if runtime.GOOS != "android" || err != EACCES {
++			return nil, err
++		}
+ 	}
+ 	wb := newNetlinkRouteRequest(proto, 1, family)
+ 	if err := Sendto(s, wb, 0, sa); err != nil {

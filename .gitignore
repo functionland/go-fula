@@ -1,6 +1,7 @@
 dist
 .vscode
 **.env
+**.bak
 */**/tmp
 wap/wap
 .history/*

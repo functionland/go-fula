@@ -1,0 +1,38 @@
+diff --git a/mobile/golang-issue-no-40569-workaround/interface_linux.go b/mobile/golang-issue-no-40569-workaround/interface_linux.go
+index 441ab2f..ed7300d 100644
+--- a/mobile/golang-issue-no-40569-workaround/interface_linux.go
++++ b/mobile/golang-issue-no-40569-workaround/interface_linux.go
+@@ -6,6 +6,7 @@ package net
+ 
+ import (
+ 	"os"
++	"runtime"
+ 	"syscall"
+ 	"unsafe"
+ )
+@@ -130,7 +131,7 @@ func interfaceAddrTable(ifi *Interface) ([]Addr, error) {
+ 	if ifi == nil {
+ 		var err error
+ 		ift, err = interfaceTable(0)
+-		if err != nil {
++		if err != nil && (runtime.GOOS != "android" || err != syscall.EACCES) {
+ 			return nil, err
+ 		}
+ 	}
+@@ -150,6 +151,16 @@ loop:
+ 			break loop
+ 		case syscall.RTM_NEWADDR:
+ 			ifam := (*syscall.IfAddrmsg)(unsafe.Pointer(&m.Data[0]))
++			if ifi == nil && len(ift) == 0 {
++				attrs, err := syscall.ParseNetlinkRouteAttr(&m)
++				if err != nil {
++					return nil, os.NewSyscallError("parsenetlinkrouteattr", err)
++				}
++				ifa := newAddr(ifam, attrs)
++				if ifa != nil {
++					ifat = append(ifat, ifa)
++				}
++			}
+ 			if len(ift) != 0 || ifi.Index == int(ifam.Index) {
+ 				if len(ift) != 0 {
+ 					var err error
