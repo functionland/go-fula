@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/docker/docker v23.0.5+incompatible
 	github.com/golang/protobuf v1.5.3
+	github.com/hashicorp/mdns v1.0.5
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-badger v0.3.0

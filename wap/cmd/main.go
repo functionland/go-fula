@@ -9,6 +9,7 @@ import (
 	"time"
 
 	blox "github.com/functionland/go-fula/wap/cmd/blox"
+	mdns "github.com/functionland/go-fula/wap/cmd/mdns"
 	"github.com/functionland/go-fula/wap/pkg/server"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
@@ -45,11 +46,20 @@ func main() {
 	// Start the server in a separate goroutine
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
+	// Add a channel for stopping the mDNS server:
+	stopMDNSServer := make(chan struct{}, 1)
 	go func() {
 		closer := server.Serve(blox.BloxCommandInitOnly, "", "")
 		serverCloser <- closer
 		<-stopServer
 		closer.Close()
+
+		// Start the mDNS server after HTTP server is closed:
+		mdnsServer := mdns.StartServer(ctx, 8080)
+
+		// Wait for signal to stop the mDNS server:
+		<-stopMDNSServer
+		mdnsServer.Close()
 	}()
 
 	if !isConnected && configExists {
@@ -102,6 +112,9 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	log.Info("Shutting down wap")
+
+	// Stop the mDNS server:
+	stopMDNSServer <- struct{}{}
 
 	// Close the server
 	select {
