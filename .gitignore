@@ -5,3 +5,4 @@ dist
 */**/tmp
 wap/wap
 .history/*
+vendor
