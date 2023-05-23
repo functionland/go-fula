@@ -17,9 +17,45 @@ import (
 
 var log = logging.Logger("fula/wap/main")
 
+// The state of the application.
+var currentIsConnected *bool
+
+// handleAppState monitors the application state and starts/stops services as needed.
+func handleAppState(ctx context.Context, isConnected *bool, stopServer chan struct{}, mdnsServer **mdns.MDNSServer) {
+	if currentIsConnected == nil || (currentIsConnected != nil && *currentIsConnected != *isConnected) {
+		if *mdnsServer != nil {
+			// Shutdown existing mDNS server before state change
+			(*mdnsServer).Shutdown()
+			*mdnsServer = nil
+		}
+		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
+		if *isConnected {
+			log.Info("Wi-Fi is connected, starting mDNS server.")
+			stopServer <- struct{}{} // stop the HTTP server
+		} else {
+			log.Info("Wi-Fi is disconnected, activating the hotspot mode.")
+			if err := wifi.StartHotspot(ctx, true); err != nil {
+				log.Errorw("start hotspot on startup", "err", err)
+			}
+			log.Info("Access point enabled on startup")
+		}
+		// Initialize currentIsConnected if it's nil
+		if currentIsConnected == nil {
+			currentIsConnected = new(bool)
+		}
+		*currentIsConnected = *isConnected
+	}
+}
+
 func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
+	var mdnsServer *mdns.MDNSServer = nil
+
+	serverCloser := make(chan io.Closer, 1)
+	stopServer := make(chan struct{}, 1)
+	serverReady := make(chan struct{}, 1)
+	mdnsRestartCh := make(chan bool)
 
 	isConnected := false
 
@@ -37,33 +73,27 @@ func main() {
 	}
 
 	log.Info("Waiting for the system to connect to Wi-Fi")
-	if !isConnected {
-		log.Info("Wi-Fi is still not connected and system is activating the hotspot mode")
-		if err := wifi.StartHotspot(ctx, true); err != nil {
-			log.Errorw("start hotspot on startup", "err", err)
-		}
-		log.Info("Access point enabled on startup")
-	} else {
-		log.Info("Wi-Fi already connected")
-	}
+	handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
 
 	// Start the server in a separate goroutine
-	serverCloser := make(chan io.Closer, 1)
-	stopServer := make(chan struct{}, 1)
-	mdnsServerCloseChan := make(chan struct{}, 1)
 	go func() {
-		closer := server.Serve(blox.BloxCommandInitOnly, "", "")
+		closer := server.Serve(blox.BloxCommandInitOnly, "", "", mdnsRestartCh)
 		serverCloser <- closer
+		serverReady <- struct{}{} // Signal that the server is ready
 		<-stopServer
 		closer.Close()
 
-		// Start the mDNS server after HTTP server is closed:
-		mdnsServer := mdns.StartServer(ctx, 8080)
-
-		// Wait for signal to stop the mDNS server:
-		<-mdnsServerCloseChan
-		mdnsServer.Shutdown()
+		for {
+			select {
+			case <-mdnsRestartCh:
+				isConnected = true
+				handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+			}
+		}
 	}()
+
+	// Wait for server to be ready
+	<-serverReady
 
 	if !isConnected && configExists {
 		timeout2 := time.After(30 * time.Second)
@@ -84,15 +114,12 @@ func main() {
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
-					stopServer <- struct{}{}
+					handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
 					ticker2.Stop()
 					break loop2
 				}
 			}
 		}
-	} else if isConnected {
-		log.Info("Wi-Fi is already connected")
-		stopServer <- struct{}{}
 	}
 
 	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 600 seconds
@@ -104,9 +131,8 @@ func main() {
 			ticker3.Stop()
 		} else {
 			log.Info("Not connected to a wifi network")
-			if err := wifi.StartHotspot(ctx, true); err != nil {
-				log.Errorw("start hotspot on startup", "err", err)
-			}
+			isConnected = false
+			handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
 		}
 	}
 
@@ -114,10 +140,9 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
+	// Before shutting down, make sure to set the appropriate state
+	handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
 	log.Info("Shutting down wap")
-
-	// Stop the mDNS server:
-	mdnsServerCloseChan <- struct{}{}
 
 	// Close the server
 	select {
