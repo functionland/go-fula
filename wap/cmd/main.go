@@ -22,15 +22,17 @@ var currentIsConnected *bool
 
 // handleAppState monitors the application state and starts/stops services as needed.
 func handleAppState(ctx context.Context, isConnected *bool, stopServer chan struct{}, mdnsServer **mdns.MDNSServer) {
+	log.Info("handleAppState is called")
 	if currentIsConnected == nil || (currentIsConnected != nil && *currentIsConnected != *isConnected) {
 		if *mdnsServer != nil {
 			// Shutdown existing mDNS server before state change
 			(*mdnsServer).Shutdown()
 			*mdnsServer = nil
 		}
+		log.Info("starting mDNS server.")
 		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
 		if *isConnected {
-			log.Info("Wi-Fi is connected, starting mDNS server.")
+			log.Info("Wi-Fi is connected")
 			stopServer <- struct{}{} // stop the HTTP server
 		} else {
 			log.Info("Wi-Fi is disconnected, activating the hotspot mode.")
@@ -44,6 +46,8 @@ func handleAppState(ctx context.Context, isConnected *bool, stopServer chan stru
 			currentIsConnected = new(bool)
 		}
 		*currentIsConnected = *isConnected
+	} else {
+		log.Info("handleAppState is called but no action is needed")
 	}
 }
 
@@ -58,8 +62,9 @@ func main() {
 	mdnsRestartCh := make(chan bool)
 
 	isConnected := false
-
+	log.Info("initial assignment of isConnected made it false")
 	if wifi.CheckIfIsConnected(ctx) == nil {
+		log.Info("initial test of isConnected made it true")
 		isConnected = true
 	}
 
@@ -74,6 +79,7 @@ func main() {
 
 	log.Info("Waiting for the system to connect to Wi-Fi")
 	handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+	log.Infow("called handleAppState with ", isConnected)
 
 	// Start the server in a separate goroutine
 	go func() {
