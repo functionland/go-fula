@@ -23,6 +23,10 @@ func main() {
 
 	isConnected := false
 
+	if wifi.CheckIfIsConnected(ctx) == nil {
+		isConnected = true
+	}
+
 	// Check if "/internal/config.yaml" file exists
 	configExists := true
 	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
@@ -46,8 +50,7 @@ func main() {
 	// Start the server in a separate goroutine
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
-	// Add a channel for stopping the mDNS server:
-	stopMDNSServer := make(chan struct{}, 1)
+	mdnsServerCloseChan := make(chan struct{}, 1)
 	go func() {
 		closer := server.Serve(blox.BloxCommandInitOnly, "", "")
 		serverCloser <- closer
@@ -58,8 +61,8 @@ func main() {
 		mdnsServer := mdns.StartServer(ctx, 8080)
 
 		// Wait for signal to stop the mDNS server:
-		<-stopMDNSServer
-		mdnsServer.Close()
+		<-mdnsServerCloseChan
+		mdnsServer.Shutdown()
 	}()
 
 	if !isConnected && configExists {
@@ -114,7 +117,7 @@ func main() {
 	log.Info("Shutting down wap")
 
 	// Stop the mDNS server:
-	stopMDNSServer <- struct{}{}
+	mdnsServerCloseChan <- struct{}{}
 
 	// Close the server
 	select {

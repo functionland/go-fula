@@ -3,12 +3,10 @@ package mdns
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
-	"net"
 	"os"
 
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
-	"github.com/hashicorp/mdns"
+	"github.com/grandcat/zeroconf"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -22,7 +20,7 @@ const (
 )
 
 type MDNSServer struct {
-	server *mdns.Server
+	server *zeroconf.Server
 }
 type Config struct {
 	Identity   string `yaml:"identity"`
@@ -31,7 +29,7 @@ type Config struct {
 	// include other fields as needed
 }
 
-func createInfo() string {
+func createInfo() []string {
 
 	bloxPeerIdString := "NA"
 	poolName := "NA"
@@ -77,59 +75,54 @@ func createInfo() string {
 
 	poolName = config.PoolName
 
-	// Create a map with the required information
-	infoMap := map[string]string{
-		"bloxPeerIdString": bloxPeerIdString,
-		"poolName":         poolName,
-		"authorizer":       authorizer,
-		"hardwareID":       hardwareID,
+	// Create a slice with the required information in key=value format
+	infoSlice := []string{
+		"bloxPeerIdString=" + bloxPeerIdString,
+		"poolName=" + poolName,
+		"authorizer=" + authorizer,
+		"hardwareID=" + hardwareID,
 	}
 
-	// Convert the map into JSON
-	infoJson, err := json.Marshal(infoMap)
-	if err != nil {
-		log.Errorw("json.Marshal failed", "err", err)
-		return ""
-	}
-
-	// Return the JSON string
-	return string(infoJson)
+	return infoSlice
 }
 
 // Add this function
 func StartServer(ctx context.Context, port int) *MDNSServer {
-	server, err := NewMDNSServer(port)
+	server, err := NewZeroConfService(port)
 	if err != nil {
 		log.Errorw("NewMDNSServer failed", "err", err)
+		return nil
 	}
 
 	// Listen for context done signal to close the server
 	go func() {
 		<-ctx.Done()
-		server.Close()
+		server.Shutdown()
 	}()
 
 	return server
 }
 
-func NewMDNSServer(port int) (*MDNSServer, error) {
-	host, _ := os.Hostname()
-	// Call createInfo() to get the service info
-	info := []string{createInfo()}
+func NewZeroConfService(port int) (*MDNSServer, error) {
+	meta := createInfo()
 
-	service, err := mdns.NewMDNSService(host, ServiceName, "", "", port, []net.IP{net.ParseIP("0.0.0.0")}, info)
+	service, err := zeroconf.Register(
+		"fulatower",       // service instance name
+		"_fulatower._tcp", // service type and protocol
+		"local.",          // service domain
+		port,              // service port
+		meta,              // service metadata
+		nil,               // register on all network interfaces
+	)
+
 	if err != nil {
+		log.Errorw("zeroconf.Register failed", "err", err)
 		return nil, err
 	}
 
-	server, err := mdns.NewServer(&mdns.Config{Zone: service})
-	if err != nil {
-		return nil, err
-	}
-
-	return &MDNSServer{server: server}, nil
+	return &MDNSServer{server: service}, nil
 }
 
-func (s *MDNSServer) Close() {
+func (s *MDNSServer) Shutdown() {
 	s.server.Shutdown()
 }
