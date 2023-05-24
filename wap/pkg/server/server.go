@@ -237,7 +237,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request, mdnsRestartCh ch
 		http.Error(w, "couldn't connect", http.StatusBadRequest)
 		return
 	}
-
+	log.Info("wifi connected. Calling mdns restart")
 	mdnsRestartCh <- true
 
 	w.Header().Set("Content-Type", "application/json")

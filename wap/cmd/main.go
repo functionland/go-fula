@@ -59,7 +59,7 @@ func main() {
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
 	serverReady := make(chan struct{}, 1)
-	mdnsRestartCh := make(chan bool)
+	mdnsRestartCh := make(chan bool, 1)
 
 	isConnected := false
 	log.Info("initial assignment of isConnected made it false")
@@ -91,6 +91,7 @@ func main() {
 
 		for range mdnsRestartCh {
 			isConnected = true
+			log.Infow("called handleAppState in go routine with ", isConnected)
 			handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
 		}
 	}()
