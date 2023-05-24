@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -18,12 +19,19 @@ import (
 var log = logging.Logger("fula/wap/main")
 
 // The state of the application.
-var currentIsConnected *bool
+var currentIsConnected int32
 
 // handleAppState monitors the application state and starts/stops services as needed.
-func handleAppState(ctx context.Context, isConnected *bool, stopServer chan struct{}, mdnsServer **mdns.MDNSServer) {
+func handleAppState(ctx context.Context, isConnected bool, stopServer chan struct{}, mdnsServer **mdns.MDNSServer) {
 	log.Info("handleAppState is called")
-	if currentIsConnected == nil || (currentIsConnected != nil && *currentIsConnected != *isConnected) {
+
+	currentState := atomic.LoadInt32(&currentIsConnected)
+	newState := int32(0)
+	if isConnected {
+		newState = int32(1)
+	}
+
+	if currentState != newState {
 		if *mdnsServer != nil {
 			// Shutdown existing mDNS server before state change
 			(*mdnsServer).Shutdown()
@@ -31,7 +39,7 @@ func handleAppState(ctx context.Context, isConnected *bool, stopServer chan stru
 		}
 		log.Info("starting mDNS server.")
 		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
-		if *isConnected {
+		if isConnected {
 			log.Info("Wi-Fi is connected")
 			stopServer <- struct{}{} // stop the HTTP server
 		} else {
@@ -41,11 +49,7 @@ func handleAppState(ctx context.Context, isConnected *bool, stopServer chan stru
 			}
 			log.Info("Access point enabled on startup")
 		}
-		// Initialize currentIsConnected if it's nil
-		if currentIsConnected == nil {
-			currentIsConnected = new(bool)
-		}
-		*currentIsConnected = *isConnected
+		atomic.StoreInt32(&currentIsConnected, int32(newState))
 	} else {
 		log.Info("handleAppState is called but no action is needed")
 	}
@@ -78,7 +82,7 @@ func main() {
 	}
 
 	log.Info("Waiting for the system to connect to Wi-Fi")
-	handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+	handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 	log.Infow("called handleAppState with ", isConnected)
 
 	// Start the server in a separate goroutine
@@ -92,7 +96,7 @@ func main() {
 		for range mdnsRestartCh {
 			isConnected = true
 			log.Infow("called handleAppState in go routine with ", isConnected)
-			handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+			handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 		}
 	}()
 
@@ -118,7 +122,7 @@ func main() {
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx) == nil {
 					isConnected = true
-					handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+					handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 					ticker2.Stop()
 					break loop2
 				}
@@ -136,7 +140,7 @@ func main() {
 		} else {
 			log.Info("Not connected to a wifi network")
 			isConnected = false
-			handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+			handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 		}
 	}
 
@@ -145,7 +149,7 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	// Before shutting down, make sure to set the appropriate state
-	handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
+	handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 	log.Info("Shutting down wap")
 
 	// Close the server
