@@ -21,6 +21,17 @@ var log = logging.Logger("fula/wap/main")
 // The state of the application.
 var currentIsConnected int32
 
+func checkConfigExists() bool {
+	// Check if "/internal/config.yaml" file exists
+	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
+		log.Info("File /internal/config.yaml does not exist")
+		return false
+	} else {
+		log.Info("File /internal/config.yaml exists")
+		return true
+	}
+}
+
 // handleAppState monitors the application state and starts/stops services as needed.
 func handleAppState(ctx context.Context, isConnected bool, stopServer chan struct{}, mdnsServer **mdns.MDNSServer) {
 	log.Info("handleAppState is called")
@@ -41,7 +52,16 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
 		if isConnected {
 			log.Info("Wi-Fi is connected")
-			stopServer <- struct{}{} // stop the HTTP server
+			configExists := checkConfigExists()
+			if configExists {
+				stopServer <- struct{}{} // stop the HTTP server
+			} else {
+				log.Info("No config file found, activating the hotspot mode.")
+				if err := wifi.StartHotspot(ctx, true); err != nil {
+					log.Errorw("error on start hotspot on startup", "err", err)
+				}
+				log.Info("Access point enabled on startup")
+			}
 		} else {
 			log.Info("Wi-Fi is disconnected, activating the hotspot mode.")
 			if err := wifi.StartHotspot(ctx, true); err != nil {
@@ -73,13 +93,7 @@ func main() {
 	}
 
 	// Check if "/internal/config.yaml" file exists
-	configExists := true
-	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
-		log.Info("File /internal/config.yaml does not exist")
-		configExists = false
-	} else {
-		log.Info("File /internal/config.yaml exists")
-	}
+	configExists := checkConfigExists()
 
 	log.Info("Waiting for the system to connect to Wi-Fi")
 	handleAppState(ctx, isConnected, stopServer, &mdnsServer)
