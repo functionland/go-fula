@@ -89,12 +89,9 @@ func main() {
 		<-stopServer
 		closer.Close()
 
-		for {
-			select {
-			case <-mdnsRestartCh:
-				isConnected = true
-				handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
-			}
+		for range mdnsRestartCh {
+			isConnected = true
+			handleAppState(ctx, &isConnected, stopServer, &mdnsServer)
 		}
 	}()
 
