@@ -244,7 +244,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request, mdnsRestartCh ch
 	w.WriteHeader(http.StatusCreated)
 	jsonErr := json.NewEncoder(w).Encode("Wifi connected!")
 	if jsonErr != nil {
-		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
 		return
 	}
 }

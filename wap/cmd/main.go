@@ -63,8 +63,8 @@ func main() {
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
 	serverReady := make(chan struct{}, 1)
-	mdnsRestartCh := make(chan bool, 1)
 
+	atomic.StoreInt32(&currentIsConnected, int32(2))
 	isConnected := false
 	log.Info("initial assignment of isConnected made it false")
 	if wifi.CheckIfIsConnected(ctx) == nil {
@@ -87,16 +87,19 @@ func main() {
 
 	// Start the server in a separate goroutine
 	go func() {
+		mdnsRestartCh := make(chan bool, 1)
 		closer := server.Serve(blox.BloxCommandInitOnly, "", "", mdnsRestartCh)
 		serverCloser <- closer
 		serverReady <- struct{}{} // Signal that the server is ready
-		<-stopServer
-		closer.Close()
-
-		for range mdnsRestartCh {
-			isConnected = true
-			log.Infow("called handleAppState in go routine with ", isConnected)
-			handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+		for {
+			select {
+			case <-stopServer:
+				closer.Close()
+				return // Exit the goroutine
+			case isConnected = <-mdnsRestartCh:
+				log.Infow("called handleAppState in go routine1 with ", isConnected)
+				handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+			}
 		}
 	}()
 
