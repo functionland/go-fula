@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -20,6 +21,9 @@ var log = logging.Logger("fula/wap/main")
 
 // The state of the application.
 var currentIsConnected int32
+var isHotspotStarted = false
+var currentServer io.Closer = nil
+var serverMutex sync.Mutex
 
 func checkConfigExists() bool {
 	// Check if "/internal/config.yaml" file exists
@@ -57,17 +61,29 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 				stopServer <- struct{}{} // stop the HTTP server
 			} else {
 				log.Info("No config file found, activating the hotspot mode.")
-				if err := wifi.StartHotspot(ctx, true); err != nil {
-					log.Errorw("error on start hotspot on startup", "err", err)
+				if !isHotspotStarted {
+					if err := wifi.StartHotspot(ctx, true); err != nil {
+						log.Errorw("start hotspot on startup", "err", err)
+					} else {
+						isHotspotStarted = true
+					}
+					log.Info("Access point enabled on startup")
+				} else {
+					log.Info("Access point already enabled on startup")
 				}
-				log.Info("Access point enabled on startup")
 			}
 		} else {
 			log.Info("Wi-Fi is disconnected, activating the hotspot mode.")
-			if err := wifi.StartHotspot(ctx, true); err != nil {
-				log.Errorw("start hotspot on startup", "err", err)
+			if !isHotspotStarted {
+				if err := wifi.StartHotspot(ctx, true); err != nil {
+					log.Errorw("start hotspot on startup", "err", err)
+				} else {
+					isHotspotStarted = true
+				}
+				log.Info("Access point enabled on startup")
+			} else {
+				log.Info("Access point already enabled on startup")
 			}
-			log.Info("Access point enabled on startup")
 		}
 		atomic.StoreInt32(&currentIsConnected, int32(newState))
 	} else {
@@ -102,13 +118,26 @@ func main() {
 	// Start the server in a separate goroutine
 	go func() {
 		mdnsRestartCh := make(chan bool, 1)
+		serverMutex.Lock()
+		if currentServer != nil {
+			currentServer.Close()
+			currentServer = nil
+		}
 		closer := server.Serve(blox.BloxCommandInitOnly, "", "", mdnsRestartCh)
+		currentServer = closer
+		serverMutex.Unlock()
 		serverCloser <- closer
 		serverReady <- struct{}{} // Signal that the server is ready
 		for {
 			select {
 			case <-stopServer:
-				closer.Close()
+				serverMutex.Lock()
+				if currentServer != nil {
+					currentServer.Close()
+					currentServer = nil
+				}
+				isHotspotStarted = false
+				serverMutex.Unlock()
 				return // Exit the goroutine
 			case isConnected = <-mdnsRestartCh:
 				log.Infow("called handleAppState in go routine1 with ", isConnected)
