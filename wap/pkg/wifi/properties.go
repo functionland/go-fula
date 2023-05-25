@@ -18,6 +18,8 @@ import (
 
 // Assuming config.ReadProperties() and config.PROJECT_NAME are defined in your code
 
+type BloxFreeSpaceRequest struct {
+}
 type BloxFreeSpaceResponse struct {
 	DeviceCount    int     `json:"device_count"`
 	Size           float32 `json:"size"`

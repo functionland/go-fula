@@ -15,6 +15,13 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+type WifiRemoveallRequest struct {
+}
+type WifiRemoveallResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type Credentials struct {
 	SSID        string
 	Password    string
@@ -90,6 +97,39 @@ func DeleteConnection(ctx context.Context, connectionName string) {
 	_, _, err := runCommand(ctx, command)
 	if err != nil {
 		log.Warnf("failed to delete connection %s: %v", connectionName, err)
+	}
+}
+
+func WifiRemoveall(ctx context.Context) WifiRemoveallResponse {
+	connections, err := getWifiConnections(ctx)
+	if err != nil {
+		log.Warnf("failed to get connections: %v", err)
+		return WifiRemoveallResponse{
+			Msg:    fmt.Sprintf("Failed to get connections: %v", err),
+			Status: false,
+		}
+	}
+
+	var errors []string
+	for _, connectionName := range connections {
+		command := fmt.Sprintf("nmcli con delete '%s'", strings.TrimSpace(connectionName))
+		_, _, err := runCommand(ctx, command)
+		if err != nil {
+			log.Warnf("failed to delete connection %s: %v", connectionName, err)
+			errors = append(errors, fmt.Sprintf("Failed to delete connection %s: %v", connectionName, err))
+		}
+	}
+
+	if len(errors) > 0 {
+		return WifiRemoveallResponse{
+			Msg:    strings.Join(errors, "; "),
+			Status: false,
+		}
+	}
+
+	return WifiRemoveallResponse{
+		Msg:    "All wifi connections removed successfully",
+		Status: true,
 	}
 }
 

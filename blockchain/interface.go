@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 
+	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -28,6 +29,9 @@ const (
 	actionManifestRemoveStorer = "fula-manifest-remove_storer"
 	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
 	actionBloxFreeSpace        = "blox-free-space"
+
+	//Hardware
+	actionWifiRemoveall = "wifi-removeall"
 )
 
 type SeededRequest struct {
@@ -259,15 +263,6 @@ type ManifestRemoveStoredResponse struct {
 	PoolID   int    `json:"pool_id"`
 }
 
-type BloxFreeSpaceRequest struct {
-}
-type BloxFreeSpaceResponse struct {
-	Size           float32 `json:"size"`
-	Used           float32 `json:"used"`
-	Avail          float32 `json:"avail"`
-	UsedPercentage float32 `json:"used_percentage"`
-}
-
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -289,7 +284,10 @@ type Blockchain interface {
 	ManifestRemoveStorer(context.Context, peer.ID, ManifestRemoveStorerRequest) ([]byte, error)
 	ManifestRemoveStored(context.Context, peer.ID, ManifestRemoveStoredRequest) ([]byte, error)
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
+
+	//Hardware
 	BloxFreeSpace(context.Context, peer.ID) ([]byte, error)
+	WifiRemoveall(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -311,7 +309,10 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
-	actionBloxFreeSpace:        reflect.TypeOf(BloxFreeSpaceRequest{}),
+
+	//Hardware
+	actionBloxFreeSpace: reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
+	actionWifiRemoveall: reflect.TypeOf(wifi.WifiRemoveallRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -333,5 +334,8 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
-	actionBloxFreeSpace:        reflect.TypeOf(BloxFreeSpaceResponse{}),
+
+	//Hardware
+	actionBloxFreeSpace: reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
+	actionWifiRemoveall: reflect.TypeOf(wifi.WifiRemoveallResponse{}),
 }
