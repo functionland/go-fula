@@ -202,7 +202,7 @@ func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
+func connectWifiHandler(w http.ResponseWriter, r *http.Request, mdnsRestartCh chan bool) {
 	if r.URL.Path != "/wifi/connect" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
@@ -237,12 +237,14 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "couldn't connect", http.StatusBadRequest)
 		return
 	}
+	log.Info("wifi connected. Calling mdns restart")
+	mdnsRestartCh <- true
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	jsonErr := json.NewEncoder(w).Encode("Wifi connected!")
 	if jsonErr != nil {
-		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
 		return
 	}
 }
@@ -402,13 +404,15 @@ func getNonLoopbackIP() (string, error) {
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
-func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string) io.Closer {
+func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, mdnsRestartCh chan bool) io.Closer {
 	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readiness", readinessHandler)
 	mux.HandleFunc("/wifi/list", listWifiHandler)
 	mux.HandleFunc("/wifi/status", wifiStatusHandler)
-	mux.HandleFunc("/wifi/connect", connectWifiHandler)
+	mux.HandleFunc("/wifi/connect", func(w http.ResponseWriter, r *http.Request) {
+		connectWifiHandler(w, r, mdnsRestartCh)
+	})
 	mux.HandleFunc("/ap/enable", enableAccessPointHandler)
 	mux.HandleFunc("/ap/disable", disableAccessPointHandler)
 	mux.HandleFunc("/properties", propertiesHandler)
