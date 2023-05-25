@@ -157,8 +157,18 @@ func (c *Client) ManifestRemoveStored(seed string, uploader string, poolID int, 
 	return c.bl.ManifestRemoveStored(ctx, c.bloxPid, blockchain.ManifestRemoveStoredRequest{Uploader: uploader, Cid: cid, PoolID: poolID})
 }
 
+//////////////////////////////////////////////////
+/////////////////////HARDWARE/////////////////////
+//////////////////////////////////////////////////
+
 // BloxFreeSpace requests the blox avail/used free space information.
 func (c *Client) BloxFreeSpace() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.BloxFreeSpace(ctx, c.bloxPid)
+}
+
+// WifiRemoveall requests the blox to remove all saved wifis
+func (c *Client) WifiRemoveall() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.WifiRemoveall(ctx, c.bloxPid)
 }

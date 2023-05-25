@@ -259,6 +259,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionBloxFreeSpace: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleBloxFreeSpace(from, w, r)
 		},
+		actionWifiRemoveall: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleWifiRemoveall(r.Context(), from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -353,6 +356,19 @@ func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter,
 
 }
 
+func (bl *FxBlockchain) handleWifiRemoveall(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionWifiRemoveall, "from", from)
+	out := wifi.WifiRemoveall(ctx)
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+}
+
 func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
 	// Check if auth is for local host; if so, handle it locally.
 	if on == bl.h.ID() {
@@ -399,7 +415,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionWifiRemoveall, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
