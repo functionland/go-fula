@@ -28,10 +28,11 @@ const (
 	actionManifestRemove       = "fula-manifest-remove"
 	actionManifestRemoveStorer = "fula-manifest-remove_storer"
 	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
-	actionBloxFreeSpace        = "blox-free-space"
 
 	//Hardware
+	actionBloxFreeSpace = "blox-free-space"
 	actionWifiRemoveall = "wifi-removeall"
+	actionReboot        = "reboot"
 )
 
 type SeededRequest struct {
@@ -288,6 +289,7 @@ type Blockchain interface {
 	//Hardware
 	BloxFreeSpace(context.Context, peer.ID) ([]byte, error)
 	WifiRemoveall(context.Context, peer.ID) ([]byte, error)
+	Reboot(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -313,6 +315,7 @@ var requestTypes = map[string]reflect.Type{
 	//Hardware
 	actionBloxFreeSpace: reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
 	actionWifiRemoveall: reflect.TypeOf(wifi.WifiRemoveallRequest{}),
+	actionReboot:        reflect.TypeOf(wifi.RebootRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -338,4 +341,5 @@ var responseTypes = map[string]reflect.Type{
 	//Hardware
 	actionBloxFreeSpace: reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
 	actionWifiRemoveall: reflect.TypeOf(wifi.WifiRemoveallResponse{}),
+	actionReboot:        reflect.TypeOf(wifi.RebootResponse{}),
 }
