@@ -22,6 +22,13 @@ type WifiRemoveallResponse struct {
 	Status bool   `json:"status"`
 }
 
+type RebootRequest struct {
+}
+type RebootResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type Credentials struct {
 	SSID        string
 	Password    string
@@ -100,6 +107,20 @@ func DeleteConnection(ctx context.Context, connectionName string) {
 	}
 }
 
+func Reboot(ctx context.Context) RebootResponse {
+	go func() {
+		time.Sleep(5 * time.Second)
+		_, stderr, err := runCommand(ctx, "sudo reboot")
+		if err != nil {
+			log.Warnf("failed to reboot: %v: %v", err, stderr)
+		}
+	}()
+	return RebootResponse{
+		Msg:    "Trying to reboot...",
+		Status: true,
+	}
+}
+
 func WifiRemoveall(ctx context.Context) WifiRemoveallResponse {
 	connections, err := getWifiConnections(ctx)
 	if err != nil {
@@ -127,9 +148,12 @@ func WifiRemoveall(ctx context.Context) WifiRemoveallResponse {
 		}
 	}
 
+	msg := "All wifi connections removed successfully. "
+	status := true
+
 	return WifiRemoveallResponse{
-		Msg:    "All wifi connections removed successfully",
-		Status: true,
+		Msg:    msg,
+		Status: status,
 	}
 }
 

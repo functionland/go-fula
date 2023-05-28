@@ -172,3 +172,9 @@ func (c *Client) WifiRemoveall() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.WifiRemoveall(ctx, c.bloxPid)
 }
+
+// Reboot requests the blox to reboot
+func (c *Client) Reboot() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.Reboot(ctx, c.bloxPid)
+}
