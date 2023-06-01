@@ -27,8 +27,8 @@ bundles:
 	cp LICENSE ./build/LICENSE && cd build &&\
 	cp ../Fula.xcframework/ios-arm64/Fula.framework/Fula libfula_ios.a &&\
 	cp ../Fula.xcframework/ios-arm64_x86_64-simulator/Fula.framework/Fula libfula_iossimulator.a &&\
-	cp -r ../Fula.xcframework/ios-arm64/Fula.framework/Headers Headers
-	cp -r ../Fula.xcframework/ios-arm64/Fula.framework/Modules Modules
+	cp -r ../Fula.xcframework/ios-arm64/Fula.framework/Headers Headers &&\
+	cp -r ../Fula.xcframework/ios-arm64/Fula.framework/Modules Modules &&\
 	zip -r ./cocoapods-bundle.zip  ./libfula_iossimulator.a ./libfula_ios.a ./Headers ./Modules && echo "$$(openssl dgst -sha256 ./cocoapods-bundle.zip)" > ./cocoapods-bundle.zip.sha256
 
 clean-up:
