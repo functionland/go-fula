@@ -1,3 +1,5 @@
 dist
 .vscode
 .env
+build
+tmp-fula-build

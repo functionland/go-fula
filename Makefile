@@ -31,6 +31,7 @@ build-bundle:
 
 lipo:
 	cd build && \
+	lipo libfula_iossimulator.a -remove arm64 -output libfula_iossimulator.a && \
 	lipo -create \
 	libfula_iossimulator.a \
 	libfula_ios.a \
