@@ -4,3 +4,6 @@ dist
 */**/tmp
 wap/wap
 .history/*
+.env
+build
+tmp-fula-build

@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|  
     s.name              = 'FulaMobile' # Name for your pod
-    s.version           = '0.1.0'
+    s.version           = '0.1.1'
     s.summary           = 'Go-fula for iOS'
     s.homepage          = 'https://github.com/functionland/go-fula'
 
