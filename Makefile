@@ -2,7 +2,7 @@ GO_MOD_REPLACEMENT=replace github.com/raulk/go-watchdog => ./tmp-fula-build/go-w
 all:
 	go test ./...
 
-fula-xcframework: patch-go-watchdog prepare-gomobile build-fula-xcframework build-bundle lipo zip
+fula-xcframework: patch-go-watchdog prepare-gomobile build-fula-xcframework build-bundle zip
 patch-go-watchdog:
 	mkdir -p tmp-fula-build &&\
 	cd tmp-fula-build &&\
@@ -24,22 +24,11 @@ build-fula-xcframework:
 build-bundle:
 	mkdir -p build &&\
 	cp LICENSE ./build/LICENSE && cd build &&\
-	cp ../Fula.xcframework/ios-arm64/Fula.framework/Fula libfula_ios.a &&\
-	cp ../Fula.xcframework/ios-arm64_x86_64-simulator/Fula.framework/Fula libfula_iossimulator.a &&\
-	cp -r ../Fula.xcframework/ios-arm64/Fula.framework/Headers Headers &&\
-	cp -r ../Fula.xcframework/ios-arm64/Fula.framework/Modules Modules
-
-lipo:
-	cd build && \
-	lipo libfula_iossimulator.a -remove arm64 -output libfula_iossimulator.a && \
-	lipo -create \
-	libfula_iossimulator.a \
-	libfula_ios.a \
-	-output libfula.a
+	mv ../Fula.xcframework .
 
 zip:
 	cd build &&\
-	zip -r ./cocoapods-bundle.zip  ./libfula.a ./Headers ./Modules && echo "$$(openssl dgst -sha256 ./cocoapods-bundle.zip)" > ./cocoapods-bundle.zip.sha256
+	zip -r ./cocoapods-bundle.zip ./Fula.xcframework ./LICENSE && echo "$$(openssl dgst -sha256 ./cocoapods-bundle.zip)" > ./cocoapods-bundle.zip.sha256
 
 clean-up:
 	grep -v "$(GO_MOD_REPLACEMENT)" ./go.mod > ./tmp.mod ; mv ./tmp.mod ./go.mod &&\
