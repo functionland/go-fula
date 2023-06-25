@@ -18,10 +18,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
-// ExamplePool_DiscoverPeersViaPubSub starts a pool named "my-pool" across three nodes, connects two of the nodes to
+// Example_poolDiscoverPeersViaPubSub starts a pool named "my-pool" across three nodes, connects two of the nodes to
 // the other one to facilitate a path for pubsub to propagate and shows all three nodes discover
 // each other using pubsub.
-func ExamplePool_DiscoverPeersViaPubSub() {
+func Example_poolDiscoverPeersViaPubSub() {
 	const poolName = "my-pool"
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
@@ -155,9 +155,9 @@ func ExamplePool_DiscoverPeersViaPubSub() {
 	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 }
 
-// ExamplePool_ExchangeDagBetweenPoolNodes starts up a pool with 2 nodes, stores a sample DAG in
+// Example_poolExchangeDagBetweenPoolNodes starts up a pool with 2 nodes, stores a sample DAG in
 // one node and fetches it via GraphSync from the other node.
-func ExamplePool_ExchangeDagBetweenPoolNodes() {
+func Example_poolExchangeDagBetweenPoolNodes() {
 	const poolName = "my-pool"
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
