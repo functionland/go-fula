@@ -23,8 +23,8 @@ var lp = cidlink.LinkPrototype{
 	},
 }
 
-// ExampleEventChain creates three events, chains them together and stores them via ipld.DefaultLinkSystem.
-func ExampleEventChain() {
+// Example_eventChain creates three events, chains them together and stores them via ipld.DefaultLinkSystem.
+func Example_eventChain() {
 	first := &event.Event{
 		Version:   event.Version0,
 		Peer:      "1",
