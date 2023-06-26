@@ -188,7 +188,16 @@ func main() {
 			isConnected = false
 			handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 		}
+		log.Info("Access point enabled on startup")
 	}
+	// TODO: this code seems unused while using nmcli
+	// else {
+	// log.Info("Wifi already connected")
+	// if err := wifi.StopHotspot(ctx); err != nil {
+	// 	log.Errorw("stop hotspot on startup", "err", err)
+	// }
+	// log.Info("Access point disabled on startup")
+	//}
 
 	// Wait for the signal to terminate
 	sig := make(chan os.Signal, 1)

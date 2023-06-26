@@ -19,13 +19,13 @@ var TimeLimit = 10 * time.Second
 
 func init() {
 	// Working Directory
-	var err error
+	//var err error
 
 	// Check if NetworkManager is installed
-	_, err = exec.LookPath("nmcli")
-	if err != nil {
-		//log.Fatal("nmcli (NetworkManager) not found")
-	}
+	//_, err = exec.LookPath("nmcli")
+	//if err != nil {
+	//log.Fatal("nmcli (NetworkManager) not found")
+	//}
 	// Check if iw is installed
 	// _, err := exec.LookPath("iw")
 	// if err != nil {

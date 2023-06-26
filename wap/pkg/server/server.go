@@ -399,7 +399,7 @@ func getNonLoopbackIP() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("No non-loopback IP address found")
+	return "", fmt.Errorf("no non-loopback IP address found")
 }
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
