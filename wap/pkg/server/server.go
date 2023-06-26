@@ -134,7 +134,7 @@ func wifiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	connected := true
 	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
 	defer cl()
-	err := wifi.CheckIfIsConnected(ctx)
+	err := wifi.CheckIfIsConnected(ctx, "")
 	if err != nil {
 		log.Errorw("failed to check the wifi status", "err", err)
 		connected = false

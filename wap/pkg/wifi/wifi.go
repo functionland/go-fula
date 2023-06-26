@@ -35,10 +35,10 @@ type Credentials struct {
 	CountryCode string
 }
 
-func CheckIfIsConnected(ctx context.Context) error {
+func CheckIfIsConnected(ctx context.Context, interfaceName string) error {
 	switch runtime.GOOS {
 	case "linux":
-		return checkIfIsConnectedLinux(ctx)
+		return checkIfIsConnectedLinux(ctx, interfaceName)
 	default:
 		return fmt.Errorf("unsupported platform")
 	}
@@ -102,10 +102,11 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 
 func DeleteConnection(ctx context.Context, connectionName string) {
 	command1 := fmt.Sprintf("nmcli con down %s", connectionName)
-	_, _, err1 := runCommand(ctx, command1)
+	stdout, stderr, err1 := runCommand(ctx, command1)
 	if err1 != nil {
 		log.Warnf("failed to down connection %s: %v", connectionName, err1)
 	}
+	log.Infof("command '%s' ran with %v , %v", command1, stdout, stderr)
 
 	command := fmt.Sprintf("nmcli con delete %s", connectionName)
 	_, _, err := runCommand(ctx, command)
@@ -274,6 +275,18 @@ func ConnectToSavedWifi(ctx context.Context) error {
 	return connectToFirstWifi(ctx, connections)
 }
 
+func getDeviceOfConnection(ctx context.Context, connectionName string) (string, error) {
+	c3 := fmt.Sprintf(`nmcli -g GENERAL.DEVICES con show "%s"`, connectionName)
+	stdout, _, err := runCommand(ctx, c3)
+	if err != nil {
+		return "", err
+	}
+
+	// The device name is the output of the command.
+	deviceName := strings.TrimSpace(string(stdout))
+	return deviceName, nil
+}
+
 func connectToNetwork(ctx context.Context, connectionName string) error {
 	c3 := fmt.Sprintf("nmcli con up %s", connectionName)
 	_, _, err := runCommand(ctx, c3)
@@ -282,7 +295,12 @@ func connectToNetwork(ctx context.Context, connectionName string) error {
 	}
 
 	time.Sleep(10 * time.Second)
-	if err := CheckIfIsConnected(ctx); err != nil {
+	interfaceName, err := getDeviceOfConnection(ctx, connectionName)
+	if err != nil {
+		return err
+	}
+
+	if err := CheckIfIsConnected(ctx, interfaceName); err != nil {
 		return err
 
 	} else {
@@ -308,18 +326,39 @@ func activateHotspot(ctx context.Context) {
 	}
 }
 
-func checkIfIsConnectedLinux(ctx context.Context) error {
-	// Check the connection
-	stdout, stderr, err := runCommand(ctx, fmt.Sprintf("iw %s link", config.IFFACE_CLIENT))
-	if err != nil {
-		return err
-	}
-	if strings.Contains(string(stdout), "Not connected") ||
-		strings.Contains(string(stderr), "Not connected") {
-		return errors.New("Wifi not connected")
-	}
-	return nil
+func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
+    var interfaces []string
+
+    if interfaceName == "" {
+        // Get all available wireless network interfaces
+        ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
+        defer cl()
+        stdout, _, err := runCommand(ctx, `iwconfig 2>/dev/null | grep '^[a-zA-Z]' | awk '{print $1}'`)
+        if err != nil {
+            return err
+        }
+        interfaces = strings.Fields(string(stdout)) // splits the interfaces into a slice
+    } else {
+        interfaces = []string{interfaceName}
+    }
+
+    // Iterate over interfaces and check the connection
+    for _, iface := range interfaces {
+        stdout, stderr, err := runCommand(ctx, fmt.Sprintf("iw %s link", iface))
+        if err != nil {
+            return err
+        }
+        if strings.Contains(string(stdout), "Not connected") ||
+            strings.Contains(string(stderr), "Not connected") ||
+            strings.Contains(string(stdout), "FxBlox") {
+            continue
+        }
+        return nil
+    }
+    return errors.New("Wifi not connected on any interface")
 }
+
+
 
 // TODO: unused, complete the c1 command
 func disconnectLinux(ctx context.Context) error {
@@ -330,7 +369,7 @@ func disconnectLinux(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := CheckIfIsConnected(ctx); err != nil {
+	if err := CheckIfIsConnected(ctx, ""); err != nil {
 		return err
 
 	}

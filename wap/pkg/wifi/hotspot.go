@@ -94,7 +94,7 @@ func CheckHotspotSupported(ctx context.Context) (supported bool, err error) {
 
 // startHotspot can be used to get the list of available wifis and their strength
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
-// wifiInterface is the name of interface that it should look for in Linux. Default is wlan0
+// wifiInterface is the name of interface that it should look for in Linux.
 func StartHotspot(ctx context.Context, forceReload bool) error {
 	var commands []string
 	var err error

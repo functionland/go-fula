@@ -103,7 +103,7 @@ func main() {
 	atomic.StoreInt32(&currentIsConnected, int32(2))
 	isConnected := false
 	log.Info("initial assignment of isConnected made it false")
-	if wifi.CheckIfIsConnected(ctx) == nil {
+	if wifi.CheckIfIsConnected(ctx, "") == nil {
 		log.Info("initial test of isConnected made it true")
 		isConnected = true
 	}
@@ -166,7 +166,7 @@ func main() {
 				break loop2
 			case <-ticker2.C:
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
-				if wifi.CheckIfIsConnected(ctx) == nil {
+				if wifi.CheckIfIsConnected(ctx, "") == nil {
 					isConnected = true
 					handleAppState(ctx, isConnected, stopServer, &mdnsServer)
 					ticker2.Stop()
@@ -179,7 +179,7 @@ func main() {
 	ticker3 := time.NewTicker(600 * time.Second) // Check the connection every 600 seconds
 
 	for range ticker3.C {
-		err := wifi.CheckConnection(5 * time.Second)
+		err := wifi.CheckIfIsConnected(ctx, "")
 		if err == nil {
 			log.Info("Connected to a wifi network")
 			ticker3.Stop()
