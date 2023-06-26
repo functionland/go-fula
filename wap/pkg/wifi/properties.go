@@ -94,7 +94,7 @@ func GenerateRandomString(length int) (string, error) {
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
-	cmd := `df -h 2>/dev/null | grep -n /storage/usb | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
+	cmd := `df -B1 2>/dev/null | grep -nE '/storage/(usb|sd[a-z]|nvme)' | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
 		return BloxFreeSpaceResponse{}, fmt.Errorf("error executing shell command: %v", err)

@@ -84,6 +84,7 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	}
 
 	// If connected successfully, delete the hotspot
+	log.Info("Deleting FxBlox as connectToNetwork was successful")
 	DeleteConnection(ctx, "FxBlox")
 
 	// Save connection properties
@@ -100,6 +101,12 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 }
 
 func DeleteConnection(ctx context.Context, connectionName string) {
+	command1 := fmt.Sprintf("nmcli con down %s", connectionName)
+	_, _, err1 := runCommand(ctx, command1)
+	if err1 != nil {
+		log.Warnf("failed to down connection %s: %v", connectionName, err1)
+	}
+
 	command := fmt.Sprintf("nmcli con delete %s", connectionName)
 	_, _, err := runCommand(ctx, command)
 	if err != nil {
