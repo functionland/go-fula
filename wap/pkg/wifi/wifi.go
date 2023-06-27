@@ -367,15 +367,17 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
         if err != nil {
             return err
         }
-        if strings.Contains(string(stdout), "Not connected") ||
-            strings.Contains(string(stderr), "Not connected") ||
-            strings.Contains(string(stdout), "FxBlox") {
-            continue
+        // If connection is not "FxBlox" and is connected, return nil (no error)
+        if !strings.Contains(string(stdout), "FxBlox") &&
+           !strings.Contains(string(stdout), "Not connected") &&
+           !strings.Contains(string(stderr), "Not connected") {
+            return nil
         }
-        return nil
     }
+    // If no connected interface is found, return error
     return errors.New("Wifi not connected on any interface")
 }
+
 
 
 
