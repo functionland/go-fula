@@ -61,7 +61,7 @@ func parseHotspotLinux(output string) (supported bool, err error) {
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, "AP") {
+		if strings.Contains(strings.ToLower(line), "device supports ap") {
 			supported = true
 		} else {
 			continue
@@ -71,26 +71,28 @@ func parseHotspotLinux(output string) (supported bool, err error) {
 }
 
 func CheckHotspotSupported(ctx context.Context) (supported bool, err error) {
-	command := ""
-	os := ""
-	switch runtime.GOOS {
-	case "windows":
-		os = "windows"
-		command = "netsh wlan show drivers"
-	case "darwin":
-		os = "darwin"
-		command = "networksetup -listallhardwareports"
-	default:
-		os = "linux"
-		command = "iw list | grep -i AP"
-	}
-	stdout, stderr, err := runCommand(ctx, command)
-	if err != nil {
-		log.Errorw("failed to check hotspot support", "command", command, "err", err, "stderr", stderr)
-		return
-	}
-	return parseHotspot(stdout, os)
+    command := ""
+    os := ""
+    switch runtime.GOOS {
+    case "windows":
+        os = "windows"
+        command = "netsh wlan show drivers"
+    case "darwin":
+        os = "darwin"
+        command = "networksetup -listallhardwareports"
+    default:
+        os = "linux"
+        command = "iw list"
+    }
+    stdout, stderr, err := runCommand(ctx, command)
+    if err != nil {
+        log.Errorw("failed to check hotspot support", "command", command, "err", err, "stderr", stderr)
+        return
+    }
+    
+    return parseHotspot(stdout, os)
 }
+
 
 // startHotspot can be used to get the list of available wifis and their strength
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
