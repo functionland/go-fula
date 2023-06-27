@@ -144,9 +144,9 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 		// Get all available wireless network interfaces
 		ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
 		defer cl()
-		stdout, _, err = runCommand(ctx, `iwconfig 2>/dev/null | grep '^[a-zA-Z]' | awk '{print $1}'`)
+		stdout, stderr, err = runCommand(ctx, `iwconfig 2>/dev/null | grep '^[a-zA-Z]' | awk '{print $1}'`)
 		if err != nil {
-			log.Errorw("failed to list interfaces", "err", err)
+			log.Errorw("failed to list interfaces", "err", err, stderr)
 			return
 		}
 		interfaces := strings.Fields(string(stdout)) // splits the interfaces into a slice
