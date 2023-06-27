@@ -152,7 +152,7 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
         scanner := bufio.NewScanner(strings.NewReader(stdout))
         for scanner.Scan() {
             line := scanner.Text()
-            if line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z' {
+            if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
                 filteredLines = append(filteredLines, line)
             }
         }
