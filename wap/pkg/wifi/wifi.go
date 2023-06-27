@@ -333,11 +333,30 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
         // Get all available wireless network interfaces
         ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
         defer cl()
-        stdout, _, err := runCommand(ctx, `iwconfig 2>/dev/null | grep '^[a-zA-Z]' | awk '{print $1}'`)
+
+        // Stage 1: Run iwconfig
+        stdout, _, err := runCommand(ctx, "iwconfig")
         if err != nil {
             return err
         }
-        interfaces = strings.Fields(string(stdout)) // splits the interfaces into a slice
+        
+        // Stage 2: Filter output with grep-like functionality
+        var filteredLines []string
+        scanner := bufio.NewScanner(strings.NewReader(stdout))
+        for scanner.Scan() {
+            line := scanner.Text()
+            if line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z' {
+                filteredLines = append(filteredLines, line)
+            }
+        }
+        
+        // Stage 3: Run awk-like functionality to print the first field of each line
+        for _, line := range filteredLines {
+            fields := strings.Fields(line)
+            if len(fields) > 0 {
+                interfaces = append(interfaces, fields[0])
+            }
+        }
     } else {
         interfaces = []string{interfaceName}
     }
@@ -357,6 +376,7 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
     }
     return errors.New("Wifi not connected on any interface")
 }
+
 
 
 
