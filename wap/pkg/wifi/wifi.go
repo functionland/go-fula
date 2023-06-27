@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -203,7 +202,7 @@ func getWifiConnections(ctx context.Context) ([]string, error) {
 func readWiFiPasswordFromFile(connectionName string) (string, error) {
 	cfg, err := ini.Load(fmt.Sprintf("/etc/NetworkManager/system-connections/%s.nmconnection", connectionName))
 	if err != nil {
-		return "", fmt.Errorf("Failed to read file: %v", err)
+		return "", fmt.Errorf("failed to read file: %v", err)
 	}
 
 	psk := cfg.Section("wifi-security").Key("psk").String()
@@ -236,7 +235,7 @@ func connectToFirstWifi(ctx context.Context, connections []string) error {
 	}
 
 	// Create a temporary file
-	tempFile, err := ioutil.TempFile("", "passwd-")
+	tempFile, err := os.CreateTemp("", "passwd-")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
