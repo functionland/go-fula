@@ -345,9 +345,9 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
         scanner := bufio.NewScanner(strings.NewReader(stdout))
         for scanner.Scan() {
             line := scanner.Text()
-            if line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z' {
-                filteredLines = append(filteredLines, line)
-            }
+            if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
+				filteredLines = append(filteredLines, line)
+			}
         }
         
         // Stage 3: Run awk-like functionality to print the first field of each line
