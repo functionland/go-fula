@@ -129,55 +129,55 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
 // wifiInterface is the name of interface that it should look for in Linux.
 func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error) {
-    var command, stdout, stderr string
-    switch runtime.GOOS {
-    case "windows":
-        // Your windows related code
-    case "darwin":
-        // Your darwin related code
-    default:
-        // Get all available wireless network interfaces
-        ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
-        defer cl()
+	var command, stdout, stderr string
+	switch runtime.GOOS {
+	case "windows":
+		// Your windows related code
+	case "darwin":
+		// Your darwin related code
+	default:
+		// Get all available wireless network interfaces
+		ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
+		defer cl()
 
-        // Stage 1: Run iwconfig
-        stdout, stderr, err = runCommand(ctx, "iwconfig")
-        if err != nil {
-            log.Errorw("failed to run iwconfig", "err", err, "stderr", stderr)
-            return nil, err // Here we return nil for wifilist
-        }
-        
-        // Stage 2: Filter output with grep-like functionality
-        var filteredLines []string
-        scanner := bufio.NewScanner(strings.NewReader(stdout))
-        for scanner.Scan() {
-            line := scanner.Text()
-            if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
-                filteredLines = append(filteredLines, line)
-            }
-        }
-        
-        // Stage 3: Run awk-like functionality to print the first field of each line
-        var interfaces []string
-        for _, line := range filteredLines {
-            fields := strings.Fields(line)
-            if len(fields) > 0 {
-                interfaces = append(interfaces, fields[0])
-            }
-        }
-        
-        // Loop over interfaces
-        for _, iface := range interfaces {
-            command = fmt.Sprintf("iwlist %s scan", iface)
-            stdout, _, err = runCommand(ctx, command)
-            if err == nil {
-                // Break the loop when the scan command is successful
-                wifilist, err = parse(stdout, "linux")
-                if err == nil {
-                    break
-                }
-            }
-        }
-    }
-    return
+		// Stage 1: Run iwconfig
+		stdout, stderr, err = runCommand(ctx, "iwconfig")
+		if err != nil {
+			log.Errorw("failed to run iwconfig", "err", err, "stderr", stderr)
+			return nil, err // Here we return nil for wifilist
+		}
+
+		// Stage 2: Filter output with grep-like functionality
+		var filteredLines []string
+		scanner := bufio.NewScanner(strings.NewReader(stdout))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
+				filteredLines = append(filteredLines, line)
+			}
+		}
+
+		// Stage 3: Run awk-like functionality to print the first field of each line
+		var interfaces []string
+		for _, line := range filteredLines {
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				interfaces = append(interfaces, fields[0])
+			}
+		}
+
+		// Loop over interfaces
+		for _, iface := range interfaces {
+			command = fmt.Sprintf("iwlist %s scan", iface)
+			stdout, _, err = runCommand(ctx, command)
+			if err == nil {
+				// Break the loop when the scan command is successful
+				wifilist, err = parse(stdout, "linux")
+				if err == nil {
+					break
+				}
+			}
+		}
+	}
+	return
 }
