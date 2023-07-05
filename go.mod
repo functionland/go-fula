@@ -2,7 +2,7 @@ module github.com/functionland/go-fula
 
 go 1.19
 
-replace github.com/multiformats/go-multiaddr => github.com/masih/go-multiaddr v0.0.0-20230705195714-69db3d149697
+replace github.com/multiformats/go-multiaddr => github.com/masih/go-multiaddr v0.0.0-20230705203729-a229ac6e52f4
 
 require (
 	github.com/docker/docker v23.0.5+incompatible

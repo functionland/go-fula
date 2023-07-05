@@ -380,8 +380,8 @@ github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czP
 github.com/mailru/easyjson v0.0.0-20190312143242-1de009706dbe/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
 github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd h1:br0buuQ854V8u83wA0rVZ8ttrq5CpaPZdvrK0LP2lOk=
 github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd/go.mod h1:QuCEs1Nt24+FYQEqAAncTDPJIuGs+LxK1MCiFL25pMU=
-github.com/masih/go-multiaddr v0.0.0-20230705195714-69db3d149697 h1:EZ06VMzabTrDSf5pE1WN3SVbDb7s84nbUoqvHXzymw0=
-github.com/masih/go-multiaddr v0.0.0-20230705195714-69db3d149697/go.mod h1:gUv4M6GANle6Ru2+3xOS7MnITEgEV6C5ThrhOffE0P8=
+github.com/masih/go-multiaddr v0.0.0-20230705203729-a229ac6e52f4 h1:PkKyg75rN9nsSJZ5aKOx0c6SM1LP0wHxww6FzF52E+M=
+github.com/masih/go-multiaddr v0.0.0-20230705203729-a229ac6e52f4/go.mod h1:gUv4M6GANle6Ru2+3xOS7MnITEgEV6C5ThrhOffE0P8=
 github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27kJ6hsGG94=
 github.com/mattn/go-isatty v0.0.19 h1:JITubQf0MOLdlGRuRq+jtsDlekdYPia9ZFsB8h/APPA=
 github.com/mattn/go-isatty v0.0.19/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
