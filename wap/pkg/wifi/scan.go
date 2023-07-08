@@ -7,9 +7,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/functionland/go-fula/wap/pkg/config"
 )
 
 // Wifi is the data structure containing the basic
@@ -130,46 +127,57 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 
 // Scan can be used to get the list of available wifis and their strength
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
-// wifiInterface is the name of interface that it should look for in Linux. Default is wlan0
+// wifiInterface is the name of interface that it should look for in Linux.
 func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error) {
-	command := ""
-	os := ""
+	var command, stdout, stderr string
 	switch runtime.GOOS {
 	case "windows":
-		os = "windows"
-		command = "netsh.exe wlan show networks mode=Bssid"
-		if forceReload {
-			ctx, cl1 := context.WithTimeout(context.Background(), TimeLimit)
-			defer cl1()
-			_, _, errRun := runCommand(ctx, "netsh interface set interface name=Wi-Fi admin=disabled")
-			if errRun != nil {
-				log.Errorw("failed to disable wifi interface", "errRun", errRun)
-			}
-			ctx, cl2 := context.WithTimeout(context.Background(), TimeLimit)
-			defer cl2()
-			_, _, errRun = runCommand(ctx, "netsh interface set interface name=Wi-Fi admin=enabled")
-			if errRun != nil {
-				log.Errorw("failed to enabled wifi interface", "errRun", errRun)
-			}
-			time.Sleep(3 * time.Second)
-		}
+		// Your windows related code
 	case "darwin":
-		os = "darwin"
-		command = "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s"
+		// Your darwin related code
 	default:
-		os = "linux"
-		command = "iwlist " + config.IFFACE_CLIENT + " scan"
-		if len(wifiInterface) > 0 && len(wifiInterface[0]) > 0 {
-			command = fmt.Sprintf("iwlist %s scan", wifiInterface[0])
+		// Get all available wireless network interfaces
+		ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
+		defer cl()
+
+		// Stage 1: Run iwconfig
+		stdout, stderr, err = runCommand(ctx, "iwconfig")
+		if err != nil {
+			log.Errorw("failed to run iwconfig", "err", err, "stderr", stderr)
+			return nil, err // Here we return nil for wifilist
+		}
+
+		// Stage 2: Filter output with grep-like functionality
+		var filteredLines []string
+		scanner := bufio.NewScanner(strings.NewReader(stdout))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
+				filteredLines = append(filteredLines, line)
+			}
+		}
+
+		// Stage 3: Run awk-like functionality to print the first field of each line
+		var interfaces []string
+		for _, line := range filteredLines {
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				interfaces = append(interfaces, fields[0])
+			}
+		}
+
+		// Loop over interfaces
+		for _, iface := range interfaces {
+			command = fmt.Sprintf("iwlist %s scan", iface)
+			stdout, _, err = runCommand(ctx, command)
+			if err == nil {
+				// Break the loop when the scan command is successful
+				wifilist, err = parse(stdout, "linux")
+				if err == nil {
+					break
+				}
+			}
 		}
 	}
-	ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
-	defer cl()
-	stdout, _, err := runCommand(ctx, command)
-	if err != nil {
-		log.Errorw("failed to list interfaces", "command", command, "err", err)
-		return
-	}
-	wifilist, err = parse(stdout, os)
 	return
 }

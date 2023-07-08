@@ -9,13 +9,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("fula/wap/server")
-var peerFunction func(clientPeerId string) (string, error)
+var peerFunction func(clientPeerId string, bloxSeed string) (string, error)
 
 func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/properties" {
@@ -24,15 +25,72 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		p, err := config.ReadProperties()
+		hardwareID, err := wifi.GetHardwareID()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-			return
+			hardwareID = ""
 		}
-		p["name"] = config.PROJECT_NAME
+
+		bloxFreeSpace, err := wifi.GetBloxFreeSpace()
+		if err != nil {
+			bloxFreeSpace = wifi.BloxFreeSpaceResponse{
+				DeviceCount:    0,
+				Size:           0,
+				Used:           0,
+				Avail:          0,
+				UsedPercentage: 0,
+			}
+		}
+		fulaContainerInfo, err := wifi.GetContainerInfo("fula_go")
+		if err != nil {
+			fulaContainerInfo = wifi.DockerInfo{
+				Image:       "",
+				Version:     "",
+				ID:          "",
+				Labels:      map[string]string{},
+				Created:     "",
+				RepoDigests: []string{},
+			}
+		}
+
+		fxsupportContainerInfo, err := wifi.GetContainerInfo("fula_fxsupport")
+		if err != nil {
+			fulaContainerInfo = wifi.DockerInfo{
+				Image:       "",
+				Version:     "",
+				ID:          "",
+				Labels:      map[string]string{},
+				Created:     "",
+				RepoDigests: []string{},
+			}
+		}
+
+		nodeContainerInfo, err := wifi.GetContainerInfo("fula_node")
+		if err != nil {
+			nodeContainerInfo = wifi.DockerInfo{
+				Image:       "",
+				Version:     "",
+				ID:          "",
+				Labels:      map[string]string{},
+				Created:     "",
+				RepoDigests: []string{},
+			}
+		}
+
+		p, err := config.ReadProperties()
+		response := make(map[string]interface{})
+		if err == nil {
+			response = p
+			response["name"] = config.PROJECT_NAME
+		}
+		response["hardwareID"] = hardwareID
+		response["bloxFreeSpace"] = bloxFreeSpace
+		response["containerInfo_fula"] = fulaContainerInfo
+		response["containerInfo_fxsupport"] = fxsupportContainerInfo
+		response["containerInfo_node"] = nodeContainerInfo
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		jsonErr := json.NewEncoder(w).Encode(p)
+		jsonErr := json.NewEncoder(w).Encode(response)
 		if jsonErr != nil {
 			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 			return
@@ -76,7 +134,7 @@ func wifiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	connected := true
 	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
 	defer cl()
-	err := wifi.CheckIfIsConnected(ctx)
+	err := wifi.CheckIfIsConnected(ctx, "")
 	if err != nil {
 		log.Errorw("failed to check the wifi status", "err", err)
 		connected = false
@@ -144,7 +202,7 @@ func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
+func connectWifiHandler(w http.ResponseWriter, r *http.Request, mdnsRestartCh chan bool) {
 	if r.URL.Path != "/wifi/connect" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
@@ -158,6 +216,14 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	ssid := r.FormValue("ssid")
 	password := r.FormValue("password")
 
+	if ssid == "" {
+		http.Error(w, "missing ssid", http.StatusBadRequest)
+		return
+	}
+	if password == "" {
+		http.Error(w, "missing password", http.StatusBadRequest)
+		return
+	}
 	credential := wifi.Credentials{
 		SSID:        ssid,
 		Password:    password,
@@ -168,21 +234,17 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request) {
 	err := wifi.ConnectWifi(ctx, credential)
 	if err != nil {
 		log.Errorw("failed to connect to wifi", "err", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		jsonErr := json.NewEncoder(w).Encode("Couldn't Connect")
-		if jsonErr != nil {
-			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "couldn't connect", http.StatusBadRequest)
 		return
 	}
+	log.Info("wifi connected. Calling mdns restart")
+	mdnsRestartCh <- true
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	jsonErr := json.NewEncoder(w).Encode("Wifi connected!")
 	if jsonErr != nil {
-		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
 		return
 	}
 }
@@ -204,9 +266,44 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing peer_id", http.StatusBadRequest)
 		return
 	}
-	bloxPeerID, err := peerFunction(peerID)
+
+	seed := r.FormValue("seed")
+	if seed == "" {
+		http.Error(w, "missing seed", http.StatusBadRequest)
+		return
+	}
+
+	hardwareID, err := wifi.GetHardwareID()
+	if err != nil || hardwareID == "" {
+		hardwareID, err = wifi.GenerateRandomString(32)
+		if err != nil || hardwareID == "" {
+			http.Error(w, "failed to create a random ID or get hardwareID", http.StatusBadRequest)
+			return
+		}
+	}
+
+	seedByte := []byte(seed)
+	// Convert byte slice to string
+	seedString := string(seedByte)
+
+	combinedSeed := hardwareID + seedString
+	bloxPrivKey, err := wifi.GeneratePrivateKeyFromSeed(combinedSeed)
+	if err != nil {
+		http.Error(w, "failed to create bloxPrivKey", http.StatusBadRequest)
+		return
+	}
+
+	keySotre := blockchain.NewSimpleKeyStorer()
+	if err := keySotre.SaveKey(r.Context(), []byte(seed)); err != nil {
+		http.Error(w, "saving the seed", http.StatusBadRequest)
+		log.Errorw("saving the seed", "err", err)
+		return
+	}
+
+	bloxPeerID, err := peerFunction(peerID, bloxPrivKey)
 	if err != nil {
 		http.Error(w, "error while exchanging peers", http.StatusBadRequest)
+
 		return
 	}
 
@@ -307,13 +404,15 @@ func getNonLoopbackIP() (string, error) {
 
 // This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
-func Serve(peerFn func(clientPeerId string) (string, error), ip string, port string) io.Closer {
+func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, mdnsRestartCh chan bool) io.Closer {
 	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readiness", readinessHandler)
 	mux.HandleFunc("/wifi/list", listWifiHandler)
 	mux.HandleFunc("/wifi/status", wifiStatusHandler)
-	mux.HandleFunc("/wifi/connect", connectWifiHandler)
+	mux.HandleFunc("/wifi/connect", func(w http.ResponseWriter, r *http.Request) {
+		connectWifiHandler(w, r, mdnsRestartCh)
+	})
 	mux.HandleFunc("/ap/enable", enableAccessPointHandler)
 	mux.HandleFunc("/ap/disable", disableAccessPointHandler)
 	mux.HandleFunc("/properties", propertiesHandler)

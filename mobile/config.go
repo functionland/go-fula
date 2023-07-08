@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
@@ -167,6 +168,18 @@ func (cfg *Config) init(mc *Client) error {
 			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(true),
 		)
+		if err != nil {
+			return err
+		}
+		mc.bl, err = blockchain.NewFxBlockchain(mc.h,
+			blockchain.NewSimpleKeyStorer(),
+			blockchain.WithAuthorizer(mc.h.ID()),
+			blockchain.WithAllowTransientConnection(cfg.AllowTransientConnection),
+			blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
+			blockchain.WithTimeout(30))
+		if err != nil {
+			return err
+		}
 		if mc.bloxPid != "" {
 			// Explicitly authorize the Blox ID if its address is specified.
 			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {

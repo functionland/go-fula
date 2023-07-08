@@ -61,7 +61,7 @@ func parseHotspotLinux(output string) (supported bool, err error) {
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, "AP") {
+		if strings.Contains(strings.ToLower(line), "device supports ap") {
 			supported = true
 		} else {
 			continue
@@ -82,19 +82,20 @@ func CheckHotspotSupported(ctx context.Context) (supported bool, err error) {
 		command = "networksetup -listallhardwareports"
 	default:
 		os = "linux"
-		command = "iw list | grep -i AP"
+		command = "iw list"
 	}
 	stdout, stderr, err := runCommand(ctx, command)
 	if err != nil {
 		log.Errorw("failed to check hotspot support", "command", command, "err", err, "stderr", stderr)
 		return
 	}
+
 	return parseHotspot(stdout, os)
 }
 
 // startHotspot can be used to get the list of available wifis and their strength
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
-// wifiInterface is the name of interface that it should look for in Linux. Default is wlan0
+// wifiInterface is the name of interface that it should look for in Linux.
 func StartHotspot(ctx context.Context, forceReload bool) error {
 	var commands []string
 	var err error
@@ -141,6 +142,22 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 		return err
 	}
 	return nil
+}
+
+func CheckConnection(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	stdout, _, err := runCommand(ctx, "nmcli -t -f DEVICE,STATE device status")
+	if err != nil {
+		return fmt.Errorf("failed to run nmcli command: %w", err)
+	}
+
+	if strings.Contains(stdout, "wlan0:connected") {
+		return nil
+	}
+
+	return fmt.Errorf("Wi-Fi not connected")
 }
 
 func StopHotspot(ctx context.Context) error {

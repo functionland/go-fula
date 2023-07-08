@@ -79,6 +79,7 @@ func RunCommand(ctx context.Context, commands string) (stdout, stderr string, er
 func runCommand(ctx context.Context, commands string) (stdout, stderr string, err error) {
 	log.Infow("running", "commands", commands)
 	command := strings.Fields(commands)
+	// TODO: consider exec.CommandContext as an alternative to enable context timeout/deadline
 	cmd := exec.Command(command[0])
 	if len(command) > 0 {
 		cmd = exec.Command(command[0], command[1:]...)
