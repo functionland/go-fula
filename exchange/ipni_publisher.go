@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -48,23 +49,39 @@ func (p *ipniPublisher) Start(ctx context.Context) error {
 	}
 	go func() {
 		unpublished := make(map[cid.Cid]struct{})
+		var publishing atomic.Bool
 		maybePublish := func() {
 			remaining := len(unpublished)
-			if remaining > 0 {
-				mhs := make([]multihash.Multihash, 0, remaining)
-				for c := range unpublished {
-					mhs = append(mhs, c.Hash())
-					delete(unpublished, c)
-				}
-				if err := p.publish(mhs); err != nil {
+			if remaining == 0 {
+				log.Debug("No remaining entries to publish")
+				return
+			}
+			if publishing.Load() {
+				log.Debugw("IPNI publishing in progress", "remaining", remaining)
+				return
+			}
+			log.Debugw("Attempting to publish links to IPNI", "count", remaining)
+			mhs := make([]multihash.Multihash, 0, remaining)
+			for c := range unpublished {
+				mhs = append(mhs, c.Hash())
+				delete(unpublished, c)
+			}
+			publishing.Store(true)
+			go func(entries []multihash.Multihash) {
+				log.Debug("IPNI publish attempt in progress...")
+				defer func() {
+					publishing.Store(false)
+					log.Debug("Finished attempt to publish to IPNI.")
+				}()
+				if err := p.publish(entries); err != nil {
 					log.Errorw("Failed to publish to IPNI", "entriesCount", len(mhs), "err", err)
 				}
-			}
+			}(mhs)
 		}
 		for {
 			select {
 			case <-p.ctx.Done():
-				log.Infow("IPNI publisher stopped")
+				log.Infow("IPNI publisher stopped", "remainingLinks", len(unpublished))
 				return
 			case <-p.ipniPublishTicker.C:
 				maybePublish()
