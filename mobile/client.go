@@ -186,8 +186,8 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
-func (c *Client) ListFailedPushes() (*LinkIterator, error) {
-	links, err := c.listFailedPushes(context.TODO())
+func (c *Client) ListFailedPushes(format string) (*LinkIterator, error) {
+	links, err := c.listFailedPushes(context.TODO(), format)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (c *Client) ListFailedPushes() (*LinkIterator, error) {
 // See ListFailedPushes.
 func (c *Client) RetryFailedPushes() error {
 	ctx := context.TODO()
-	links, err := c.listFailedPushes(ctx)
+	links, err := c.listFailedPushes(ctx, "byte")
 	if err != nil {
 		return err
 	}

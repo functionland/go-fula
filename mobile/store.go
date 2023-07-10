@@ -22,7 +22,7 @@ func (c *Client) markAsPushedSuccessfully(ctx context.Context, l ipld.Link) erro
 	return c.ds.Delete(ctx, k)
 }
 
-func (c *Client) listFailedPushes(ctx context.Context) ([]ipld.Link, error) {
+func (c *Client) listFailedPushes(ctx context.Context, format string) (interface{}, error) {
 	q := query.Query{
 		KeysOnly: true,
 		Prefix:   failedPushKeyPrefix.String(),
@@ -32,20 +32,40 @@ func (c *Client) listFailedPushes(ctx context.Context) ([]ipld.Link, error) {
 		return nil, err
 	}
 	defer results.Close()
-	var links []ipld.Link
-	for r := range results.Next() {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+
+	if format == "string" {
+		var links []string
+		for r := range results.Next() {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if r.Error != nil {
+				return nil, r.Error
+			}
+			key := datastore.RawKey(r.Key)
+			c, err := cid.Decode(key.BaseNamespace())
+			if err != nil {
+				return nil, err
+			}
+			links = append(links, c.String())
 		}
-		if r.Error != nil {
-			return nil, r.Error
+		return links, nil
+	} else { // default to byte format
+		var links []ipld.Link
+		for r := range results.Next() {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if r.Error != nil {
+				return nil, r.Error
+			}
+			key := datastore.RawKey(r.Key)
+			c, err := cid.Decode(key.BaseNamespace())
+			if err != nil {
+				return nil, err
+			}
+			links = append(links, cidlink.Link{Cid: c})
 		}
-		key := datastore.RawKey(r.Key)
-		c, err := cid.Decode(key.BaseNamespace())
-		if err != nil {
-			return nil, err
-		}
-		links = append(links, cidlink.Link{Cid: c})
+		return links, nil
 	}
-	return links, nil
 }
