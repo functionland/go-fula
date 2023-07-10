@@ -27,3 +27,24 @@ func (i *LinkIterator) Next() ([]byte, error) {
 	}
 	return next.(cidlink.Link).Bytes(), nil
 }
+
+type StringIterator struct {
+	links  []string
+	offset int
+}
+
+func (i *StringIterator) HasNext() bool {
+	return i.offset < len(i.links)
+}
+
+func (i *StringIterator) Next() (string, error) {
+	if !i.HasNext() {
+		return "", errors.New("no more items")
+	}
+	next := i.links[i.offset]
+	if next == "" {
+		return "", errors.New("no more items")
+	}
+	i.offset++
+	return next, nil
+}

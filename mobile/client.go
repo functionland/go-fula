@@ -194,6 +194,14 @@ func (c *Client) ListFailedPushes() (*LinkIterator, error) {
 	return &LinkIterator{links: links}, nil
 }
 
+func (c *Client) ListFailedPushesAsString() (*StringIterator, error) {
+	links, err := c.listFailedPushesAsString(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	return &StringIterator{links: links}, nil
+}
+
 // RetryFailedPushes retries pushing all links that failed to push.
 // The retry is disrupted as soon as a failure occurs.
 // See ListFailedPushes.
