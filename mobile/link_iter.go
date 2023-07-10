@@ -34,11 +34,14 @@ type StringIterator struct {
 }
 
 func (i *StringIterator) HasNext() bool {
+	if i.links == nil {
+		return false
+	}
 	return i.offset < len(i.links)
 }
 
 func (i *StringIterator) Next() (string, error) {
-	if !i.HasNext() {
+	if i.links == nil || !i.HasNext() {
 		return "", errors.New("no more items")
 	}
 	next := i.links[i.offset]
