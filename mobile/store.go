@@ -49,3 +49,31 @@ func (c *Client) listFailedPushes(ctx context.Context) ([]ipld.Link, error) {
 	}
 	return links, nil
 }
+
+func (c *Client) listFailedPushesAsString(ctx context.Context) ([]string, error) {
+	q := query.Query{
+		KeysOnly: true,
+		Prefix:   failedPushKeyPrefix.String(),
+	}
+	results, err := c.ds.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer results.Close()
+	var links []string
+	for r := range results.Next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if r.Error != nil {
+			return nil, r.Error
+		}
+		key := datastore.RawKey(r.Key)
+		c, err := cid.Decode(key.BaseNamespace())
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, c.String())
+	}
+	return links, nil
+}
