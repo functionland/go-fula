@@ -117,7 +117,11 @@ func (e *FxExchange) Start(ctx context.Context) error {
 			return err
 		}
 		e.gx.RegisterIncomingBlockHook(func(p peer.ID, responseData graphsync.ResponseData, blockData graphsync.BlockData, hookActions graphsync.IncomingBlockHookActions) {
-			e.pub.notifyReceivedLink(blockData.Link())
+			go func(link ipld.Link) {
+				log.Debugw("Notifying link to IPNI publisher...", "link", link)
+				e.pub.notifyReceivedLink(link)
+				log.Debugw("Successfully notified link to IPNI publisher", "link", link)
+			}(blockData.Link())
 		})
 	}
 
