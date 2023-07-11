@@ -95,7 +95,13 @@ func (p *ipniPublisher) Start(ctx context.Context) error {
 }
 
 func (p *ipniPublisher) notifyReceivedLink(l ipld.Link) {
-	if link, ok := l.(cidlink.Link); ok && !cid.Undef.Equals(link.Cid) {
+	if l == nil {
+		return
+	}
+	link, ok := l.(cidlink.Link)
+	if ok &&
+		!cid.Undef.Equals(link.Cid) &&
+		link.Cid.Prefix().MhType != multihash.IDENTITY {
 		p.buffer <- link.Cid
 	}
 }
