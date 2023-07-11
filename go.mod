@@ -72,6 +72,7 @@ require (
 	github.com/functionland/anet v0.0.2-0.20230705144238-d8b3b0a8532c // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -145,11 +146,13 @@ require (
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/twmb/murmur3 v1.1.6 // indirect
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11 // indirect
 	github.com/whyrusleeping/cbor-gen v0.0.0-20230418232409-daab9ece03a0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
+	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.opentelemetry.io/otel v1.13.0 // indirect
 	go.opentelemetry.io/otel/trace v1.13.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
