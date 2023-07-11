@@ -115,7 +115,7 @@ func GetBloxFreeSpaceOther() (BloxFreeSpaceResponse, error) {
 	}
 
 	usedPercentage := usage.UsedPercent
-
+	log.Infow("GetBloxFreeSpaceOther", "usage", usage)
 	return BloxFreeSpaceResponse{
 		DeviceCount:    1, // assuming that the current directory is on a single device
 		Size:           float32(usage.Total),
