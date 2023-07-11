@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-
-	"github.com/shirou/gopsutil/disk"
 )
 
 func GetBloxFreeSpaceWindows() (BloxFreeSpaceResponse, error) {
