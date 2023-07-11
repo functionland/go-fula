@@ -52,6 +52,7 @@ var (
 			IpniPublishDisabled       bool          `yaml:"ipniPublishDisabled"`
 			IpniPublishInterval       time.Duration `yaml:"ipniPublishInterval"`
 			IpniPublishDirectAnnounce []string      `yaml:"IpniPublishDirectAnnounce"`
+			IpniPublisherIdentity     string        `yaml:"ipniPublisherIdentity"`
 
 			listenAddrs    cli.StringSlice
 			staticRelays   cli.StringSlice
@@ -142,6 +143,11 @@ func init() {
 				Destination: &app.config.directAnnounce,
 				Value:       cli.NewStringSlice("https://cid.contact/ingest/announce"),
 			}),
+			altsrc.NewStringFlag(&cli.StringFlag{
+				Name:        "ipniPublisherIdentity",
+				DefaultText: "Randomly generated lib2p identity.",
+				Destination: &app.config.IpniPublisherIdentity,
+			}),
 			&cli.BoolFlag{
 				Name:        "initOnly",
 				Usage:       "Weather to only initialise config and quit.",
@@ -210,6 +216,17 @@ func before(ctx *cli.Context) error {
 		}
 		app.config.Authorizer = pid.String()
 	}
+	if app.config.IpniPublisherIdentity == "" {
+		k, _, err := crypto.GenerateEd25519Key(nil)
+		if err != nil {
+			return err
+		}
+		km, err := crypto.MarshalPrivateKey(k)
+		if err != nil {
+			return err
+		}
+		app.config.IpniPublisherIdentity = base64.StdEncoding.EncodeToString(km)
+	}
 	// Initialize store directory if not set.
 	if app.config.StoreDir == "" {
 		app.config.StoreDir = path.Join(homeDir, ".fula", "blox", "store")
@@ -247,18 +264,31 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
+	ipnikm, err := base64.StdEncoding.DecodeString(app.config.IpniPublisherIdentity)
+	if err != nil {
+		return err
+	}
+	ipnik, err := crypto.UnmarshalPrivateKey(ipnikm)
+	if err != nil {
+		return err
+	}
+
 	if app.initOnly {
 		fmt.Printf("Application config initialised at: %s\n", app.configPath)
 		pid, err := peer.IDFromPrivateKey(k)
 		if err != nil {
 			return err
 		}
+		ipnipid, err := peer.IDFromPrivateKey(ipnik)
+		if err != nil {
+			return err
+		}
 		fmt.Printf("   blox peer ID: %s\n", pid.String())
+		fmt.Printf("   blox IPNI publisher peer ID: %s\n", ipnipid.String())
 		return nil
 	}
 
 	hopts := []libp2p.Option{
-		libp2p.Identity(k),
 		libp2p.ListenAddrStrings(app.config.ListenAddrs...),
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
@@ -286,7 +316,13 @@ func action(ctx *cli.Context) error {
 		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1)))
 	}
 
-	h, err := libp2p.New(hopts...)
+	bopts := append(hopts, libp2p.Identity(k))
+	h, err := libp2p.New(bopts...)
+	if err != nil {
+		return err
+	}
+	iopts := append(hopts, libp2p.Identity(ipnik))
+	ipnih, err := libp2p.New(iopts...)
 	if err != nil {
 		return err
 	}
@@ -304,7 +340,7 @@ func action(ctx *cli.Context) error {
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
 			exchange.WithIpniProviderEngineOptions(
-				engine.WithHost(h),
+				engine.WithHost(ipnih),
 				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
 				engine.WithPublisherKind(engine.DataTransferPublisher),
 				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
