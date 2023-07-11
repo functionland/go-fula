@@ -98,33 +98,17 @@ func GenerateRandomString(length int) (string, error) {
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	switch runtime.GOOS {
 	case "windows":
-		return GetBloxFreeSpaceWindows()
+		return GetBloxFreeSpaceOther()
 	case "linux": // Unix-like systems (including macOS)
 		return GetBloxFreeSpaceLinux()
 	case "darwin":
-		return GetBloxFreeSpaceMac()
+		return GetBloxFreeSpaceOther()
 	default:
 		return BloxFreeSpaceResponse{}, fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
 
-func GetBloxFreeSpaceMac() (BloxFreeSpaceResponse, error) {
-	usage, err := disk.Usage("/")
-	if err != nil {
-		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting disk usage: %v", err)
-	}
-
-	usedPercentage := usage.UsedPercent
-
-	return BloxFreeSpaceResponse{
-		DeviceCount:    1, // assuming that the current directory is on a single device
-		Size:           float32(usage.Total),
-		Used:           float32(usage.Used),
-		Avail:          float32(usage.Free),
-		UsedPercentage: float32(usedPercentage),
-	}, nil
-}
-func GetBloxFreeSpaceWindows() (BloxFreeSpaceResponse, error) {
+func GetBloxFreeSpaceOther() (BloxFreeSpaceResponse, error) {
 	usage, err := disk.Usage("/")
 	if err != nil {
 		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting disk usage: %v", err)
