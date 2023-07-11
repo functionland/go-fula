@@ -10,6 +10,14 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func GetBloxFreeSpaceMac() (BloxFreeSpaceResponse, error) {
+	return BloxFreeSpaceResponse{}, fmt.Errorf("GetBloxFreeSpaceWindows not supported on this platform")
+}
+
+func GetBloxFreeSpaceLinux() (BloxFreeSpaceResponse, error) {
+	return BloxFreeSpaceResponse{}, fmt.Errorf("GetBloxFreeSpaceWindows not supported on this platform")
+}
+
 func GetBloxFreeSpaceWindows() (BloxFreeSpaceResponse, error) {
 	wd, err := os.Getwd()
 	if err != nil {
