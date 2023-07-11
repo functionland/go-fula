@@ -6,14 +6,18 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/ed25519"
+	"golang.org/x/sys/windows"
 )
 
 // Assuming config.ReadProperties() and config.PROJECT_NAME are defined in your code
@@ -94,6 +98,76 @@ func GenerateRandomString(length int) (string, error) {
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return GetBloxFreeSpaceWindows()
+	case "linux": // Unix-like systems (including macOS)
+		return GetBloxFreeSpaceLinux()
+	case "darwin":
+		return GetBloxFreeSpaceMac()
+	default:
+		return BloxFreeSpaceResponse{}, fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+}
+
+func GetBloxFreeSpaceMac() (BloxFreeSpaceResponse, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting current directory: %v", err)
+	}
+
+	fs := syscall.Statfs_t{}
+	err = syscall.Statfs(wd, &fs)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting file system statistics: %v", err)
+	}
+
+	total := fs.Blocks * uint64(fs.Bsize)
+	free := fs.Bfree * uint64(fs.Bsize)
+	used := total - free
+	usedPercentage := (float32(used) / float32(total)) * 100
+
+	return BloxFreeSpaceResponse{
+		DeviceCount:    1, // assuming that the current directory is on a single device
+		Size:           float32(total),
+		Used:           float32(used),
+		Avail:          float32(free),
+		UsedPercentage: usedPercentage,
+	}, nil
+}
+
+func GetBloxFreeSpaceWindows() (BloxFreeSpaceResponse, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting current directory: %v", err)
+	}
+
+	lpFreeBytesAvailable := uint64(0)
+	lpTotalNumberOfBytes := uint64(0)
+	lpTotalNumberOfFreeBytes := uint64(0)
+
+	disk := windows.StringToUTF16Ptr(wd)
+
+	err = windows.GetDiskFreeSpaceEx(disk, &lpFreeBytesAvailable, &lpTotalNumberOfBytes, &lpTotalNumberOfFreeBytes)
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting disk space details: %v", err)
+	}
+
+	total := lpTotalNumberOfBytes
+	free := lpFreeBytesAvailable
+	used := total - free
+	usedPercentage := (float32(used) / float32(total)) * 100
+
+	return BloxFreeSpaceResponse{
+		DeviceCount:    1, // assuming that the current directory is on a single device
+		Size:           float32(total),
+		Used:           float32(used),
+		Avail:          float32(free),
+		UsedPercentage: usedPercentage,
+	}, nil
+}
+
+func GetBloxFreeSpaceLinux() (BloxFreeSpaceResponse, error) {
 	cmd := `df -B1 2>/dev/null | grep -nE '/storage/(usb|sd[a-z]|nvme)' | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
