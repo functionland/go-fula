@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|  
-    s.name              = 'FulaMobile' # Name for your pod
-    s.version           = '0.1.6'
+    s.name              = 'Fula' # Name for your pod
+    s.version           = '1.0.0'
     s.summary           = 'Go-fula for iOS'
     s.homepage          = 'https://github.com/functionland/go-fula'
 
@@ -10,10 +10,10 @@ Pod::Spec.new do |s|
     s.platform          = :ios
     # change the source location
     s.source            = { :http => "https://github.com/functionland/go-fula/releases/download/v#{s.version}/cocoapods-bundle.zip" } 
-    s.source_files = "include/*.{h}"
-    s.module_map = "include/module.modulemap"
-    s.ios.deployment_target = '11.0'
-    s.ios.vendored_libraries = 'Fula'
-    s.osx.vendored_libraries = 'Fula'
+
+    s.ios.deployment_target = '13.0'
+    s.vendored_framework = 'Fula.xcframework'
     s.static_framework = true
+    s.user_target_xcconfig = { 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64' }
+    s.pod_target_xcconfig = { 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64' }
 end 

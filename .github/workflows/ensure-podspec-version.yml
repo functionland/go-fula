@@ -1,0 +1,30 @@
+name: Update Podspec Version
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Update version
+      run: |
+        VERSION=$(echo ${{ github.event.release.tag_name }} | cut -c 2-) # remove the v from the tag name
+        sed -i 's/\(s.version\s*=\s*\).*$/\1\''"$VERSION"'\'/' Fula.podspec
+        sed -i 's/#{s.version}/'"$VERSION"'/' Fula.podspec
+
+    - name: Set up Git
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+
+    - name: Commit and push
+      run: |
+        git add .
+        git commit -m "Update version to $VERSION"
+        git push
