@@ -7,12 +7,14 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/shirou/gopsutil/v3/disk"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -94,6 +96,36 @@ func GenerateRandomString(length int) (string, error) {
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return GetBloxFreeSpaceOther()
+	case "linux": // Unix-like systems (including macOS)
+		return GetBloxFreeSpaceLinux()
+	case "darwin":
+		return GetBloxFreeSpaceOther()
+	default:
+		return BloxFreeSpaceResponse{}, fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	}
+}
+
+func GetBloxFreeSpaceOther() (BloxFreeSpaceResponse, error) {
+	usage, err := disk.Usage("/")
+	if err != nil {
+		return BloxFreeSpaceResponse{}, fmt.Errorf("error getting disk usage: %v", err)
+	}
+
+	usedPercentage := usage.UsedPercent
+	log.Infow("GetBloxFreeSpaceOther", "usage", usage)
+	return BloxFreeSpaceResponse{
+		DeviceCount:    1, // assuming that the current directory is on a single device
+		Size:           float32(usage.Total),
+		Used:           float32(usage.Used),
+		Avail:          float32(usage.Free),
+		UsedPercentage: float32(usedPercentage),
+	}, nil
+}
+
+func GetBloxFreeSpaceLinux() (BloxFreeSpaceResponse, error) {
 	cmd := `df -B1 2>/dev/null | grep -nE '/storage/(usb|sd[a-z]|nvme)' | awk '{sum2+=$2; sum3+=$3; sum4+=$4; sum5+=$5} END { print NR "," sum2 "," sum3 "," sum4 "," sum5}'`
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
