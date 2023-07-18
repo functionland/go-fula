@@ -1,6 +1,6 @@
 name: Build for iOS
 
-on: 
+on:
   push:
   pull_request:
   release:
