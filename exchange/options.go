@@ -11,7 +11,6 @@ type (
 	Option        func(*options) error
 	ConfigUpdater func([]peer.ID) error
 	options       struct {
-		configPath               string
 		authorizer               peer.ID
 		authorizedPeers          []peer.ID
 		allowTransientConnection bool
@@ -52,6 +51,13 @@ func WithUpdateConfig(updateConfig ConfigUpdater) Option {
 func WithAuthorizer(a peer.ID) Option {
 	return func(o *options) error {
 		o.authorizer = a
+		return nil
+	}
+}
+
+func WithAuthorizedPeers(l []peer.ID) Option {
+	return func(o *options) error {
+		o.authorizedPeers = l
 		return nil
 	}
 }

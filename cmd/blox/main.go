@@ -287,6 +287,15 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	// Decode the authorized peers from strings to peer.IDs
+	authorizedPeers := make([]peer.ID, len(app.config.AuthorizedPeers))
+	for i, authorizedPeer := range app.config.AuthorizedPeers {
+		id, err := peer.Decode(authorizedPeer)
+		if err != nil {
+			return fmt.Errorf("unable to decode authorized peer: %w", err)
+		}
+		authorizedPeers[i] = id
+	}
 	km, err := base64.StdEncoding.DecodeString(app.config.Identity)
 	if err != nil {
 		return err
@@ -369,6 +378,7 @@ func action(ctx *cli.Context) error {
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),
+			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
