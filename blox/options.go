@@ -28,6 +28,7 @@ type (
 		ds               datastore.Batching
 		ls               *ipld.LinkSystem
 		authorizer       peer.ID
+		authorizedPeers  []peer.ID
 		exchangeOpts     []exchange.Option
 	}
 )

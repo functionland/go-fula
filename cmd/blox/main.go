@@ -46,6 +46,7 @@ var (
 			LogLevel                  string        `yaml:"logLevel"`
 			ListenAddrs               []string      `yaml:"listenAddrs"`
 			Authorizer                string        `yaml:"authorizer"`
+			AuthorizedPeers           []string      `yaml:"authorizedPeers"`
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
@@ -250,6 +251,37 @@ func before(ctx *cli.Context) error {
 	return os.WriteFile(app.configPath, yc, 0700)
 }
 
+func updateConfig(p []peer.ID) error {
+	// Load existing config file
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return err
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return err
+	}
+
+	// Convert the slice of peer.ID to a slice of strings
+	app.config.AuthorizedPeers = make([]string, len(p))
+	for i, pid := range p {
+		app.config.AuthorizedPeers[i] = pid.String()
+	}
+
+	// Write back the updated config to the file
+	configData, err = yaml.Marshal(app.config)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(app.configPath, configData, 0700); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func action(ctx *cli.Context) error {
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
@@ -335,6 +367,7 @@ func action(ctx *cli.Context) error {
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithExchangeOpts(
+			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),

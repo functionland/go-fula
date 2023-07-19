@@ -268,7 +268,25 @@ func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r 
 		delete(e.authorizedPeers, a.Subject)
 	}
 	e.authorizedPeersLock.Unlock()
+	if err := e.updateAuthorizePeers(); err != nil {
+		log.Errorw("failed to update authorized peers", "err", err)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (e *FxExchange) updateAuthorizePeers() error {
+	var peerList []peer.ID
+	for peerId := range e.authorizedPeers {
+		peerList = append(peerList, peerId)
+	}
+	e.options.authorizedPeers = peerList
+	err := e.updateConfig(e.options.authorizedPeers)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
@@ -281,7 +299,12 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 			delete(e.authorizedPeers, subject)
 		}
 		e.authorizedPeersLock.Unlock()
-		return nil
+
+		// Save the updated authorized peers to config file
+		err := e.updateAuthorizePeers()
+		if err != nil {
+			return err
+		}
 	}
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
