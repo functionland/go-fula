@@ -8,15 +8,18 @@ import (
 )
 
 type (
-	Option  func(*options) error
-	options struct {
+	Option        func(*options) error
+	ConfigUpdater func([]peer.ID) error
+	options       struct {
 		authorizer               peer.ID
+		authorizedPeers          []peer.ID
 		allowTransientConnection bool
 		ipniPublishDisabled      bool
 		ipniPublishTicker        *time.Ticker
 		ipniPublishChanBuffer    int
 		ipniPublishMaxBatchSize  int
 		ipniProviderEngineOpts   []engine.Option
+		updateConfig             ConfigUpdater
 	}
 )
 
@@ -36,11 +39,25 @@ func newOptions(o ...Option) (*options, error) {
 	return &opts, nil
 }
 
+func WithUpdateConfig(updateConfig ConfigUpdater) Option {
+	return func(o *options) error {
+		o.updateConfig = updateConfig
+		return nil
+	}
+}
+
 // WithAuthorizer sets the peer ID that has permission to configure DAG exchange authorization.
 // Defaults to authorization disabled.
 func WithAuthorizer(a peer.ID) Option {
 	return func(o *options) error {
 		o.authorizer = a
+		return nil
+	}
+}
+
+func WithAuthorizedPeers(l []peer.ID) Option {
+	return func(o *options) error {
+		o.authorizedPeers = l
 		return nil
 	}
 }

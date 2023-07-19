@@ -46,6 +46,7 @@ var (
 			LogLevel                  string        `yaml:"logLevel"`
 			ListenAddrs               []string      `yaml:"listenAddrs"`
 			Authorizer                string        `yaml:"authorizer"`
+			AuthorizedPeers           []string      `yaml:"authorizedPeers"`
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
@@ -250,10 +251,50 @@ func before(ctx *cli.Context) error {
 	return os.WriteFile(app.configPath, yc, 0700)
 }
 
+func updateConfig(p []peer.ID) error {
+	// Load existing config file
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return err
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return err
+	}
+
+	// Convert the slice of peer.ID to a slice of strings
+	app.config.AuthorizedPeers = make([]string, len(p))
+	for i, pid := range p {
+		app.config.AuthorizedPeers[i] = pid.String()
+	}
+
+	// Write back the updated config to the file
+	configData, err = yaml.Marshal(app.config)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(app.configPath, configData, 0700); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func action(ctx *cli.Context) error {
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		return err
+	}
+	// Decode the authorized peers from strings to peer.IDs
+	authorizedPeers := make([]peer.ID, len(app.config.AuthorizedPeers))
+	for i, authorizedPeer := range app.config.AuthorizedPeers {
+		id, err := peer.Decode(authorizedPeer)
+		if err != nil {
+			return fmt.Errorf("unable to decode authorized peer: %w", err)
+		}
+		authorizedPeers[i] = id
 	}
 	km, err := base64.StdEncoding.DecodeString(app.config.Identity)
 	if err != nil {
@@ -335,7 +376,9 @@ func action(ctx *cli.Context) error {
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithExchangeOpts(
+			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),
+			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
