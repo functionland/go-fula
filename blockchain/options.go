@@ -8,6 +8,7 @@ type (
 	Option  func(*options) error
 	options struct {
 		authorizer               peer.ID
+		authorizedPeers          []peer.ID
 		allowTransientConnection bool
 		blockchainEndPoint       string
 		timeout                  int
@@ -27,6 +28,13 @@ func newOptions(o ...Option) (*options, error) {
 func WithAuthorizer(a peer.ID) Option {
 	return func(o *options) error {
 		o.authorizer = a
+		return nil
+	}
+}
+
+func WithAuthorizedPeers(l []peer.ID) Option {
+	return func(o *options) error {
+		o.authorizedPeers = l
 		return nil
 	}
 }

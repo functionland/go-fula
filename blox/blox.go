@@ -52,9 +52,14 @@ func New(o ...Option) (*Blox, error) {
 	if err != nil {
 		authorizer = opts.authorizer
 	}
+	authorizedPeers, err := p.ex.GetAuthorizedPeers(p.ctx)
+	if err != nil {
+		authorizedPeers = opts.authorizedPeers
+	}
 	p.bl, _ = blockchain.NewFxBlockchain(p.h,
 		blockchain.NewSimpleKeyStorer(),
 		blockchain.WithAuthorizer(authorizer),
+		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
 		blockchain.WithTimeout(30))
 	return &p, nil

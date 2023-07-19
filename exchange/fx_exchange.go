@@ -108,6 +108,15 @@ func (e *FxExchange) GetAuth(ctx context.Context) (peer.ID, error) {
 	return e.authorizer, nil
 }
 
+func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) {
+	var peerList []peer.ID
+	for peerId := range e.authorizedPeers {
+		peerList = append(peerList, peerId)
+	}
+	e.options.authorizedPeers = peerList
+	return peerList, nil
+}
+
 func (e *FxExchange) Start(ctx context.Context) error {
 	gsn := gsnet.NewFromLibp2pHost(e.h)
 	e.gx = gs.New(ctx, gsn, e.ls)
@@ -278,9 +287,8 @@ func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r 
 
 func (e *FxExchange) updateAuthorizePeers() error {
 	var peerList []peer.ID
-	for peerId := range e.authorizedPeers {
-		peerList = append(peerList, peerId)
-	}
+	ctx := context.TODO()
+	peerList, _ = e.GetAuthorizedPeers(ctx)
 	e.options.authorizedPeers = peerList
 	err := e.updateConfig(e.options.authorizedPeers)
 	if err != nil {
