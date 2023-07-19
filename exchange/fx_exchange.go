@@ -113,6 +113,9 @@ func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) 
 	for peerId := range e.authorizedPeers {
 		peerList = append(peerList, peerId)
 	}
+	if e.options == nil {
+		return nil, fmt.Errorf("options is nil")
+	}
 	e.options.authorizedPeers = peerList
 	return peerList, nil
 }
@@ -256,6 +259,7 @@ func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Req
 }
 
 func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := log.With("action", actionAuth, "from", from)
 	defer r.Body.Close()
 	b, err := io.ReadAll(r.Body)
@@ -277,7 +281,7 @@ func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r 
 		delete(e.authorizedPeers, a.Subject)
 	}
 	e.authorizedPeersLock.Unlock()
-	if err := e.updateAuthorizePeers(); err != nil {
+	if err := e.updateAuthorizePeers(ctx); err != nil {
 		log.Errorw("failed to update authorized peers", "err", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
@@ -285,12 +289,19 @@ func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (e *FxExchange) updateAuthorizePeers() error {
+func (e *FxExchange) updateAuthorizePeers(ctx context.Context) error {
 	var peerList []peer.ID
-	ctx := context.TODO()
 	peerList, _ = e.GetAuthorizedPeers(ctx)
 	e.options.authorizedPeers = peerList
+	if e.options == nil {
+		return fmt.Errorf("options is nil")
+	}
+	log.Infow("update authorized peers", "peers", e.options.authorizedPeers)
+	if e.updateConfig == nil {
+		return nil
+	}
 	err := e.updateConfig(e.options.authorizedPeers)
+	log.Infow("update authorized peers", "err", err)
 	if err != nil {
 		return err
 	}
@@ -309,7 +320,7 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 		e.authorizedPeersLock.Unlock()
 
 		// Save the updated authorized peers to config file
-		err := e.updateAuthorizePeers()
+		err := e.updateAuthorizePeers(ctx)
 		if err != nil {
 			return err
 		}
