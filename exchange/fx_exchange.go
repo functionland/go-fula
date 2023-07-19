@@ -305,6 +305,7 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
