@@ -60,7 +60,7 @@ git clone https://github.com/functionland/go-fula.git
 
 cd go-fula
 
-go run ./cmd/blox --authorizer [PeerID of client allowed to write to the backend]
+go run ./cmd/blox --authorizer [PeerID of client allowed to write to the backend] --logLevel=[info/debug] --ipniPublisherDisabled=[true/false]
 ```
 
 The default generated config goes to a YAML file in home directory, under /.fula/blox/config.yaml
