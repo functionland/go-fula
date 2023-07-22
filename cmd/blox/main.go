@@ -263,12 +263,27 @@ func updateConfig(p []peer.ID) error {
 		return err
 	}
 
-	// Convert the slice of peer.ID to a slice of strings
-	app.config.AuthorizedPeers = make([]string, len(p))
-	for i, pid := range p {
-		app.config.AuthorizedPeers[i] = pid.String()
+	// Create a map to hold unique peer IDs
+	uniquePeers := make(map[string]bool)
+
+	// Add existing AuthorizedPeers to the map
+	for _, pidStr := range app.config.AuthorizedPeers {
+		uniquePeers[pidStr] = true
 	}
 
+	// Convert the slice of peer.ID to a slice of strings
+	for _, pid := range p {
+		// Convert the peer.ID to string
+		pidStr := pid.String()
+		// Check if the peer.ID is already in the map
+		if !uniquePeers[pidStr] {
+			// If it's not in the map, add it to the map and the slice
+			uniquePeers[pidStr] = true
+			app.config.AuthorizedPeers = append(app.config.AuthorizedPeers, pidStr)
+		}
+	}
+
+	logger.Infof("Authorized peers: %v", app.config.AuthorizedPeers)
 	// Write back the updated config to the file
 	configData, err = yaml.Marshal(app.config)
 	if err != nil {

@@ -280,6 +280,7 @@ func (e *FxExchange) handleAuthorization(from peer.ID, w http.ResponseWriter, r 
 	} else {
 		delete(e.authorizedPeers, a.Subject)
 	}
+	log.Infow("Authorizing peers for ", "a.Subject", a.Subject, "from", from)
 	e.authorizedPeersLock.Unlock()
 	if err := e.updateAuthorizePeers(ctx); err != nil {
 		log.Errorw("failed to update authorized peers", "err", err)
