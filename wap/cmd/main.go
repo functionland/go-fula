@@ -52,13 +52,18 @@ func versionStringToInt(version string) (int, error) {
 
 // GetLastRebootTime reads the last boot time from /proc/stat
 func GetLastRebootTime() (time.Time, error) {
-	var stat syscall.Sysinfo_t
-	err := syscall.Sysinfo(&stat)
+	uptimeBytes, err := os.ReadFile("/proc/uptime")
 	if err != nil {
-		return time.Time{}, fmt.Errorf("cannot get system info: %v", err)
+		return time.Time{}, fmt.Errorf("cannot read uptime: %v", err)
 	}
 
-	bootTime := time.Unix(int64(stat.Uptime), 0)
+	uptimeString := strings.Split(string(uptimeBytes), " ")[0]
+	uptimeSeconds, err := strconv.ParseFloat(uptimeString, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("cannot parse uptime: %v", err)
+	}
+
+	bootTime := time.Now().UTC().Add(-time.Second * time.Duration(uptimeSeconds))
 
 	return bootTime, nil
 }
