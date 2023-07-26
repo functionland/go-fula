@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"strconv"
@@ -90,7 +89,7 @@ func checkAndSetVersionInfo() error {
 
 		file, _ := json.MarshalIndent(versionInfo, "", " ")
 
-		err = ioutil.WriteFile(versionFilePath, file, 0644)
+		err = os.WriteFile(versionFilePath, file, 0644)
 		if err != nil {
 			return fmt.Errorf("error writing version file: %v", err)
 		}
@@ -103,7 +102,7 @@ func checkAndSetVersionInfo() error {
 
 	} else {
 		// if the version file exists
-		versionFileContent, err := ioutil.ReadFile(versionFilePath)
+		versionFileContent, err := os.ReadFile(versionFilePath)
 		if err != nil {
 			return fmt.Errorf("error reading version file: %v", err)
 		}
@@ -122,7 +121,7 @@ func checkAndSetVersionInfo() error {
 
 			file, _ := json.MarshalIndent(versionInfo, "", " ")
 
-			err = ioutil.WriteFile(versionFilePath, file, 0644)
+			err = os.WriteFile(versionFilePath, file, 0644)
 			if err != nil {
 				return fmt.Errorf("error updating version file: %v", err)
 			}
