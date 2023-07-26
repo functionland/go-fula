@@ -87,6 +87,8 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		response["containerInfo_fula"] = fulaContainerInfo
 		response["containerInfo_fxsupport"] = fxsupportContainerInfo
 		response["containerInfo_node"] = nodeContainerInfo
+		response["ota_version"] = 3
+		response["ota_type"] = "rk"
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

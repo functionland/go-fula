@@ -35,7 +35,7 @@ func getEnv(key, fallback string) string {
 func init() {
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Printf("Error loading .env file\n")
+		fmt.Printf("Error loading .env file %s\n", err)
 	}
 
 	PROJECT_NAME = getEnv("PROJECT_NAME", "Box Firmware")
