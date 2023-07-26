@@ -132,21 +132,26 @@ func checkAndSetVersionInfo() error {
 		if err != nil {
 			return fmt.Errorf("error getting last reboot time: %v", err)
 		}
+		log.Infof("last reboot time: ", restartTime)
+		log.Infof("versionInfo.Date: ", versionInfo.Date)
+		log.Infof("RESTART_NEEDED_AFTER: ", RESTART_NEEDED_AFTER)
+		log.Infof("OTA_VERSION: ", OTA_VERSION)
 
 		// compare the dates and version
 		if versionInfo.Date.After(restartTime) && OTA_VERSION <= RESTART_NEEDED_AFTER {
-			// create a file named /internal/.restart_neded
+			// create a file named /internal/.restart_needed
 			_, err = os.Create(restartNeededPath)
 			if err != nil {
 				return fmt.Errorf("error creating restart needed file: %v", err)
 			}
+			log.Info("creating restart needed file")
 		} else {
-			// delete a file named /internal/.restart_neded
+			// delete a file named /internal/.restart_needed
 			err = os.Remove(restartNeededPath)
 			if err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("error removing restart needed file: %v", err)
 			}
-
+			log.Info("removing restart needed file")
 		}
 	}
 
