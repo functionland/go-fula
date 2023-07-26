@@ -23,6 +23,7 @@ var (
 	FORCE_ACCESSPOINT      string
 	COUNTRY                string
 	BLOX_COMMAND           string
+	OTA_VERSION            string
 )
 
 func getEnv(key, fallback string) string {
@@ -58,4 +59,5 @@ func init() {
 	COUNTRY = getEnv("COUNTRY", "GB")
 	PROJECT_ROOT = getEnv("PROJECT_ROOT", "../..")
 	BLOX_COMMAND = getEnv("BLOX_COMMAND", "/app --authorizer %s --identity %s --initOnly --config /internal/config.yaml --storeDir /uniondrive")
+	OTA_VERSION = getEnv("OTA_VERSION", "3")
 }

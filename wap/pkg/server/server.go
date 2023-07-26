@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/functionland/go-fula/blockchain"
@@ -87,8 +88,11 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		response["containerInfo_fula"] = fulaContainerInfo
 		response["containerInfo_fxsupport"] = fxsupportContainerInfo
 		response["containerInfo_node"] = nodeContainerInfo
-		response["ota_version"] = 3
-		response["ota_type"] = "rk"
+		ota_ver, err := strconv.Atoi(config.OTA_VERSION)
+		if err != nil {
+			ota_ver = 3
+		}
+		response["ota_version"] = ota_ver
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
