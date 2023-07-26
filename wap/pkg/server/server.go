@@ -7,7 +7,8 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/functionland/go-fula/blockchain"
@@ -88,11 +89,21 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		response["containerInfo_fula"] = fulaContainerInfo
 		response["containerInfo_fxsupport"] = fxsupportContainerInfo
 		response["containerInfo_node"] = nodeContainerInfo
-		ota_ver, err := strconv.Atoi(config.OTA_VERSION)
-		if err != nil {
-			ota_ver = 3
+		var restartNeeded string
+
+		if _, err := os.Stat("/internal/.restart_needed"); err == nil {
+			// if file exists
+			restartNeeded = "true"
+		} else if os.IsNotExist(err) {
+			// if file does not exist
+			restartNeeded = "false"
+		} else {
+			// other error
+			fmt.Println("An error occurred:", err)
+			restartNeeded = "false"
 		}
-		response["ota_version"] = ota_ver
+		response["restartNeeded"] = restartNeeded
+		response["ota_version"] = config.OTA_VERSION
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -387,6 +398,39 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func getIPFromSpecificNetwork(ctx context.Context, ssid string) (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+
+	for _, iface := range ifaces {
+		cmdString := "iwconfig " + iface.Name
+		out, _, err := wifi.RunCommand(ctx, cmdString)
+
+		// If the interface is connected to the specified network, return its IP.
+		if err == nil && strings.Contains(out, ssid) {
+			addrs, err := iface.Addrs()
+			if err != nil {
+				return "", err
+			}
+
+			for _, addr := range addrs {
+				ip, _, err := net.ParseCIDR(addr.String())
+				if err != nil {
+					continue
+				}
+
+				if !ip.IsLoopback() && ip.To4() != nil {
+					return ip.String(), nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no non-loopback IP address found for network %s", ssid)
+}
+
 // This finds the ip address of the device
 func getNonLoopbackIP() (string, error) {
 	addrs, err := net.InterfaceAddrs()
@@ -408,9 +452,10 @@ func getNonLoopbackIP() (string, error) {
 	return "", fmt.Errorf("no non-loopback IP address found")
 }
 
-// This function accepts an ip and port that it runs the webserver on. Default is 192.168.88.1:3500 and if it fails reverts to 0.0.0.0:3500
+// This function accepts an ip and port that it runs the webserver on. Default is 10.42.0.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, mdnsRestartCh chan bool) io.Closer {
+	ctx := context.Background()
 	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readiness", readinessHandler)
@@ -438,10 +483,15 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		ip, err = getNonLoopbackIP()
+		log.Errorw("Failed to use default IP address for serve", "err", err)
+		ip, err = getIPFromSpecificNetwork(ctx, config.HOTSPOT_SSID)
 		if err != nil {
-			log.Errorw("Failed to get non-loopback IP address", "err", err)
-			ip = "0.0.0.0"
+			log.Errorw("Failed to use IP of hotspot", "err", err)
+			ip, err = getNonLoopbackIP()
+			if err != nil {
+				log.Errorw("Failed to get non-loopback IP address for serve", "err", err)
+				ip = "0.0.0.0"
+			}
 		}
 		listenAddr = ip + ":" + port
 
@@ -450,7 +500,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 			listenAddr = "0.0.0.0:" + port
 			ln, err = net.Listen("tcp", listenAddr)
 			if err != nil {
-				log.Errorw("Listen could not initialize", "err", err)
+				log.Errorw("Listen could not initialize for serve", "err", err)
 			}
 		}
 	}

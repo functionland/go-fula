@@ -15,7 +15,6 @@ var (
 	API_PORT               string
 	IFFACE                 string
 	IFFACE_CLIENT          string
-	SSID                   string
 	IPADDRESS              string
 	SUBNET_RANGE_START     string
 	SUBNET_RANGE_END       string
@@ -24,6 +23,8 @@ var (
 	COUNTRY                string
 	BLOX_COMMAND           string
 	OTA_VERSION            string
+	HOTSPOT_SSID           string
+	RESTART_NEEDED_AFTER   string
 )
 
 func getEnv(key, fallback string) string {
@@ -49,8 +50,7 @@ func init() {
 	IFFACE = getEnv("IFFACE", "uap0")
 	IFFACE_CLIENT = getEnv("IFFACE_CLIENT", "wlan0")
 
-	SSID = getEnv("SSID", "Box")
-	IPADDRESS = getEnv("IPADDRESS", "192.168.88.1")
+	IPADDRESS = getEnv("IPADDRESS", "10.42.0.1")
 	SUBNET_RANGE_START = getEnv("SUBNET_RANGE_START", "192.168.88.100")
 	SUBNET_RANGE_END =
 		getEnv("SUBNET_RANGE_END", "192.168.88.200")
@@ -60,4 +60,6 @@ func init() {
 	PROJECT_ROOT = getEnv("PROJECT_ROOT", "../..")
 	BLOX_COMMAND = getEnv("BLOX_COMMAND", "/app --authorizer %s --identity %s --initOnly --config /internal/config.yaml --storeDir /uniondrive")
 	OTA_VERSION = getEnv("OTA_VERSION", "3")
+	HOTSPOT_SSID = getEnv("HOTSPOT_SSID", "FxBlox")
+	RESTART_NEEDED_AFTER = getEnv("RESTART_NEEDED_AFTER", "3")
 }
