@@ -201,9 +201,9 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 				log.Info("No config file found, activating the hotspot mode.")
 				if !isHotspotStarted {
 					//Disconnect from external Wi-Fi before starting server as it causes the hotspot server not get the proper IP address
-					if err := wifi.DisconnectFromExternalWifi(ctx); err != nil {
+					/*if err := wifi.DisconnectFromExternalWifi(ctx); err != nil {
 						log.Errorw("disconnect from wifi on startup", "err", err)
-					}
+					}*/
 					if err := wifi.StartHotspot(ctx, true); err != nil {
 						log.Errorw("start hotspot on startup", "err", err)
 					} else {
