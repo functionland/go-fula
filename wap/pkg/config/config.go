@@ -25,6 +25,9 @@ var (
 	OTA_VERSION            string
 	HOTSPOT_SSID           string
 	RESTART_NEEDED_AFTER   string
+	VERSION_FILE_PATH      string
+	RESTART_NEEDED_PATH    string
+	PARTITION_NEEDED_PATH  string
 )
 
 func getEnv(key, fallback string) string {
@@ -62,4 +65,7 @@ func init() {
 	OTA_VERSION = getEnv("OTA_VERSION", "3")
 	HOTSPOT_SSID = getEnv("HOTSPOT_SSID", "FxBlox")
 	RESTART_NEEDED_AFTER = getEnv("RESTART_NEEDED_AFTER", "3")
+	VERSION_FILE_PATH = getEnv("VERSION_FILE_PATH", "/home/go_fula_version.info")
+	RESTART_NEEDED_PATH = getEnv("RESTART_NEEDED_PATH", "/home/commands/.command_reboot")
+	PARTITION_NEEDED_PATH = getEnv("PARTITION_NEEDED_PATH", "/home/commands/.command_partition")
 }

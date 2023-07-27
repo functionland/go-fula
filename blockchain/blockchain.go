@@ -265,6 +265,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionReboot: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleReboot(r.Context(), from, w, r)
 		},
+		actionPartition: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePartition(r.Context(), from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -385,6 +388,19 @@ func (bl *FxBlockchain) handleReboot(ctx context.Context, from peer.ID, w http.R
 
 }
 
+func (bl *FxBlockchain) handlePartition(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionPartition, "from", from)
+	out := wifi.Partition(ctx)
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+}
+
 func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
 	// Check if auth is for local host; if so, handle it locally.
 	if on == bl.h.ID() {
@@ -431,7 +447,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionPartition, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

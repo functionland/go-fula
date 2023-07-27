@@ -178,3 +178,9 @@ func (c *Client) Reboot() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.Reboot(ctx, c.bloxPid)
 }
+
+// Partition requests the blox to partition ssd and nvme
+func (c *Client) Partition() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.Partition(ctx, c.bloxPid)
+}

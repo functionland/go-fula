@@ -30,6 +30,9 @@ var isHotspotStarted = false
 var currentServer io.Closer = nil
 var serverMutex sync.Mutex
 
+var versionFilePath = config.VERSION_FILE_PATH
+var restartNeededPath = config.RESTART_NEEDED_PATH
+
 type VersionInfo struct {
 	Version int       `json:"version"`
 	Date    time.Time `json:"date"`
@@ -69,8 +72,6 @@ func GetLastRebootTime() (time.Time, error) {
 }
 
 func checkAndSetVersionInfo() error {
-	versionFilePath := "/internal/go_fula_version.info"
-	restartNeededPath := "/internal/.restart_needed"
 
 	// Replace "1.2.3" with strings from map
 	OTA_VERSION, err := versionStringToInt(config.OTA_VERSION)
@@ -99,7 +100,7 @@ func checkAndSetVersionInfo() error {
 			return fmt.Errorf("error writing version file: %v", err)
 		}
 
-		// also create a file named /internal/.restart_neded
+		// also create a file named /home/commands/.command_reboot
 		_, err = os.Create(restartNeededPath)
 		if err != nil {
 			return fmt.Errorf("error creating restart needed file: %v", err)
@@ -144,14 +145,14 @@ func checkAndSetVersionInfo() error {
 
 		// compare the dates and version
 		if versionInfo.Date.After(restartTime) && OTA_VERSION <= RESTART_NEEDED_AFTER {
-			// create a file named /internal/.restart_needed
+			// create a file named /home/commands/.command_reboot
 			_, err = os.Create(restartNeededPath)
 			if err != nil {
 				return fmt.Errorf("error creating restart needed file: %v", err)
 			}
 			log.Info("creating restart needed file")
 		} else {
-			// delete a file named /internal/.restart_needed
+			// delete a file named /home/commands/.command_reboot
 			err = os.Remove(restartNeededPath)
 			if err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("error removing restart needed file: %v", err)
@@ -200,10 +201,23 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 			} else {
 				log.Info("No config file found, activating the hotspot mode.")
 				if !isHotspotStarted {
-					//Disconnect from external Wi-Fi before starting server as it causes the hotspot server not get the proper IP address
-					if err := wifi.DisconnectFromExternalWifi(ctx); err != nil {
-						log.Errorw("disconnect from wifi on startup", "err", err)
+					//Disconnect from external Wi-Fi before starting server as it causes Android in some cases not being able to connect to hotspot
+
+					// Check if /home/V5.info exists which means fula-ota update is completed before we disconnect wifi
+					if _, err := os.Stat("/home/V5.info"); err == nil {
+						// File exists
+						if err := wifi.DisconnectFromExternalWifi(ctx); err != nil {
+							log.Errorw("disconnect from wifi on startup", "err", err)
+						}
+					} else {
+						// create a file named /home/commands/.command_reboot
+						_, err = os.Create(restartNeededPath)
+						if err != nil {
+							log.Errorw("error creating restart needed file: %v", err)
+						}
+						log.Info("creating restart needed file")
 					}
+
 					if err := wifi.StartHotspot(ctx, true); err != nil {
 						log.Errorw("start hotspot on startup", "err", err)
 					} else {
