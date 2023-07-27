@@ -161,7 +161,32 @@ func wifiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"status": connected})
 	if jsonErr != nil {
-		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
+		return
+	}
+}
+
+func partitionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/partition" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Unsupported method type.", http.StatusMethodNotAllowed)
+		log.Errorw("Method is not supported.", "StatusNotFound", http.StatusMethodNotAllowed, "w", w)
+		return
+	}
+
+	ctx, cl := context.WithTimeout(r.Context(), time.Second*10)
+	defer cl()
+	res := wifi.Partition(ctx)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"status": res.Status, "message": res.Msg})
+	if jsonErr != nil {
+		http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
 		return
 	}
 }
@@ -467,6 +492,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	mux.HandleFunc("/ap/enable", enableAccessPointHandler)
 	mux.HandleFunc("/ap/disable", disableAccessPointHandler)
 	mux.HandleFunc("/properties", propertiesHandler)
+	mux.HandleFunc("/partition", partitionHandler)
 	mux.HandleFunc("/peer/exchange", exchangePeersHandler)
 
 	listenAddr := ""
