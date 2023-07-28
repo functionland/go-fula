@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,6 +20,35 @@ import (
 
 var log = logging.Logger("fula/wap/server")
 var peerFunction func(clientPeerId string, bloxSeed string) (string, error)
+
+func checkPathExistAndFileNotExist(path string) string {
+	dir := filepath.Dir(path)
+
+	// Check if the directory exists
+	_, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		// The directory does not exist, so return false
+		return "true"
+	}
+	if err != nil {
+		// There was an error other than the directory not existing, so return false
+		return "true"
+	}
+
+	// If we get here, the directory exists. Now check for the file.
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		// The file does not exist, which is what we want, so return true
+		return "false"
+	}
+	if err != nil {
+		// There was an error other than the file not existing, so return false
+		return "true"
+	}
+
+	// If we get here, the file exists, so return false
+	return "true"
+}
 
 func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/properties" {
@@ -89,19 +119,8 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		response["containerInfo_fula"] = fulaContainerInfo
 		response["containerInfo_fxsupport"] = fxsupportContainerInfo
 		response["containerInfo_node"] = nodeContainerInfo
-		var restartNeeded string
+		var restartNeeded = checkPathExistAndFileNotExist(config.RESTART_NEEDED_PATH)
 
-		if _, err := os.Stat("/internal/.restart_needed"); err == nil {
-			// if file exists
-			restartNeeded = "true"
-		} else if os.IsNotExist(err) {
-			// if file does not exist
-			restartNeeded = "false"
-		} else {
-			// other error
-			fmt.Println("An error occurred:", err)
-			restartNeeded = "false"
-		}
 		response["restartNeeded"] = restartNeeded
 		response["ota_version"] = config.OTA_VERSION
 

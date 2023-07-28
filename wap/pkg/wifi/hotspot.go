@@ -161,17 +161,27 @@ func DisconnectFromExternalWifi(ctx context.Context) error {
 		// We'll split this into a slice for easier processing.
 		networks := strings.Split(output, "\n")
 
-		// Now we'll iterate over the list of networks, and disconnect from each one
+		// Now we'll iterate over the list of networks, and disconnect from each wifi one
 		// that isn't named "FxBlox".
 		for _, network := range networks {
 			if network != "FxBlox" {
-				_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection down %s", network))
+				connectionTypeOutput, _, err := runCommand(ctx, fmt.Sprintf("nmcli -t -f TYPE con show %s", network))
 				if err != nil {
-					log.Errorw("failed to disconnect from network", "network", network, "err", err)
+					log.Errorw("failed to get the type of network", "network", network, "err", err)
+				} else {
+					connectionType := strings.TrimSpace(connectionTypeOutput)
+					if connectionType == "wifi" {
+						_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection down %s", network))
+						if err != nil {
+							log.Errorw("failed to disconnect from network", "network", network, "err", err)
+						}
+					}
 				}
 			}
 		}
 	}
+	return err
+}
 
 	// If there were any errors disconnecting from networks, this will be non-nil.
 	if err != nil {
