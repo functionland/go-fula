@@ -184,3 +184,9 @@ func (c *Client) Partition() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.Partition(ctx, c.bloxPid)
 }
+
+// DeleteFulaConfig deletes config.yaml file
+func (c *Client) DeleteFulaConfig() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.DeleteFulaConfig(ctx, c.bloxPid)
+}

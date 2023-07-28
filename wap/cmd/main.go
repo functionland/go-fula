@@ -165,12 +165,12 @@ func checkAndSetVersionInfo() error {
 }
 
 func checkConfigExists() bool {
-	// Check if "/internal/config.yaml" file exists
-	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
-		log.Info("File /internal/config.yaml does not exist")
+	// Check if config.yaml file exists
+	if _, err := os.Stat(config.FULA_CONFIG_PATH); os.IsNotExist(err) {
+		log.Infof("File %s does not exist", config.FULA_CONFIG_PATH)
 		return false
 	} else {
-		log.Info("File /internal/config.yaml exists")
+		log.Infof("File %s exists", config.FULA_CONFIG_PATH)
 		return true
 	}
 }
@@ -271,7 +271,7 @@ func main() {
 		isConnected = true
 	}
 
-	// Check if "/internal/config.yaml" file exists
+	// Check if config.yaml file exists
 	configExists := checkConfigExists()
 
 	log.Info("Waiting for the system to connect to Wi-Fi")

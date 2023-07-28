@@ -21,6 +21,13 @@ type WifiRemoveallResponse struct {
 	Status bool   `json:"status"`
 }
 
+type DeleteFulaConfigRequest struct {
+}
+type DeleteFulaConfigResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type RebootRequest struct {
 }
 type RebootResponse struct {
@@ -169,6 +176,32 @@ func Partition(ctx context.Context) PartitionResponse {
 	}
 	return PartitionResponse{
 		Msg:    res,
+		Status: status,
+	}
+}
+
+func DeleteFulaConfig(ctx context.Context) DeleteFulaConfigResponse {
+	configFilePath := config.FULA_CONFIG_PATH
+	msg := ""
+	status := true
+
+	if _, err := os.Stat(configFilePath); err == nil {
+		// The file exists, delete it
+		if err := os.Remove(configFilePath); err != nil {
+			msg = fmt.Sprintf("failed to delete config file: %v", err)
+			status = false
+		}
+		msg = "Config file deleted successfully."
+	} else if os.IsNotExist(err) {
+		// The file does not exist
+		msg = "Config file does not exist."
+	} else {
+		// An error other than IsNotExist occurred
+		msg = fmt.Sprintf("error checking config file: %v", err)
+		status = false
+	}
+	return DeleteFulaConfigResponse{
+		Msg:    msg,
 		Status: status,
 	}
 }
