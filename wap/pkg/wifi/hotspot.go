@@ -165,7 +165,7 @@ func DisconnectFromExternalWifi(ctx context.Context) error {
 		// that isn't named "FxBlox".
 		for _, network := range networks {
 			if network != "FxBlox" {
-				connectionTypeOutput, _, err := runCommand(ctx, fmt.Sprintf("nmcli -t -f TYPE con show %s", network))
+				connectionTypeOutput, _, err := runCommand(ctx, fmt.Sprintf("nmcli -t -f connection.type con show %s", network))
 				if err != nil {
 					log.Errorw("failed to get the type of network", "network", network, "err", err)
 				} else {
