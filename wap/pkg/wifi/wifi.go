@@ -190,8 +190,9 @@ func DeleteFulaConfig(ctx context.Context) DeleteFulaConfigResponse {
 		if err := os.Remove(configFilePath); err != nil {
 			msg = fmt.Sprintf("failed to delete config file: %v", err)
 			status = false
+		} else {
+			msg = "Config file deleted successfully."
 		}
-		msg = "Config file deleted successfully."
 	} else if os.IsNotExist(err) {
 		// The file does not exist
 		msg = "Config file does not exist."
