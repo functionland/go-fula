@@ -183,15 +183,6 @@ func DisconnectFromExternalWifi(ctx context.Context) error {
 	return err
 }
 
-	// If there were any errors disconnecting from networks, this will be non-nil.
-	if err != nil {
-		log.Errorw("failed to disconnect from external wifi", "err", err)
-		return err
-	}
-
-	return nil
-}
-
 func CheckConnection(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
