@@ -169,8 +169,8 @@ func DisconnectFromExternalWifi(ctx context.Context) error {
 				if err != nil {
 					log.Errorw("failed to get the type of network", "network", network, "err", err)
 				} else {
-					connectionType := strings.TrimSpace(connectionTypeOutput)
-					if connectionType == "wifi" {
+					connectionType := strings.Split(strings.TrimSpace(connectionTypeOutput), ":")[1]
+					if connectionType == "802-11-wireless" {
 						_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection down %s", network))
 						if err != nil {
 							log.Errorw("failed to disconnect from network", "network", network, "err", err)
