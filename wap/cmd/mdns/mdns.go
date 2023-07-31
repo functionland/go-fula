@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"os"
 
+	"github.com/functionland/go-fula/wap/pkg/config"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	"github.com/grandcat/zeroconf"
 	logging "github.com/ipfs/go-log/v2"
@@ -41,7 +42,7 @@ func createInfo() []string {
 		log.Errorw("GetHardwareID failed", "err", err)
 	}
 
-	data, err := os.ReadFile("/internal/config.yaml")
+	data, err := os.ReadFile(config.FULA_CONFIG_PATH)
 	if err != nil {
 		log.Errorw("ReadFile failed", "err", err)
 	}
