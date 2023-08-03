@@ -264,17 +264,20 @@ func (c *Client) Shutdown() error {
 // This stores the encrypted root Cid in an IPLD node and links rootCid to it.
 // We use the identity as the value of a new IPLD node and link rootCid to it.
 // Essentially, you're creating a new IPLD node with the content of identity and a link to rootCid.
-func (c *Client) StoreWithIdentity(identity []byte, encryptedRootCidStr string) (string, error) {
+func (c *Client) StoreWithIdentity(identity string, appID string, encryptedRootCidStr string) (string, error) {
 	ctx := context.TODO()
 
 	// Convert encryptedRootCidStr to []byte
 	encryptedRootCid := []byte(encryptedRootCidStr)
 
+	// Concatenate identity and appID
+	identityAppID := append([]byte(identity), []byte(appID)...)
+
 	// Create a new node builder for the identity
 	identityBuilder := basicnode.Prototype.Any.NewBuilder()
 
 	// Create a new node with the identity as the value
-	err := identityBuilder.AssignBytes(identity)
+	err := identityBuilder.AssignBytes(identityAppID)
 	if err != nil {
 		return "", err
 	}
@@ -326,9 +329,10 @@ func (c *Client) StoreWithIdentity(identity []byte, encryptedRootCidStr string) 
 	return identityLink.String(), nil
 }
 
-func (c *Client) GetByIdentity(identity string) (string, error) {
+func (c *Client) GetByIdentity(identity string, appID string) (string, error) {
 	// Convert the identity to a link
-	identityCid, err := cid.Decode(identity)
+	identityAppID := append([]byte(identity), []byte(appID)...)
+	identityCid, err := cid.Decode(string(identityAppID))
 	if err != nil {
 		return "", err
 	}
@@ -392,9 +396,7 @@ func decrypt(ciphertext []byte, key []byte) ([]byte, error) {
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-func (c *Client) StoreWithIdentityAndEncrypt(identity []byte, rootCidStr string, key []byte) (string, error) {
-	ctx := context.TODO()
-
+func (c *Client) StoreWithIdentityAndEncrypt(identity string, appID string, rootCidStr string, key []byte) (string, error) {
 	// Convert rootCidStr to []byte
 	rootCid := []byte(rootCidStr)
 
@@ -404,60 +406,15 @@ func (c *Client) StoreWithIdentityAndEncrypt(identity []byte, rootCidStr string,
 		return "", err
 	}
 
-	// Create a new node builder
-	builder := basicnode.Prototype.Any.NewBuilder()
-
-	// Create a new node with the encryptedRootCid as the value
-	err = builder.AssignBytes(encryptedRootCid)
-	if err != nil {
-		return "", err
-	}
-	node := builder.Build()
-
-	// Store the new node
-	identityLink, err := c.ls.Store(ipld.LinkContext{Ctx: ctx},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    uint64(multicodec.Raw),
-				MhType:   uint64(multicodec.Sha2_256),
-				MhLength: -1,
-			},
-		},
-		node)
-
-	if err != nil {
-		return "", err
-	}
-
-	// Convert identityLink to string
-	return identityLink.String(), nil
+	return c.StoreWithIdentity(identity, appID, string(encryptedRootCid))
 }
 
-func (c *Client) GetByIdentityAndDecrypt(identity string, key []byte) (string, error) {
-	// Convert the identity to a link
-	identityCid, err := cid.Decode(identity)
-	if err != nil {
-		return "", err
-	}
-
-	// Create a cidlink.Link from the cid.Cid
-	identityLink := cidlink.Link{Cid: identityCid}
-
-	// Load the rootCid node
-	rootCidNode, err := c.ls.Load(ipld.LinkContext{Ctx: context.TODO()}, identityLink, basicnode.Prototype.Any)
-	if err != nil {
-		return "", err
-	}
-
+func (c *Client) GetByIdentityAndDecrypt(identity string, appID string, key []byte) (string, error) {
 	// The node should be Bytes, so convert it
-	encryptedRootCid, err := rootCidNode.AsBytes()
-	if err != nil {
-		return "", err
-	}
+	encryptedRootCid, err := c.GetByIdentity(identity, appID)
 
 	// Decrypt the rootCid
-	decryptedRootCid, err := decrypt(encryptedRootCid, key)
+	decryptedRootCid, err := decrypt([]byte(encryptedRootCid), key)
 	if err != nil {
 		return "", err
 	}
