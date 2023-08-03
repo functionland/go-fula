@@ -412,6 +412,9 @@ func (c *Client) StoreWithIdentityAndEncrypt(identity string, appID string, root
 func (c *Client) GetByIdentityAndDecrypt(identity string, appID string, key []byte) (string, error) {
 	// The node should be Bytes, so convert it
 	encryptedRootCid, err := c.GetByIdentity(identity, appID)
+	if err != nil {
+		return "", err
+	}
 
 	// Decrypt the rootCid
 	decryptedRootCid, err := decrypt([]byte(encryptedRootCid), key)
