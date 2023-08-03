@@ -3,7 +3,11 @@ package fulamobile
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"errors"
+	"io"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
@@ -255,4 +259,208 @@ func (c *Client) Shutdown() error {
 	default:
 		return xErr
 	}
+}
+
+// This stores the encrypted root Cid in an IPLD node and links rootCid to it.
+// We use the identity as the value of a new IPLD node and link rootCid to it.
+// Essentially, you're creating a new IPLD node with the content of identity and a link to rootCid.
+func (c *Client) StoreWithIdentity(identity []byte, encryptedRootCidStr string) (string, error) {
+	ctx := context.TODO()
+
+	// Convert encryptedRootCidStr to []byte
+	encryptedRootCid := []byte(encryptedRootCidStr)
+
+	// Create a new node builder for the identity
+	identityBuilder := basicnode.Prototype.Any.NewBuilder()
+
+	// Create a new node with the identity as the value
+	err := identityBuilder.AssignBytes(identity)
+	if err != nil {
+		return "", err
+	}
+	identityNode := identityBuilder.Build()
+
+	// Store the new node
+	identityLink, err := c.ls.Store(ipld.LinkContext{Ctx: ctx},
+		cidlink.LinkPrototype{
+			Prefix: cid.Prefix{
+				Version:  1,
+				Codec:    uint64(multicodec.Raw),
+				MhType:   uint64(multicodec.Sha2_256),
+				MhLength: -1,
+			},
+		},
+		identityNode)
+
+	if err != nil {
+		return "", err
+	}
+
+	// Create a new node builder for the encryptedRootCid
+	rootCidBuilder := basicnode.Prototype.Any.NewBuilder()
+
+	// Create a new node with the encryptedRootCid as the value
+	err = rootCidBuilder.AssignBytes(encryptedRootCid)
+	if err != nil {
+		return "", err
+	}
+	rootCidNode := rootCidBuilder.Build()
+
+	// Now link the encryptedRootCid node to this new identity node
+	_, err = c.ls.Store(ipld.LinkContext{Ctx: ctx},
+		cidlink.LinkPrototype{
+			Prefix: cid.Prefix{
+				Version:  1,
+				Codec:    uint64(multicodec.Raw),
+				MhType:   uint64(multicodec.Sha2_256),
+				MhLength: -1,
+			},
+		},
+		rootCidNode)
+
+	if err != nil {
+		return "", err
+	}
+
+	// Convert identityLink to string
+	return identityLink.String(), nil
+}
+
+func (c *Client) GetByIdentity(identity string) (string, error) {
+	// Convert the identity to a link
+	identityCid, err := cid.Decode(identity)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a cidlink.Link from the cid.Cid
+	identityLink := cidlink.Link{Cid: identityCid}
+
+	// Load the rootCid node
+	rootCidNode, err := c.ls.Load(ipld.LinkContext{Ctx: context.TODO()}, identityLink, basicnode.Prototype.Any)
+	if err != nil {
+		return "", err
+	}
+
+	// The node should be Bytes, so convert it
+	encryptedRootCid, err := rootCidNode.AsBytes()
+	if err != nil {
+		return "", err
+	}
+
+	return string(encryptedRootCid), nil
+}
+
+// This function will encrypt the provided plaintext with the provided key using AES
+func encrypt(plaintext []byte, key []byte) ([]byte, error) {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, plaintext, nil), nil
+}
+
+// This function will decrypt the provided ciphertext with the provided key using AES
+func decrypt(ciphertext []byte, key []byte) ([]byte, error) {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	return gcm.Open(nil, nonce, ciphertext, nil)
+}
+
+func (c *Client) StoreWithIdentityAndEncrypt(identity []byte, rootCidStr string, key []byte) (string, error) {
+	ctx := context.TODO()
+
+	// Convert rootCidStr to []byte
+	rootCid := []byte(rootCidStr)
+
+	// Encrypt rootCid
+	encryptedRootCid, err := encrypt(rootCid, key)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a new node builder
+	builder := basicnode.Prototype.Any.NewBuilder()
+
+	// Create a new node with the encryptedRootCid as the value
+	err = builder.AssignBytes(encryptedRootCid)
+	if err != nil {
+		return "", err
+	}
+	node := builder.Build()
+
+	// Store the new node
+	identityLink, err := c.ls.Store(ipld.LinkContext{Ctx: ctx},
+		cidlink.LinkPrototype{
+			Prefix: cid.Prefix{
+				Version:  1,
+				Codec:    uint64(multicodec.Raw),
+				MhType:   uint64(multicodec.Sha2_256),
+				MhLength: -1,
+			},
+		},
+		node)
+
+	if err != nil {
+		return "", err
+	}
+
+	// Convert identityLink to string
+	return identityLink.String(), nil
+}
+
+func (c *Client) GetByIdentityAndDecrypt(identity string, key []byte) (string, error) {
+	// Convert the identity to a link
+	identityCid, err := cid.Decode(identity)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a cidlink.Link from the cid.Cid
+	identityLink := cidlink.Link{Cid: identityCid}
+
+	// Load the rootCid node
+	rootCidNode, err := c.ls.Load(ipld.LinkContext{Ctx: context.TODO()}, identityLink, basicnode.Prototype.Any)
+	if err != nil {
+		return "", err
+	}
+
+	// The node should be Bytes, so convert it
+	encryptedRootCid, err := rootCidNode.AsBytes()
+	if err != nil {
+		return "", err
+	}
+
+	// Decrypt the rootCid
+	decryptedRootCid, err := decrypt(encryptedRootCid, key)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decryptedRootCid), nil
 }
