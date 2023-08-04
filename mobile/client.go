@@ -294,9 +294,9 @@ func (c *Client) StoreEncryptedWithIdentity(identity string, appID string, encry
 	}
 
 	// Convert byte slice to base64 string
-	identityLinkStr := base64.StdEncoding.EncodeToString(identityLink)
+	_ = base64.StdEncoding.EncodeToString(identityLink)
 
-	return identityLinkStr, nil
+	return encryptedRootCID, nil
 }
 
 func (c *Client) GetEncryptedRootCID(identity string, appID string) ([]byte, error) {
