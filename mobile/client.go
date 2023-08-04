@@ -6,6 +6,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 
@@ -264,95 +266,64 @@ func (c *Client) Shutdown() error {
 // This stores the encrypted root Cid in an IPLD node and links rootCid to it.
 // We use the identity as the value of a new IPLD node and link rootCid to it.
 // Essentially, you're creating a new IPLD node with the content of identity and a link to rootCid.
-func (c *Client) StoreWithIdentity(identity string, appID string, encryptedRootCidStr string) (string, error) {
-	ctx := context.TODO()
-
-	// Convert encryptedRootCidStr to []byte
-	encryptedRootCid := []byte(encryptedRootCidStr)
-
-	// Concatenate identity and appID
-	identityAppID := append([]byte(identity), []byte(appID)...)
-
-	// Create a new node builder for the identity
-	identityBuilder := basicnode.Prototype.Any.NewBuilder()
-
-	// Create a new node with the identity as the value
-	err := identityBuilder.AssignBytes(identityAppID)
-	if err != nil {
-		return "", err
-	}
-	identityNode := identityBuilder.Build()
-
-	// Store the new node
-	identityLink, err := c.ls.Store(ipld.LinkContext{Ctx: ctx},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    uint64(multicodec.Raw),
-				MhType:   uint64(multicodec.Sha2_256),
-				MhLength: -1,
-			},
-		},
-		identityNode)
-
+func (c *Client) StoreEncryptedWithIdentity(identity string, appID string, encryptedRootCID string) (string, error) {
+	// Create appID-encryptedRootCID map
+	appIDEncryptedRootCIDMap := map[string]interface{}{appID: encryptedRootCID}
+	appIDEncryptedRootCIDMapBytes, err := json.Marshal(appIDEncryptedRootCIDMap)
 	if err != nil {
 		return "", err
 	}
 
-	// Create a new node builder for the encryptedRootCid
-	rootCidBuilder := basicnode.Prototype.Any.NewBuilder()
-
-	// Create a new node with the encryptedRootCid as the value
-	err = rootCidBuilder.AssignBytes(encryptedRootCid)
-	if err != nil {
-		return "", err
-	}
-	rootCidNode := rootCidBuilder.Build()
-
-	// Now link the encryptedRootCid node to this new identity node
-	_, err = c.ls.Store(ipld.LinkContext{Ctx: ctx},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    uint64(multicodec.Raw),
-				MhType:   uint64(multicodec.Sha2_256),
-				MhLength: -1,
-			},
-		},
-		rootCidNode)
-
+	// Store appID-encryptedRootCID map
+	appIDEncryptedRootCIDLink, err := c.Put(appIDEncryptedRootCIDMapBytes, int64(multicodec.Json))
 	if err != nil {
 		return "", err
 	}
 
-	// Convert identityLink to string
-	return identityLink.String(), nil
+	// Create identity-appIDEncryptedRootCIDLink map
+	identityLinkMap := map[string]interface{}{identity: appIDEncryptedRootCIDLink}
+	identityLinkMapBytes, err := json.Marshal(identityLinkMap)
+	if err != nil {
+		return "", err
+	}
+
+	// Store identity-appIDEncryptedRootCIDLink map
+	identityLink, err := c.Put(identityLinkMapBytes, int64(multicodec.Json))
+	if err != nil {
+		return "", err
+	}
+
+	// Convert byte slice to base64 string
+	identityLinkStr := base64.StdEncoding.EncodeToString(identityLink)
+
+	return identityLinkStr, nil
 }
 
-func (c *Client) GetByIdentity(identity string, appID string) (string, error) {
-	// Convert the identity to a link
-	identityAppID := append([]byte(identity), []byte(appID)...)
-	identityCid, err := cid.Decode(string(identityAppID))
+func (c *Client) GetEncryptedRootCID(identity string, appID string) ([]byte, error) {
+	// Load identity link map
+	identityLinkMapBytes, err := c.Get([]byte(identity))
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	var identityLinkMap map[string][]byte
+	err = json.Unmarshal(identityLinkMapBytes, &identityLinkMap)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create a cidlink.Link from the cid.Cid
-	identityLink := cidlink.Link{Cid: identityCid}
-
-	// Load the rootCid node
-	rootCidNode, err := c.ls.Load(ipld.LinkContext{Ctx: context.TODO()}, identityLink, basicnode.Prototype.Any)
+	// Load appID-encryptedRootCID map
+	appIDEncryptedRootCIDMapBytes, err := c.Get(identityLinkMap[identity])
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	var appIDEncryptedRootCIDMap map[string][]byte
+	err = json.Unmarshal(appIDEncryptedRootCIDMapBytes, &appIDEncryptedRootCIDMap)
+	if err != nil {
+		return nil, err
 	}
 
-	// The node should be Bytes, so convert it
-	encryptedRootCid, err := rootCidNode.AsBytes()
-	if err != nil {
-		return "", err
-	}
-
-	return string(encryptedRootCid), nil
+	encryptedRootCID := appIDEncryptedRootCIDMap[appID]
+	return encryptedRootCID, nil
 }
 
 // This function will encrypt the provided plaintext with the provided key using AES
@@ -406,12 +377,12 @@ func (c *Client) StoreWithIdentityAndEncrypt(identity string, appID string, root
 		return "", err
 	}
 
-	return c.StoreWithIdentity(identity, appID, string(encryptedRootCid))
+	return c.StoreEncryptedWithIdentity(identity, appID, string(encryptedRootCid))
 }
 
 func (c *Client) GetByIdentityAndDecrypt(identity string, appID string, key []byte) (string, error) {
 	// The node should be Bytes, so convert it
-	encryptedRootCid, err := c.GetByIdentity(identity, appID)
+	encryptedRootCid, err := c.GetEncryptedRootCID(identity, appID)
 	if err != nil {
 		return "", err
 	}
