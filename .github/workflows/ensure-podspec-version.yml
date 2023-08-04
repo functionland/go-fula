@@ -15,8 +15,8 @@ jobs:
     - name: Update version
       run: |
         VERSION=$(echo ${{ github.event.release.tag_name }} | cut -c 2-) # remove the v from the tag name
-        sed -i 's/\(s.version\s*=\s*\).*$/\1\''"$VERSION"'\'/' Fula.podspec
-        sed -i 's/#{s.version}/'"$VERSION"'/' Fula.podspec
+        sed -i 's/\(s.version\s*=\s*\).*$/\1'"\"$VERSION\""'/g' Fula.podspec
+        sed -i 's/#{s.version}/'"$VERSION"'/g' Fula.podspec
 
     - name: Set up Git
       run: |

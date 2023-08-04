@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -12,6 +16,7 @@ import (
 
 	blox "github.com/functionland/go-fula/wap/cmd/blox"
 	mdns "github.com/functionland/go-fula/wap/cmd/mdns"
+	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/server"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
@@ -25,13 +30,147 @@ var isHotspotStarted = false
 var currentServer io.Closer = nil
 var serverMutex sync.Mutex
 
+var versionFilePath = config.VERSION_FILE_PATH
+var restartNeededPath = config.RESTART_NEEDED_PATH
+
+type VersionInfo struct {
+	Version int       `json:"version"`
+	Date    time.Time `json:"date"`
+}
+
+func versionStringToInt(version string) (int, error) {
+	versionSlice := strings.Split(version, ".")
+	versionInt := 0
+
+	for i := 0; i < len(versionSlice); i++ {
+		num, err := strconv.Atoi(versionSlice[i])
+		if err != nil {
+			return 0, err
+		}
+		versionInt = versionInt*1000 + num // 1000 is chosen as a multiplier assuming version components do not exceed 999
+	}
+
+	return versionInt, nil
+}
+
+// GetLastRebootTime reads the last boot time from /proc/stat
+func GetLastRebootTime() (time.Time, error) {
+	uptimeBytes, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("cannot read uptime: %v", err)
+	}
+
+	uptimeString := strings.Split(string(uptimeBytes), " ")[0]
+	uptimeSeconds, err := strconv.ParseFloat(uptimeString, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("cannot parse uptime: %v", err)
+	}
+
+	bootTime := time.Now().UTC().Add(-time.Second * time.Duration(uptimeSeconds))
+
+	return bootTime, nil
+}
+
+func checkAndSetVersionInfo() error {
+
+	// Replace "1.2.3" with strings from map
+	OTA_VERSION, err := versionStringToInt(config.OTA_VERSION)
+	if err != nil {
+		return fmt.Errorf("error converting OTA_VERSION to int: %v", err)
+	}
+
+	RESTART_NEEDED_AFTER, err := versionStringToInt(config.RESTART_NEEDED_AFTER)
+	if err != nil {
+		return fmt.Errorf("error converting RESTART_NEEDED_AFTER to int: %v", err)
+	}
+
+	_, err = os.Stat(versionFilePath)
+
+	if os.IsNotExist(err) {
+		// if the version file does not exist, create it
+		versionInfo := VersionInfo{
+			Version: OTA_VERSION,
+			Date:    time.Now(),
+		}
+
+		file, _ := json.MarshalIndent(versionInfo, "", " ")
+
+		err = os.WriteFile(versionFilePath, file, 0644)
+		if err != nil {
+			return fmt.Errorf("error writing version file: %v", err)
+		}
+
+		// also create a file named /home/commands/.command_reboot
+		_, err = os.Create(restartNeededPath)
+		if err != nil {
+			return fmt.Errorf("error creating restart needed file: %v", err)
+		}
+
+	} else {
+		// if the version file exists
+		versionFileContent, err := os.ReadFile(versionFilePath)
+		if err != nil {
+			return fmt.Errorf("error reading version file: %v", err)
+		}
+
+		var versionInfo VersionInfo
+		err = json.Unmarshal(versionFileContent, &versionInfo)
+		if err != nil {
+			return fmt.Errorf("error parsing version file: %v", err)
+		}
+
+		// check if OTA_VERSION is different than version in the file
+		if versionInfo.Version != OTA_VERSION {
+			// if different, update the file with new OTA_VERSION and current date/time
+			versionInfo.Version = OTA_VERSION
+			versionInfo.Date = time.Now()
+
+			file, _ := json.MarshalIndent(versionInfo, "", " ")
+
+			err = os.WriteFile(versionFilePath, file, 0644)
+			if err != nil {
+				return fmt.Errorf("error updating version file: %v", err)
+			}
+		}
+
+		// retrieve the system restart time
+		restartTime, err := GetLastRebootTime()
+		if err != nil {
+			return fmt.Errorf("error getting last reboot time: %v", err)
+		}
+		log.Infof("last reboot time: ", restartTime)
+		log.Infof("versionInfo.Date: ", versionInfo.Date)
+		log.Infof("RESTART_NEEDED_AFTER: ", RESTART_NEEDED_AFTER)
+		log.Infof("OTA_VERSION: ", OTA_VERSION)
+
+		// compare the dates and version
+		if versionInfo.Date.After(restartTime) && OTA_VERSION <= RESTART_NEEDED_AFTER {
+			// create a file named /home/commands/.command_reboot
+			_, err = os.Create(restartNeededPath)
+			if err != nil {
+				return fmt.Errorf("error creating restart needed file: %v", err)
+			}
+			log.Info("creating restart needed file")
+		} else {
+			// delete a file named /home/commands/.command_reboot
+			err = os.Remove(restartNeededPath)
+			if err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("error removing restart needed file: %v", err)
+			}
+			log.Info("removing restart needed file")
+		}
+	}
+
+	return nil
+}
+
 func checkConfigExists() bool {
-	// Check if "/internal/config.yaml" file exists
-	if _, err := os.Stat("/internal/config.yaml"); os.IsNotExist(err) {
-		log.Info("File /internal/config.yaml does not exist")
+	// Check if config.yaml file exists
+	if _, err := os.Stat(config.FULA_CONFIG_PATH); os.IsNotExist(err) {
+		log.Infof("File %s does not exist", config.FULA_CONFIG_PATH)
 		return false
 	} else {
-		log.Info("File /internal/config.yaml exists")
+		log.Infof("File %s exists", config.FULA_CONFIG_PATH)
 		return true
 	}
 }
@@ -62,6 +201,23 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 			} else {
 				log.Info("No config file found, activating the hotspot mode.")
 				if !isHotspotStarted {
+					//Disconnect from external Wi-Fi before starting server as it causes Android in some cases not being able to connect to hotspot
+
+					// Check if /home/V5.info exists which means fula-ota update is completed before we disconnect wifi
+					if _, err := os.Stat("/home/V5.info"); err == nil {
+						// File exists
+						if err := wifi.DisconnectFromExternalWifi(ctx); err != nil {
+							log.Errorw("disconnect from wifi on startup", "err", err)
+						}
+					} else {
+						// create a file named /home/commands/.command_reboot
+						_, err = os.Create(restartNeededPath)
+						if err != nil {
+							log.Errorw("error creating restart needed file: %v", err)
+						}
+						log.Info("creating restart needed file")
+					}
+
 					if err := wifi.StartHotspot(ctx, true); err != nil {
 						log.Errorw("start hotspot on startup", "err", err)
 					} else {
@@ -94,6 +250,13 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 func main() {
 	logging.SetLogLevel("*", os.Getenv("LOG_LEVEL"))
 	ctx := context.Background()
+	// Call checkAndSetVersionInfo function
+	err := checkAndSetVersionInfo()
+	if err != nil {
+		log.Errorf("Error checking and setting version info: %v", err)
+	} else {
+		log.Info("Successfully checked and set version info")
+	}
 	var mdnsServer *mdns.MDNSServer = nil
 
 	serverCloser := make(chan io.Closer, 1)
@@ -108,7 +271,7 @@ func main() {
 		isConnected = true
 	}
 
-	// Check if "/internal/config.yaml" file exists
+	// Check if config.yaml file exists
 	configExists := checkConfigExists()
 
 	log.Info("Waiting for the system to connect to Wi-Fi")

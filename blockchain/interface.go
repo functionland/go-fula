@@ -30,9 +30,11 @@ const (
 	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
 
 	//Hardware
-	actionBloxFreeSpace = "blox-free-space"
-	actionWifiRemoveall = "wifi-removeall"
-	actionReboot        = "reboot"
+	actionBloxFreeSpace    = "blox-free-space"
+	actionWifiRemoveall    = "wifi-removeall"
+	actionReboot           = "reboot"
+	actionPartition        = "partition"
+	actionDeleteFulaConfig = "delete-fula-config"
 )
 
 type SeededRequest struct {
@@ -290,6 +292,8 @@ type Blockchain interface {
 	BloxFreeSpace(context.Context, peer.ID) ([]byte, error)
 	WifiRemoveall(context.Context, peer.ID) ([]byte, error)
 	Reboot(context.Context, peer.ID) ([]byte, error)
+	Partition(context.Context, peer.ID) ([]byte, error)
+	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -313,9 +317,11 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
 
 	//Hardware
-	actionBloxFreeSpace: reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
-	actionWifiRemoveall: reflect.TypeOf(wifi.WifiRemoveallRequest{}),
-	actionReboot:        reflect.TypeOf(wifi.RebootRequest{}),
+	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
+	actionWifiRemoveall:    reflect.TypeOf(wifi.WifiRemoveallRequest{}),
+	actionReboot:           reflect.TypeOf(wifi.RebootRequest{}),
+	actionPartition:        reflect.TypeOf(wifi.PartitionRequest{}),
+	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -339,7 +345,9 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
 
 	//Hardware
-	actionBloxFreeSpace: reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
-	actionWifiRemoveall: reflect.TypeOf(wifi.WifiRemoveallResponse{}),
-	actionReboot:        reflect.TypeOf(wifi.RebootResponse{}),
+	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
+	actionWifiRemoveall:    reflect.TypeOf(wifi.WifiRemoveallResponse{}),
+	actionReboot:           reflect.TypeOf(wifi.RebootResponse{}),
+	actionPartition:        reflect.TypeOf(wifi.PartitionResponse{}),
+	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
 }

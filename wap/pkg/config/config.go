@@ -15,7 +15,6 @@ var (
 	API_PORT               string
 	IFFACE                 string
 	IFFACE_CLIENT          string
-	SSID                   string
 	IPADDRESS              string
 	SUBNET_RANGE_START     string
 	SUBNET_RANGE_END       string
@@ -23,6 +22,13 @@ var (
 	FORCE_ACCESSPOINT      string
 	COUNTRY                string
 	BLOX_COMMAND           string
+	OTA_VERSION            string
+	HOTSPOT_SSID           string
+	RESTART_NEEDED_AFTER   string
+	VERSION_FILE_PATH      string
+	RESTART_NEEDED_PATH    string
+	PARTITION_NEEDED_PATH  string
+	FULA_CONFIG_PATH       string
 )
 
 func getEnv(key, fallback string) string {
@@ -35,7 +41,7 @@ func getEnv(key, fallback string) string {
 func init() {
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Printf("Error loading .env file\n")
+		fmt.Printf("Error loading .env file %s\n", err)
 	}
 
 	PROJECT_NAME = getEnv("PROJECT_NAME", "Box Firmware")
@@ -48,8 +54,7 @@ func init() {
 	IFFACE = getEnv("IFFACE", "uap0")
 	IFFACE_CLIENT = getEnv("IFFACE_CLIENT", "wlan0")
 
-	SSID = getEnv("SSID", "Box")
-	IPADDRESS = getEnv("IPADDRESS", "192.168.88.1")
+	IPADDRESS = getEnv("IPADDRESS", "10.42.0.1")
 	SUBNET_RANGE_START = getEnv("SUBNET_RANGE_START", "192.168.88.100")
 	SUBNET_RANGE_END =
 		getEnv("SUBNET_RANGE_END", "192.168.88.200")
@@ -57,5 +62,13 @@ func init() {
 	FORCE_ACCESSPOINT = getEnv("FORCE_ACCESSPOINT", "1")
 	COUNTRY = getEnv("COUNTRY", "GB")
 	PROJECT_ROOT = getEnv("PROJECT_ROOT", "../..")
-	BLOX_COMMAND = getEnv("BLOX_COMMAND", "/app --authorizer %s --identity %s --initOnly --config /internal/config.yaml --storeDir /uniondrive")
+	FULA_CONFIG_PATH = getEnv("FULA_CONFIG_PATH", "/internal/config.yaml")
+	BLOX_COMMAND = fmt.Sprintf(getEnv("BLOX_COMMAND", "/app --authorizer %%s --identity %%s --initOnly --config %s --storeDir /uniondrive"), FULA_CONFIG_PATH)
+	OTA_VERSION = getEnv("OTA_VERSION", "3")
+	HOTSPOT_SSID = getEnv("HOTSPOT_SSID", "FxBlox")
+	RESTART_NEEDED_AFTER = getEnv("RESTART_NEEDED_AFTER", "3")
+	VERSION_FILE_PATH = getEnv("VERSION_FILE_PATH", "/home/go_fula_version.info")
+	RESTART_NEEDED_PATH = getEnv("RESTART_NEEDED_PATH", "/home/commands/.command_reboot")
+	PARTITION_NEEDED_PATH = getEnv("PARTITION_NEEDED_PATH", "/home/commands/.command_partition")
+
 }

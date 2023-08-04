@@ -21,9 +21,23 @@ type WifiRemoveallResponse struct {
 	Status bool   `json:"status"`
 }
 
+type DeleteFulaConfigRequest struct {
+}
+type DeleteFulaConfigResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type RebootRequest struct {
 }
 type RebootResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
+type PartitionRequest struct {
+}
+type PartitionResponse struct {
 	Msg    string `json:"msg"`
 	Status bool   `json:"status"`
 }
@@ -115,16 +129,81 @@ func DeleteConnection(ctx context.Context, connectionName string) {
 }
 
 func Reboot(ctx context.Context) RebootResponse {
-	go func() {
-		time.Sleep(5 * time.Second)
-		_, stderr, err := runCommand(ctx, "sudo reboot")
-		if err != nil {
-			log.Warnf("failed to reboot: %v: %v", err, stderr)
+	file, err := os.OpenFile(config.RESTART_NEEDED_PATH, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	res := ""
+	status := true
+	if err != nil {
+		if os.IsExist(err) {
+			res = "File already exists"
+			log.Warnf(res)
+		} else {
+			// Other error
+			res = fmt.Sprintf("Failed to open file: %s", err)
+			log.Error(res)
+			status = false
 		}
-	}()
+	} else {
+		res = "File created"
+		log.Info(res)
+		// Don't forget to close the file when you're done
+		defer file.Close()
+	}
 	return RebootResponse{
-		Msg:    "Trying to reboot...",
-		Status: true,
+		Msg:    res,
+		Status: status,
+	}
+}
+
+func Partition(ctx context.Context) PartitionResponse {
+	file, err := os.OpenFile(config.PARTITION_NEEDED_PATH, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	res := ""
+	status := true
+	if err != nil {
+		if os.IsExist(err) {
+			res = "File already exists"
+			log.Warnf(res)
+		} else {
+			// Other error
+			res = fmt.Sprintf("Failed to open file: %s", err)
+			log.Error(res)
+			status = false
+		}
+	} else {
+		res = "File created"
+		log.Info(res)
+		// Don't forget to close the file when you're done
+		defer file.Close()
+	}
+	return PartitionResponse{
+		Msg:    res,
+		Status: status,
+	}
+}
+
+func DeleteFulaConfig(ctx context.Context) DeleteFulaConfigResponse {
+	configFilePath := config.FULA_CONFIG_PATH
+	msg := ""
+	status := true
+
+	if _, err := os.Stat(configFilePath); err == nil {
+		// The file exists, delete it
+		if err := os.Remove(configFilePath); err != nil {
+			msg = fmt.Sprintf("failed to delete config file: %v", err)
+			status = false
+		} else {
+			msg = "Config file deleted successfully."
+		}
+	} else if os.IsNotExist(err) {
+		// The file does not exist
+		msg = "Config file does not exist."
+	} else {
+		// An error other than IsNotExist occurred
+		msg = fmt.Sprintf("error checking config file: %v", err)
+		status = false
+	}
+	return DeleteFulaConfigResponse{
+		Msg:    msg,
+		Status: status,
 	}
 }
 
