@@ -6,7 +6,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -263,6 +262,16 @@ func (c *Client) Shutdown() error {
 	}
 }
 
+func (c *Client) IPNSPublish(identity string, identityLink []byte) string {
+	//TODO: Implement IPNSPublish
+	return "/ipns/QmRrFsi8WQH4MZEW3QjF74CJ4VzRTvYVGQgb2rP1eLJxAf"
+}
+
+func (c *Client) IPNSResolve(identity string) ([]byte, error) {
+	//TODO: Implement IPNSResolve
+	return []byte("QmRrFsi8WQH4MZEW3QjF74CJ4VzRTvYVGQgb2rP1eLJxAf"), nil
+}
+
 // This stores the encrypted root Cid in an IPLD node and links rootCid to it.
 // We use the identity as the value of a new IPLD node and link rootCid to it.
 // Essentially, you're creating a new IPLD node with the content of identity and a link to rootCid.
@@ -293,15 +302,21 @@ func (c *Client) StoreEncryptedWithIdentity(identity string, appID string, encry
 		return "", err
 	}
 
-	// Convert byte slice to base64 string
-	_ = base64.StdEncoding.EncodeToString(identityLink)
+	// Publish new identity link to IPNS
+	ipnsName := c.IPNSPublish(identity, identityLink)
 
-	return encryptedRootCID, nil
+	return ipnsName, nil
 }
 
 func (c *Client) GetEncryptedRootCID(identity string, appID string) ([]byte, error) {
+	// Retrieve the IPNS record
+	identityLink, err := c.IPNSResolve(identity)
+	if err != nil {
+		return nil, err
+	}
+
 	// Load identity link map
-	identityLinkMapBytes, err := c.Get([]byte(identity))
+	identityLinkMapBytes, err := c.Get(identityLink)
 	if err != nil {
 		return nil, err
 	}
