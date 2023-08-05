@@ -1,6 +1,7 @@
 package blox
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -85,6 +86,49 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 				log.Errorw("failed to encode response to block stat", "err", err)
 			}
 		}
+	})
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-id
+	mux.HandleFunc("/api/v0/id", func(w http.ResponseWriter, r *http.Request) {
+		//Get string value of addresses
+		addresses := p.h.Addrs()
+		addressStrings := make([]string, len(addresses))
+		for i, addr := range addresses {
+			addressStrings[i] = addr.String()
+		}
+
+		//Get Public Key
+		pubKey, err := p.h.ID().ExtractPublicKey()
+		if err != nil {
+			log.Errorw("Public key is not available", err)
+			return
+		}
+		pubKeyBytes, err := pubKey.Raw()
+		if err != nil {
+			log.Errorw("Error getting raw public key:", err)
+			return
+		}
+
+		pubKeyBase64 := base64.StdEncoding.EncodeToString(pubKeyBytes)
+
+		resp := struct {
+			Addresses       []string `json:"Addresses"`
+			AgentVersion    string   `json:"AgentVersion"`
+			ID              string   `json:"ID"`
+			ProtocolVersion string   `json:"ProtocolVersion"`
+			Protocols       []string `json:"Protocols"`
+			PublicKey       string   `json:"PublicKey"`
+		}{
+			Addresses:       addressStrings,
+			AgentVersion:    Version0,
+			ID:              p.h.ID().String(),
+			ProtocolVersion: "fx_exchange/" + Version0,
+			Protocols:       []string{"fx_exchange"},
+			PublicKey:       pubKeyBase64,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to id", "err", err)
+		}
+
 	})
 	return mux
 }
