@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
@@ -22,6 +23,18 @@ type (
 		Type string
 	}
 )
+
+type SizeStat struct {
+	RepoSize   uint64 `json:"RepoSize"`
+	StorageMax uint64 `json:"StorageMax"`
+}
+
+type RepoInfo struct {
+	NumObjects uint64   `json:"NumObjects"`
+	RepoPath   string   `json:"RepoPath"`
+	SizeStat   SizeStat `json:"SizeStat"`
+	Version    string   `json:"Version"`
+}
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
@@ -149,9 +162,54 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 			Message: "ignored",
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Errorw("failed to encode response to id", "err", err)
+			log.Errorw("failed to encode response to log level", "err", err)
 		}
 
+	})
+
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-stats-repo
+	mux.HandleFunc("/api/v0/stats/repo", func(w http.ResponseWriter, r *http.Request) {
+		//get StorageMax
+		storage, err := wifi.GetBloxFreeSpace()
+		if err != nil {
+			log.Errorw("failed to get storage stats", "err", err)
+			http.Error(w, "internal error while getting storage stats: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		//Get RepoSize and NumObjects
+		repoSize := 0
+		numObjects := 0
+		results, err := p.ds.Query(r.Context(), query.Query{
+			KeysOnly: true,
+		})
+		if err != nil {
+			log.Errorw("failed to query datastore", "err", err)
+			http.Error(w, "internal error while querying datastore: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for result := range results.Next() {
+			if result.Error != nil {
+				log.Errorw("failed to traverse results", "err", err)
+				http.Error(w, "internal error while traversing datastore results: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			repoSize = repoSize + result.Size
+			numObjects = numObjects + 1
+		}
+
+		resp := RepoInfo{
+			NumObjects: uint64(numObjects),
+			RepoPath:   p.storeDir,
+			SizeStat: SizeStat{
+				RepoSize:   uint64(repoSize),
+				StorageMax: uint64(storage.Size),
+			},
+			Version: "fx-repo@" + Version0,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to stats repo", "err", err)
+		}
 	})
 
 	mux.HandleFunc("/", notFoundHandler)
