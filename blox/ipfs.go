@@ -23,6 +23,16 @@ type (
 	}
 )
 
+func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+	params := r.URL.Query()
+	log.Errorw("404 Not Found",
+		"method", r.Method,
+		"url", r.URL.String(),
+		"params", params,
+	)
+	http.NotFound(w, r)
+}
+
 func (p *Blox) ServeIpfsRpc() http.Handler {
 	mux := http.NewServeMux()
 	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-pin-ls
@@ -130,5 +140,8 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 
 	})
+
+	mux.HandleFunc("/", notFoundHandler)
+
 	return mux
 }
