@@ -141,6 +141,19 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 
 	})
 
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-log-level
+	mux.HandleFunc("/api/v0/log/level", func(w http.ResponseWriter, r *http.Request) {
+		resp := struct {
+			Message string `json:"Message"`
+		}{
+			Message: "ignored",
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to id", "err", err)
+		}
+
+	})
+
 	mux.HandleFunc("/", notFoundHandler)
 
 	return mux
