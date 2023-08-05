@@ -34,6 +34,7 @@ type RepoInfo struct {
 	RepoPath   string   `json:"RepoPath"`
 	SizeStat   SizeStat `json:"SizeStat"`
 	Version    string   `json:"Version"`
+	RepoSize   uint64   `json:"RepoSize"`
 }
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +168,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 
 	})
 
-	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-stats-repo
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-stats-repo Modified for Sugarfunge by adding RepoSize in the root of response
 	mux.HandleFunc("/api/v0/stats/repo", func(w http.ResponseWriter, r *http.Request) {
 		//get StorageMax
 		storage, err := wifi.GetBloxFreeSpace()
@@ -201,6 +202,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		resp := RepoInfo{
 			NumObjects: uint64(numObjects),
 			RepoPath:   p.storeDir,
+			RepoSize:   uint64(repoSize),
 			SizeStat: SizeStat{
 				RepoSize:   uint64(repoSize),
 				StorageMax: uint64(storage.Size),
