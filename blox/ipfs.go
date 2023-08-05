@@ -72,6 +72,14 @@ type StatsBw struct {
 	TotalOut int64   `json:"TotalOut"`
 }
 
+type PeerStats struct {
+	Exchanged uint64  `json:"Exchanged"`
+	Peer      string  `json:"Peer"`
+	Recv      uint64  `json:"Recv"`
+	Sent      uint64  `json:"Sent"`
+	Value     float64 `json:"Value"`
+}
+
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	log.Errorw("404 Not Found",
@@ -361,6 +369,21 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Errorw("failed to encode response to stats bw", "err", err)
+		}
+	})
+
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-bitswap-ledger
+	mux.HandleFunc("/api/v0/bitswap/ledger", func(w http.ResponseWriter, r *http.Request) {
+
+		resp := PeerStats{
+			Exchanged: 0,
+			Peer:      p.h.ID().String(),
+			Recv:      0,
+			Sent:      0,
+			Value:     0,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to bitswap ledger", "err", err)
 		}
 	})
 
