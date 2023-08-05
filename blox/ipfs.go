@@ -37,6 +37,17 @@ type RepoInfo struct {
 	RepoSize   uint64   `json:"RepoSize"`
 }
 
+type FilesStat struct {
+	Blocks         int    `json:"Blocks"`
+	CumulativeSize uint64 `json:"CumulativeSize"`
+	Hash           string `json:"Hash"`
+	Local          bool   `json:"Local,omitempty"` // Optional field. 'omitempty' keyword is used to exclude the field from the output if it's default/zero value
+	Size           uint64 `json:"Size"`
+	SizeLocal      uint64 `json:"SizeLocal,omitempty"` // Optional field.
+	Type           string `json:"Type"`
+	WithLocality   bool   `json:"WithLocality,omitempty"` // Optional field.
+}
+
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	log.Errorw("404 Not Found",
@@ -211,6 +222,41 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Errorw("failed to encode response to stats repo", "err", err)
+		}
+	})
+
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-files-stat
+	mux.HandleFunc("/api/v0/files/stat", func(w http.ResponseWriter, r *http.Request) {
+		//Get RepoSize and NumObjects
+		repoSize := 0
+		numObjects := 0
+		results, err := p.ds.Query(r.Context(), query.Query{
+			KeysOnly: true,
+		})
+		if err != nil {
+			log.Errorw("failed to query datastore", "err", err)
+			http.Error(w, "internal error while querying datastore: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for result := range results.Next() {
+			if result.Error != nil {
+				log.Errorw("failed to traverse results", "err", err)
+				http.Error(w, "internal error while traversing datastore results: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			repoSize = repoSize + result.Size
+			numObjects = numObjects + 1
+		}
+
+		resp := FilesStat{
+			Hash:           "",
+			Size:           uint64(repoSize),
+			CumulativeSize: uint64(repoSize),
+			Blocks:         numObjects,
+			Type:           "directory",
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to files stat", "err", err)
 		}
 	})
 
