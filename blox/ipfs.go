@@ -48,6 +48,23 @@ type FilesStat struct {
 	WithLocality   bool   `json:"WithLocality,omitempty"` // Optional field.
 }
 
+type CidStruct struct {
+	Root string `json:"/"`
+}
+
+type StatsBitswap struct {
+	BlocksReceived   uint64      `json:"BlocksReceived"`
+	BlocksSent       uint64      `json:"BlocksSent"`
+	DataReceived     uint64      `json:"DataReceived"`
+	DataSent         uint64      `json:"DataSent"`
+	DupBlksReceived  uint64      `json:"DupBlksReceived"`
+	DupDataReceived  uint64      `json:"DupDataReceived"`
+	MessagesReceived uint64      `json:"MessagesReceived"`
+	Peers            []string    `json:"Peers"`
+	ProvideBufLen    int         `json:"ProvideBufLen"`
+	Wantlist         []CidStruct `json:"Wantlist"`
+}
+
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	log.Errorw("404 Not Found",
@@ -249,7 +266,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 
 		resp := FilesStat{
-			Hash:           "",
+			Hash:           "", //TODO: Get hash of root directory
 			Size:           uint64(repoSize),
 			CumulativeSize: uint64(repoSize),
 			Blocks:         numObjects,
@@ -257,6 +274,54 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Errorw("failed to encode response to files stat", "err", err)
+		}
+	})
+
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-stats-bitswap
+	mux.HandleFunc("/api/v0/stats/bitswap", func(w http.ResponseWriter, r *http.Request) {
+		//Get RepoSize and NumObjects
+		repoSize := 0
+		numObjects := 0
+		results, err := p.ds.Query(r.Context(), query.Query{
+			KeysOnly: true,
+		})
+		if err != nil {
+			log.Errorw("failed to query datastore", "err", err)
+			http.Error(w, "internal error while querying datastore: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for result := range results.Next() {
+			if result.Error != nil {
+				log.Errorw("failed to traverse results", "err", err)
+				http.Error(w, "internal error while traversing datastore results: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			repoSize = repoSize + result.Size
+			numObjects = numObjects + 1
+		}
+
+		// First, create a slice to store the string representations
+		peerStrings := make([]string, len(p.authorizedPeers))
+
+		// Then convert each peer.ID to a string
+		for i, peerID := range p.authorizedPeers {
+			peerStrings[i] = peerID.String()
+		}
+
+		resp := StatsBitswap{
+			Wantlist:         []CidStruct{}, // empty slice
+			Peers:            peerStrings,
+			BlocksReceived:   uint64(numObjects),
+			DataReceived:     0,
+			DupBlksReceived:  0,
+			DupDataReceived:  0,
+			MessagesReceived: uint64(numObjects),
+			BlocksSent:       0,
+			DataSent:         0,
+			ProvideBufLen:    0,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to stats bitswap", "err", err)
 		}
 	})
 
