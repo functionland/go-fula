@@ -65,6 +65,13 @@ type StatsBitswap struct {
 	Wantlist         []CidStruct `json:"Wantlist"`
 }
 
+type StatsBw struct {
+	RateIn   float64 `json:"RateIn"`
+	RateOut  float64 `json:"RateOut"`
+	TotalIn  int64   `json:"TotalIn"`
+	TotalOut int64   `json:"TotalOut"`
+}
+
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	log.Errorw("404 Not Found",
@@ -322,6 +329,38 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Errorw("failed to encode response to stats bitswap", "err", err)
+		}
+	})
+
+	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-stats-bw
+	mux.HandleFunc("/api/v0/stats/bw", func(w http.ResponseWriter, r *http.Request) {
+		//Get NumObjects
+		numObjects := 0
+		results, err := p.ds.Query(r.Context(), query.Query{
+			KeysOnly: true,
+		})
+		if err != nil {
+			log.Errorw("failed to query datastore", "err", err)
+			http.Error(w, "internal error while querying datastore: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for result := range results.Next() {
+			if result.Error != nil {
+				log.Errorw("failed to traverse results", "err", err)
+				http.Error(w, "internal error while traversing datastore results: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			numObjects = numObjects + 1
+		}
+
+		resp := StatsBw{
+			TotalIn:  int64(numObjects),
+			TotalOut: 0,
+			RateIn:   0,
+			RateOut:  0,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Errorw("failed to encode response to stats bw", "err", err)
 		}
 	})
 
