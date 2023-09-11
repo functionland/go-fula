@@ -9,16 +9,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out code
+    - name: Checkout code
       uses: actions/checkout@v2
-      with:
-        ref: ${{ github.event.release.target_commitish }}
+    
+    - name: Create new branch
+      run: |
+        git checkout -b update-version-${{ github.event.release.tag_name }}
 
     - name: Update version
       run: |
         VERSION=$(echo ${{ github.event.release.tag_name }} | cut -c 2-) # remove the v from the tag name
         sed -i 's/\(s.version\s*=\s*\).*$/\1'"\"$VERSION\""'/g' Fula.podspec
         sed -i 's/#{s.version}/'"$VERSION"'/g' Fula.podspec
+
+    - name: Commit and push
+      run: |
+        git add .
+        git commit -m "Update version to $VERSION"
+        git push origin update-version-${{ github.event.release.tag_name }}
+    
+    - name: Create Pull Request
+      uses: gh-actions-contrib/create-pull-request@v3
+      with:
+        title: 'Update version to ${{ env.VERSION }}'
+        body: 'Automatically update version number.'
+        labels: 'version update, automated pr'
+        branch: 'update-version-${{ github.event.release.tag_name }}'
+        draft: false
 
     - name: Set up Git
       run: |
