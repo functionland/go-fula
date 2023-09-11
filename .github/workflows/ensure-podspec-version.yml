@@ -3,6 +3,7 @@ name: Update Podspec Version
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   update-version:
@@ -22,6 +23,11 @@ jobs:
         sed -i 's/\(s.version\s*=\s*\).*$/\1'"\"$VERSION\""'/g' Fula.podspec
         sed -i 's/#{s.version}/'"$VERSION"'/g' Fula.podspec
 
+    - name: Set up Git
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+
     - name: Commit and push
       run: |
         git add .
@@ -36,14 +42,3 @@ jobs:
         labels: 'version update, automated pr'
         branch: 'update-version-${{ github.event.release.tag_name }}'
         draft: false
-
-    - name: Set up Git
-      run: |
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-
-    - name: Commit and push
-      run: |
-        git add .
-        git commit -m "Update version to $VERSION"
-        git push
