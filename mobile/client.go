@@ -175,7 +175,7 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 			Prefix: cid.Prefix{
 				Version:  1,
 				Codec:    ucodec,
-				MhType:   uint64(multicodec.Sha2_256),
+				MhType:   uint64(multicodec.Blake3),
 				MhLength: -1,
 			},
 		},
