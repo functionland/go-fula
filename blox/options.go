@@ -24,6 +24,7 @@ type (
 		h                host.Host
 		name             string
 		topicName        string
+		storeDir         string
 		announceInterval time.Duration
 		ds               datastore.Batching
 		ls               *ipld.LinkSystem
@@ -98,6 +99,15 @@ func WithHost(h host.Host) Option {
 func WithPoolName(n string) Option {
 	return func(o *options) error {
 		o.name = n
+		return nil
+	}
+}
+
+// WithStoreDir sets a the store directory we are using for datastore
+// Required.
+func WithStoreDir(n string) Option {
+	return func(o *options) error {
+		o.storeDir = n
 		return nil
 	}
 }

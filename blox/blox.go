@@ -3,6 +3,7 @@ package blox
 import (
 	"context"
 	"errors"
+	"net/http"
 	"sync"
 	"time"
 
@@ -72,6 +73,16 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.Start(ctx); err != nil {
 		return err
 	}
+	go func() {
+		log.Infow("IPFS RPC server started on address http://localhost:5001")
+		switch err := http.ListenAndServe("localhost:5001", p.ServeIpfsRpc()); {
+		case errors.Is(err, http.ErrServerClosed):
+			log.Infow("IPFS RPC server stopped")
+		default:
+			log.Errorw("IPFS RPC server stopped erroneously", "err", err)
+		}
+	}()
+
 	gsub, err := pubsub.NewGossipSub(ctx, p.h,
 		pubsub.WithPeerExchange(true),
 		pubsub.WithFloodPublish(true),

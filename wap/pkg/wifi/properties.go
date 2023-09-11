@@ -107,10 +107,25 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	}
 
 	deviceCount, errCount := strconv.Atoi(parts[0])
-	size, errSize := strconv.ParseFloat(parts[1], 32)
-	used, errUsed := strconv.ParseFloat(parts[2], 32)
-	avail, errAvail := strconv.ParseFloat(parts[3], 32)
-	usedPercentage, errUsedPercentage := strconv.ParseFloat(parts[4], 32)
+	sizeStr, usedStr, availStr, usedPercentageStr := parts[1], parts[2], parts[3], parts[4]
+
+	if sizeStr == "" {
+		sizeStr = "0"
+	}
+	if usedStr == "" {
+		usedStr = "0"
+	}
+	if availStr == "" {
+		availStr = "0"
+	}
+	if usedPercentageStr == "" {
+		usedPercentageStr = "0"
+	}
+
+	size, errSize := strconv.ParseFloat(sizeStr, 32)
+	used, errUsed := strconv.ParseFloat(usedStr, 32)
+	avail, errAvail := strconv.ParseFloat(availStr, 32)
+	usedPercentage, errUsedPercentage := strconv.ParseFloat(usedPercentageStr, 32)
 
 	var errors []string
 	if errCount != nil {
