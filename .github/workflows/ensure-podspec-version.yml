@@ -3,16 +3,19 @@ name: Update Podspec Version
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   update-version:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out code
+    - name: Checkout code
       uses: actions/checkout@v2
-      with:
-        ref: ${{ github.event.release.target_commitish }}
+    
+    - name: Create new branch
+      run: |
+        git checkout -b update-version-${{ github.event.release.tag_name }}
 
     - name: Update version
       run: |
@@ -29,4 +32,13 @@ jobs:
       run: |
         git add .
         git commit -m "Update version to $VERSION"
-        git push
+        git push origin update-version-${{ github.event.release.tag_name }}
+    
+    - name: Create Pull Request
+      uses: gh-actions-contrib/create-pull-request@v3
+      with:
+        title: 'Update version to ${{ env.VERSION }}'
+        body: 'Automatically update version number.'
+        labels: 'version update, automated pr'
+        branch: 'update-version-${{ github.event.release.tag_name }}'
+        draft: false
