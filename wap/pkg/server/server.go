@@ -396,6 +396,7 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 	err = config.WriteProperties(map[string]interface{}{
 		"client_peer_id": peerID,
 		"blox_peer_id":   bloxPeerID,
+		"blox_seed":      bloxPrivKey,
 	})
 	if err != nil {
 		http.Error(w, "failed to write the properties", http.StatusBadRequest)

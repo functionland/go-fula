@@ -46,7 +46,7 @@ func init() {
 
 	PROJECT_NAME = getEnv("PROJECT_NAME", "Box Firmware")
 	CUSTOM_PROPERTIES_FILE =
-		getEnv("CUSTOM_PROPERTIES_FILE", "/var/box_props.json")
+		getEnv("CUSTOM_PROPERTIES_FILE", "/internal/box_props.json")
 
 	API_URL = getEnv("API_URL", "http://localhost:3500")
 	API_PORT = getEnv("API_PORT", "3500")
