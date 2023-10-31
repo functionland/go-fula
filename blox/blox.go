@@ -58,7 +58,7 @@ func New(o ...Option) (*Blox, error) {
 		authorizedPeers = opts.authorizedPeers
 	}
 	p.bl, _ = blockchain.NewFxBlockchain(p.h,
-		blockchain.NewSimpleKeyStorer(),
+		blockchain.NewSimpleKeyStorer(""),
 		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),

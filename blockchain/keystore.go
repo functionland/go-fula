@@ -15,9 +15,12 @@ type SimpleKeyStorer struct {
 	dbPath string
 }
 
-func NewSimpleKeyStorer() *SimpleKeyStorer {
-	// Saving the db in the local dir
-	dbPath := "/internal/.secrets"
+func NewSimpleKeyStorer(dbPath string) *SimpleKeyStorer {
+	// Default to current value if empty
+	if dbPath == "" {
+		dbPath = "/internal/.secrets"
+	}
+
 	// Create the directory if it doesn't exist
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		err := os.MkdirAll(dbPath, 0755)
@@ -25,6 +28,7 @@ func NewSimpleKeyStorer() *SimpleKeyStorer {
 			panic("Failed to create directory: " + err.Error())
 		}
 	}
+
 	return &SimpleKeyStorer{dbPath: dbPath}
 }
 
