@@ -3,7 +3,12 @@ package fulamobile
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/json"
 	"errors"
+	"io"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
@@ -255,4 +260,153 @@ func (c *Client) Shutdown() error {
 	default:
 		return xErr
 	}
+}
+
+func (c *Client) IPNSPublish(identity string, identityLink []byte) string {
+	//TODO: Implement IPNSPublish
+	return "/ipns/QmRrFsi8WQH4MZEW3QjF74CJ4VzRTvYVGQgb2rP1eLJxAf"
+}
+
+func (c *Client) IPNSResolve(identity string) ([]byte, error) {
+	//TODO: Implement IPNSResolve
+	return []byte("QmRrFsi8WQH4MZEW3QjF74CJ4VzRTvYVGQgb2rP1eLJxAf"), nil
+}
+
+// This stores the encrypted root Cid in an IPLD node and links rootCid to it.
+// We use the identity as the value of a new IPLD node and link rootCid to it.
+// Essentially, you're creating a new IPLD node with the content of identity and a link to rootCid.
+func (c *Client) StoreEncryptedWithIdentity(identity string, appID string, encryptedRootCID string) (string, error) {
+	// Create appID-encryptedRootCID map
+	appIDEncryptedRootCIDMap := map[string]interface{}{appID: encryptedRootCID}
+	appIDEncryptedRootCIDMapBytes, err := json.Marshal(appIDEncryptedRootCIDMap)
+	if err != nil {
+		return "", err
+	}
+
+	// Store appID-encryptedRootCID map
+	appIDEncryptedRootCIDLink, err := c.Put(appIDEncryptedRootCIDMapBytes, int64(multicodec.Json))
+	if err != nil {
+		return "", err
+	}
+
+	// Create identity-appIDEncryptedRootCIDLink map
+	identityLinkMap := map[string]interface{}{identity: appIDEncryptedRootCIDLink}
+	identityLinkMapBytes, err := json.Marshal(identityLinkMap)
+	if err != nil {
+		return "", err
+	}
+
+	// Store identity-appIDEncryptedRootCIDLink map
+	identityLink, err := c.Put(identityLinkMapBytes, int64(multicodec.Json))
+	if err != nil {
+		return "", err
+	}
+
+	// Publish new identity link to IPNS
+	ipnsName := c.IPNSPublish(identity, identityLink)
+
+	return ipnsName, nil
+}
+
+func (c *Client) GetEncryptedRootCID(identity string, appID string) ([]byte, error) {
+	// Retrieve the IPNS record
+	identityLink, err := c.IPNSResolve(identity)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load identity link map
+	identityLinkMapBytes, err := c.Get(identityLink)
+	if err != nil {
+		return nil, err
+	}
+	var identityLinkMap map[string][]byte
+	err = json.Unmarshal(identityLinkMapBytes, &identityLinkMap)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load appID-encryptedRootCID map
+	appIDEncryptedRootCIDMapBytes, err := c.Get(identityLinkMap[identity])
+	if err != nil {
+		return nil, err
+	}
+	var appIDEncryptedRootCIDMap map[string][]byte
+	err = json.Unmarshal(appIDEncryptedRootCIDMapBytes, &appIDEncryptedRootCIDMap)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedRootCID := appIDEncryptedRootCIDMap[appID]
+	return encryptedRootCID, nil
+}
+
+// This function will encrypt the provided plaintext with the provided key using AES
+func encrypt(plaintext []byte, key []byte) ([]byte, error) {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, plaintext, nil), nil
+}
+
+// This function will decrypt the provided ciphertext with the provided key using AES
+func decrypt(ciphertext []byte, key []byte) ([]byte, error) {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	return gcm.Open(nil, nonce, ciphertext, nil)
+}
+
+func (c *Client) StoreWithIdentityAndEncrypt(identity string, appID string, rootCidStr string, key []byte) (string, error) {
+	// Convert rootCidStr to []byte
+	rootCid := []byte(rootCidStr)
+
+	// Encrypt rootCid
+	encryptedRootCid, err := encrypt(rootCid, key)
+	if err != nil {
+		return "", err
+	}
+
+	return c.StoreEncryptedWithIdentity(identity, appID, string(encryptedRootCid))
+}
+
+func (c *Client) GetByIdentityAndDecrypt(identity string, appID string, key []byte) (string, error) {
+	// The node should be Bytes, so convert it
+	encryptedRootCid, err := c.GetEncryptedRootCID(identity, appID)
+	if err != nil {
+		return "", err
+	}
+
+	// Decrypt the rootCid
+	decryptedRootCid, err := decrypt([]byte(encryptedRootCid), key)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decryptedRootCid), nil
 }
