@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
@@ -376,13 +375,6 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 	bloxPrivKey, err := wifi.GeneratePrivateKeyFromSeed(combinedSeed)
 	if err != nil {
 		http.Error(w, "failed to create bloxPrivKey", http.StatusBadRequest)
-		return
-	}
-
-	keySotre := blockchain.NewSimpleKeyStorer()
-	if err := keySotre.SaveKey(r.Context(), []byte(seed)); err != nil {
-		http.Error(w, "saving the seed", http.StatusBadRequest)
-		log.Errorw("saving the seed", "err", err)
 		return
 	}
 

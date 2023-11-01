@@ -177,14 +177,14 @@ func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req
 		seed, err := bl.keyStorer.LoadKey(ctx)
 		if err != nil {
 			log.Errorw("seed is empty", "err", err)
-			seed = []byte{}
+			seed = ""
 		}
 		return struct {
 			ReqInterface
 			Seed string
 		}{
 			ReqInterface: req,
-			Seed:         string(seed),
+			Seed:         seed,
 		}
 	default:
 		return req
@@ -217,7 +217,6 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionPoolCreate, from, w, r)
 		},
 		actionPoolJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			//TODO: We should check if from owns the blox
 			bl.handleAction(http.MethodPost, actionPoolJoin, from, w, r)
 		},
 		actionPoolCancelJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
