@@ -6,7 +6,7 @@ import (
 )
 
 func TestSimpleKeyStore(t *testing.T) {
-	keyStore := NewSimpleKeyStorer("./internal")
+	keyStore := NewSimpleKeyStorer("")
 	err := keyStore.SaveKey(context.Background(), "dummy")
 	if err != nil {
 		t.Errorf("while save key: %v", err)
