@@ -26,13 +26,7 @@ func NewSimpleKeyStorer(dbPath string) *SimpleKeyStorer {
 		err := os.MkdirAll(dbPath, 0755)
 		if err != nil {
 			// Fallback to a local directory
-			dbPath = "./internal/.secrets"
-			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				err = os.MkdirAll(dbPath, 0755)
-				if err != nil {
-					panic("Failed to create fallback directory: " + err.Error())
-				}
-			}
+			dbPath = "."
 		}
 	}
 
