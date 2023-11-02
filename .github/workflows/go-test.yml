@@ -7,15 +7,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
           go-version: "1.19.x"
+
       - name: Go information
         run: |
           go version
           go env
+
+      - name: Create directory for secrets
+        run: |
+          mkdir -p ./secrets
+          chmod 700 ./secrets
+
       - name: Run tests
         run: go test -v -shuffle=on ./...
+        env:
+          SECRETS_DIR: ${{ github.workspace }}/secrets
+
       - name: Run tests with race detector
         run: go test -v -race ./...
+        env:
+          SECRETS_DIR: ${{ github.workspace }}/secrets

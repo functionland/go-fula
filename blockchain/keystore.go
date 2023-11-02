@@ -26,7 +26,10 @@ func NewSimpleKeyStorer(dbPath string) *SimpleKeyStorer {
 		err := os.MkdirAll(dbPath, 0755)
 		if err != nil {
 			// Fallback to a local directory
-			dbPath = "."
+			dbPath = os.Getenv("SECRETS_DIR")
+			if dbPath == "" {
+				dbPath = "."
+			}
 		}
 	}
 
