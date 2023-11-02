@@ -169,8 +169,6 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 	}
 }
 
-type ReqInterface interface{}
-
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
 	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
@@ -179,17 +177,47 @@ func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req
 			log.Errorw("seed is empty", "err", err)
 			seed = ""
 		}
-		return struct {
-			ReqInterface
-			Seed string
-		}{
-			ReqInterface: req,
-			Seed:         seed,
+		log.Debugf("seed is %s", seed)
+		log.Debugf("request is %v", req)
+
+		// Make sure we are dealing with a pointer to a struct
+		val := reflect.ValueOf(req)
+		if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+			log.Error("req is not a pointer to a struct")
+			return req
 		}
+
+		// Create a new struct based on the req's type and then set the Seed field
+		reqVal := val.Elem()
+		seededReqType := reflect.StructOf([]reflect.StructField{
+			{
+				Name: "Seed",
+				Type: reflect.TypeOf(""),
+				Tag:  `json:"seed"`,
+			},
+		})
+		seededReqVal := reflect.New(seededReqType).Elem()
+		seededReqVal.FieldByName("Seed").SetString(seed)
+
+		// Create a new struct that is a combination of the request struct and the Seed field
+		combinedReqType := reflect.StructOf(append(reflect.VisibleFields(reqVal.Type()), seededReqVal.Type().Field(0)))
+		combinedReq := reflect.New(combinedReqType).Elem()
+
+		// Copy the request struct fields to the new combined struct
+		for i := 0; i < reqVal.NumField(); i++ {
+			combinedReq.Field(i).Set(reqVal.Field(i))
+		}
+		// Set the Seed field
+		combinedReq.FieldByName("Seed").SetString(seed)
+
+		log.Debugf("seeded request is %v", combinedReq.Interface())
+		return combinedReq.Interface()
+
 	default:
 		return req
 	}
 }
+
 func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 
 	from, err := peer.Decode(r.RemoteAddr)
