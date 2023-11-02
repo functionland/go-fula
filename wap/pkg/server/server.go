@@ -127,27 +127,17 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		jsonErr := json.NewEncoder(w).Encode(response)
 		if jsonErr != nil {
-			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
 			return
 		}
 		return
 	} else if r.Method == "POST" {
-		ssid := r.FormValue("ssid")
-		password := r.FormValue("password")
-
-		err := config.WriteProperties(map[string]interface{}{
-			"ssid":     ssid,
-			"password": password,
-		})
-		if err != nil {
-			log.Errorw("failed to write the properties", "err", err)
-		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 		if jsonErr != nil {
-			http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("error building the response, %v", jsonErr), http.StatusInternalServerError)
 			return
 		}
 	}
