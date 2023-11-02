@@ -100,16 +100,6 @@ func connectLinux(ctx context.Context, creds Credentials) error {
 	log.Info("Deleting FxBlox as connectToNetwork was successful")
 	DeleteConnection(ctx, "FxBlox")
 
-	// Save connection properties
-	if err := config.WriteProperties(map[string]interface{}{
-		"ssid":         creds.SSID,
-		"password":     creds.Password,
-		"connection":   connectionName,
-		"country_code": creds.CountryCode,
-	}); err != nil {
-		log.Warnf("Couldn't write the properties file: %v", err)
-	}
-
 	return nil
 }
 
