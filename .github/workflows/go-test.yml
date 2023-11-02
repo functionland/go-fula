@@ -19,7 +19,7 @@ jobs:
       - name: Create directory for secrets
         run: |
           mkdir -p $GITHUB_WORKSPACE/secrets
-          chmod 700 $GITHUB_WORKSPACE/secrets
+          chmod 777 $GITHUB_WORKSPACE/secrets
       - name: Check permissions
         run: ls -lha $GITHUB_WORKSPACE/secrets
       - name: Run tests
