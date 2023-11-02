@@ -37,7 +37,7 @@ func NewSimpleKeyStorer(dbPath string) *SimpleKeyStorer {
 }
 
 func (s *SimpleKeyStorer) SaveKey(ctx context.Context, key string) error {
-	return os.WriteFile(s.dbPath+"/secret_seed.txt", []byte(key), 0400)
+	return os.WriteFile(s.dbPath+"/secret_seed.txt", []byte(key), 0600)
 }
 
 func (s *SimpleKeyStorer) LoadKey(ctx context.Context) (string, error) {
