@@ -16,6 +16,9 @@ jobs:
         run: |
           go version
           go env
+      - name: Print GITHUB_WORKSPACE
+        run: |
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
       - name: Create directory for secrets
         run: |
           mkdir -p $GITHUB_WORKSPACE/secrets
