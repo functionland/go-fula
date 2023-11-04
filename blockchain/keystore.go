@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"os"
+	"strings"
 )
 
 // Implementations for this interface should be responsible for saving/loading a single key.
@@ -45,5 +46,6 @@ func (s *SimpleKeyStorer) LoadKey(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	// Trim the whitespace characters from the beginning and end of the string
+	return strings.TrimSpace(string(data)), nil
 }
