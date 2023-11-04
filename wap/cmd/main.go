@@ -203,8 +203,8 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 				if !isHotspotStarted {
 					//Disconnect from external Wi-Fi before starting server as it causes Android in some cases not being able to connect to hotspot
 
-					// Check if /home/pi/V6.info exists which means fula-ota update is completed before we disconnect wifi
-					if _, err := os.Stat("/home/pi/V6.info"); err == nil {
+					// Check if /home/V6.info exists which means fula-ota update is completed before we disconnect wifi
+					if _, err := os.Stat("/home/V6.info"); err == nil {
 						// File exists
 						if err := wifi.DisconnectFromExternalWifi(ctx); err != nil {
 							log.Errorw("disconnect from wifi on startup", "err", err)
