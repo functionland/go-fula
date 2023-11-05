@@ -37,7 +37,13 @@ func (bl *FxBlockchain) PoolCreate(ctx context.Context, to peer.ID, r PoolCreate
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -68,7 +74,14 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -99,7 +112,13 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -130,7 +149,13 @@ func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequ
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -161,7 +186,13 @@ func (bl *FxBlockchain) PoolList(ctx context.Context, to peer.ID, r PoolListRequ
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -192,7 +223,13 @@ func (bl *FxBlockchain) PoolUserList(ctx context.Context, to peer.ID, r PoolUser
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -223,7 +260,13 @@ func (bl *FxBlockchain) PoolVote(ctx context.Context, to peer.ID, r PoolVoteRequ
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -254,7 +297,13 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}

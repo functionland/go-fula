@@ -37,7 +37,13 @@ func (bl *FxBlockchain) ManifestUpload(ctx context.Context, to peer.ID, r Manife
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -130,7 +136,13 @@ func (bl *FxBlockchain) ManifestRemove(ctx context.Context, to peer.ID, r Manife
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -161,7 +173,13 @@ func (bl *FxBlockchain) ManifestRemoveStorer(ctx context.Context, to peer.ID, r 
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
@@ -192,7 +210,13 @@ func (bl *FxBlockchain) ManifestRemoveStored(ctx context.Context, to peer.ID, r 
 	case err != nil:
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
 		return b, nil
 	}
