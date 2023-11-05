@@ -332,8 +332,29 @@ func (bl *FxBlockchain) handleAction(method string, action string, from peer.ID,
 	defer cancel()
 	response, err := bl.callBlockchain(ctx, method, action, req)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
 		log.Error("failed to process action request: %v", err)
+		apiError := struct {
+			Message     string `json:"message"`
+			Description string `json:"description"`
+		}{
+			Message:     "Pallet: Pool, Variant: UserBusy",
+			Description: "Fula Pool error",
+		}
+
+		// Marshal the error to JSON.
+		apiErrorJSON, jsonErr := json.Marshal(apiError)
+		if jsonErr != nil {
+			log.Error("failed to encode error response: %v", jsonErr)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+
+		// Set the header and write the error JSON to the response writer.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		if _, err := w.Write(apiErrorJSON); err != nil {
+			log.Error("failed to write error response: %v", err)
+		}
 		return
 	} else {
 		w.WriteHeader(http.StatusAccepted)
