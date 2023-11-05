@@ -22,6 +22,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
+var apiError struct {
+	Message     string `json:"message"`
+	Description string `json:"description"`
+}
+
 const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
 	actionAuth             = "auth"
