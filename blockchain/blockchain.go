@@ -333,31 +333,31 @@ func (bl *FxBlockchain) handleAction(method string, action string, from peer.ID,
 	response, err := bl.callBlockchain(ctx, method, action, req)
 	if err != nil {
 		log.Error("failed to process action request: %v", err)
-    var apiError map[string]interface{}
+		var apiError map[string]interface{}
 
-    // Assuming err is an error object that contains a JSON string with the error details.
-    // You would unmarshal it into the map.
-    if unmarshalErr := json.Unmarshal([]byte(err.Error()), &apiError); unmarshalErr != nil {
-      log.Error("failed to decode error details: %v", unmarshalErr)
-      http.Error(w, "", http.StatusInternalServerError)
-      return
-    }
+		// Assuming err is an error object that contains a JSON string with the error details.
+		// You would unmarshal it into the map.
+		if unmarshalErr := json.Unmarshal([]byte(err.Error()), &apiError); unmarshalErr != nil {
+			log.Error("failed to decode error details: %v", unmarshalErr)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
 
-    apiErrorJSON, jsonErr := json.Marshal(apiError)
-    if jsonErr != nil {
-      log.Error("failed to encode error response: %v", jsonErr)
-      http.Error(w, "", http.StatusInternalServerError)
-      return
-    }
+		apiErrorJSON, jsonErr := json.Marshal(apiError)
+		if jsonErr != nil {
+			log.Error("failed to encode error response: %v", jsonErr)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
 
-    // Set the header and write the error JSON to the response writer.
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusBadRequest)
-    if _, writeErr := w.Write(apiErrorJSON); writeErr != nil {
-      log.Error("failed to write error response: %v", writeErr)
-    }
-    return
-  } else {
+		// Set the header and write the error JSON to the response writer.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		if _, writeErr := w.Write(apiErrorJSON); writeErr != nil {
+			log.Error("failed to write error response: %v", writeErr)
+		}
+		return
+	} else {
 		w.WriteHeader(http.StatusAccepted)
 	}
 
