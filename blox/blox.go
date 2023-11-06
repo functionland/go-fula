@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"sync"
-	"time"
 
+	"github.com/functionland/go-fula/announcements"
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/functionland/go-fula/ping"
@@ -15,10 +15,11 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
 var log = logging.Logger("fula/blox")
+
+const Version0 = "0"
 
 type (
 	Blox struct {
@@ -27,12 +28,11 @@ type (
 		wg     sync.WaitGroup
 
 		*options
-		sub   *pubsub.Subscription
-		topic *pubsub.Topic
-		ls    ipld.LinkSystem
-		ex    *exchange.FxExchange
-		bl    *blockchain.FxBlockchain
-		pn    *ping.FxPing
+		ls ipld.LinkSystem
+		ex *exchange.FxExchange
+		bl *blockchain.FxBlockchain
+		pn *ping.FxPing
+		an *announcements.FxAnnouncements
 	}
 )
 
@@ -66,6 +66,16 @@ func New(o ...Option) (*Blox, error) {
 		return nil, err
 	}
 
+	p.an, err = announcements.NewFxAnnouncements(p.h,
+		announcements.WithAnnounceInterval(5),
+		announcements.WithTimeout(3),
+		announcements.WithTopicName(p.topicName),
+		announcements.WithVersion(Version0),
+		announcements.WithWg(&p.wg))
+	if err != nil {
+		return nil, err
+	}
+
 	p.bl, err = blockchain.NewFxBlockchain(p.h, p.pn,
 		blockchain.NewSimpleKeyStorer(""),
 		blockchain.WithAuthorizer(authorizer),
@@ -79,41 +89,15 @@ func New(o ...Option) (*Blox, error) {
 	return &p, nil
 }
 
-func (p *Blox) validateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
-	a := &Announcement{}
-	if err := a.UnmarshalBinary(msg.Data); err != nil {
-		log.Errorw("failed to unmarshal announcement data", "err", err)
-		return false
-	}
-	status, exists := p.bl.GetMemberStatus(id)
-
-	switch a.Type {
-	case NewManifestAnnouncementType:
-		// Check if sender is approved
-		if !exists {
-			log.Errorw("peer is not recognized", "peer", id)
-			return false
-		}
-		if status != blockchain.Approved {
-			log.Errorw("peer is not an approved member", "peer", id)
-			return false
-		}
-	case PoolJoinRequestAnnouncementType:
-		if status != blockchain.Unknown {
-			log.Errorw("peer is no longer permitted to send this message type", "peer", id)
-			return false
-		}
-	case PoolJoinApproveAnnouncementType, IExistAnnouncementType:
-		// Any member status is valid for a pool join announcement
-	default:
-		return false
-	}
-
-	// If all checks pass, the message is valid.
-	return true
-}
-
 func (p *Blox) Start(ctx context.Context) error {
+	// implemented topic validators with chain integration.
+	validator := func(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
+		status, exists := p.bl.GetMemberStatus(id)
+		return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
+	}
+
+	anErr := p.an.Start(ctx, validator)
+
 	if err := p.ex.Start(ctx); err != nil {
 		return err
 	}
@@ -131,32 +115,16 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 	}()
 
-	// TODO: implement topic validators once there is some chain integration.
-	validator := func(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
-		return p.validateAnnouncement(ctx, id, msg)
-	}
-
-	gsub, err := pubsub.NewGossipSub(ctx, p.h,
-		pubsub.WithPeerExchange(true),
-		pubsub.WithFloodPublish(true),
-		pubsub.WithMessageSigning(true),
-		pubsub.WithDefaultValidator(validator),
-	)
-	if err != nil {
-		return err
-	}
-
-	p.topic, err = gsub.Join(p.topicName)
-	if err != nil {
-		return err
-	}
-	p.sub, err = p.topic.Subscribe()
-	if err != nil {
-		return err
+	if anErr == nil {
+		p.wg.Add(1)
+		go p.an.AnnounceIExistPeriodically(ctx)
+		p.wg.Add(1)
+		go p.an.HandleAnnouncements(ctx)
+	} else {
+		log.Errorw("Announcement stopped erroneously", "err", anErr)
 	}
 	p.ctx, p.cancel = context.WithCancel(context.Background())
-	go p.announceIExistPeriodically()
-	go p.handleAnnouncements()
+
 	return nil
 }
 
@@ -168,81 +136,11 @@ func (p *Blox) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow b
 	return p.ex.SetAuth(ctx, on, subject, allow)
 }
 
-func (p *Blox) handleAnnouncements() {
-	p.wg.Add(1)
-	defer p.wg.Done()
-	for {
-		msg, err := p.sub.Next(p.ctx)
-		switch {
-		case p.ctx.Err() != nil || err == pubsub.ErrSubscriptionCancelled:
-			log.Info("stopped handling announcements")
-			return
-		case err != nil:
-			log.Errorw("failed to get the next announcement", "err", err)
-			continue
-		}
-		from, err := peer.IDFromBytes(msg.From)
-		if err != nil {
-			log.Errorw("failed to decode announcement sender", "err", err)
-			continue
-		}
-		if from == p.h.ID() {
-			continue
-		}
-		a := &Announcement{}
-		if err = a.UnmarshalBinary(msg.Data); err != nil {
-			log.Errorw("failed to decode announcement data", "err", err)
-			continue
-		}
-		addrs, err := a.GetAddrs()
-		if err != nil {
-			log.Errorw("failed to decode announcement addrs", "err", err)
-			continue
-		}
-		p.h.Peerstore().AddAddrs(from, addrs, peerstore.PermanentAddrTTL)
-		log.Infow("received announcement", "from", from, "self", p.h.ID(), "announcement", a)
-	}
-}
-
-func (p *Blox) announceIExistPeriodically() {
-	p.wg.Add(1)
-	defer p.wg.Done()
-	ticker := time.NewTicker(p.announceInterval)
-	for {
-		select {
-		case <-p.ctx.Done():
-			log.Info("stopped making periodic announcements")
-			return
-		case t := <-ticker.C:
-			a := &Announcement{
-				Version: Version0,
-				Type:    IExistAnnouncementType,
-			}
-			a.SetAddrs(p.h.Addrs()...)
-			b, err := a.MarshalBinary()
-			if err != nil {
-				log.Errorw("failed to encode iexist announcement", "err", err)
-				continue
-			}
-			if err := p.topic.Publish(p.ctx, b); err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					log.Info("stopped making periodic announcements")
-					return
-				}
-				log.Errorw("failed to publish iexist announcement", "err", err)
-				continue
-			}
-			log.Infow("announced iexist message", "from", p.h.ID(), "announcement", a, "time", t)
-		}
-	}
-}
-
 func (p *Blox) Shutdown(ctx context.Context) error {
 	bErr := p.bl.Shutdown(ctx)
 	xErr := p.ex.Shutdown(ctx)
 	pErr := p.pn.Shutdown(ctx)
-	p.sub.Cancel()
-	tErr := p.topic.Close()
+	tErr := p.an.Shutdown(ctx)
 	p.cancel()
 	dsErr := p.ds.Close()
 	done := make(chan struct{}, 1)

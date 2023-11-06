@@ -1,26 +1,31 @@
-package blox
+package announcements
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
-	"fmt"
 
-	"github.com/ipld/go-ipld-prime"
+	"github.com/functionland/go-fula/blockchain"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
 
-const Version0 = "0"
+type Announcements interface {
+	HandleAnnouncements(context.Context)
+	AnnounceIExistPeriodically(context.Context)
+	AnnounceJoinPoolRequestPeriodically(context.Context)
+	ValidateAnnouncement(context.Context, peer.ID, *pubsub.Message, blockchain.MemberStatus, bool) bool
+	Shutdown(context.Context) error
+}
 
 var (
 	PubSubPrototypes struct {
 		Announcement schema.TypedPrototype
 	}
-
-	//go:embed pubsub.ipldsch
-	schemaBytes []byte
 )
 
 type (
@@ -39,14 +44,6 @@ const (
 	PoolJoinApproveAnnouncementType
 	NewManifestAnnouncementType
 )
-
-func init() {
-	typeSystem, err := ipld.LoadSchemaBytes(schemaBytes)
-	if err != nil {
-		panic(fmt.Errorf("cannot load schema: %w", err))
-	}
-	PubSubPrototypes.Announcement = bindnode.Prototype((*Announcement)(nil), typeSystem.TypeByName("Announcement"))
-}
 
 func (a *Announcement) MarshalBinary() ([]byte, error) {
 	n := bindnode.Wrap(a, PubSubPrototypes.Announcement.Type())
