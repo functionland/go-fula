@@ -98,7 +98,12 @@ func (p *Blox) validateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub
 			log.Errorw("peer is not an approved member", "peer", id)
 			return false
 		}
-	case PoolJoinRequestAnnouncementType, PoolJoinApproveAnnouncementType, IExistAnnouncementType:
+	case PoolJoinRequestAnnouncementType:
+		if status != blockchain.Unknown {
+			log.Errorw("peer is no longer permitted to send this message type", "peer", id)
+			return false
+		}
+	case PoolJoinApproveAnnouncementType, IExistAnnouncementType:
 		// Any member status is valid for a pool join announcement
 	default:
 		return false
