@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,15 @@ var (
 	log = logging.Logger("fula/blockchain")
 )
 
+// MemberStatus represents the approval status of a peer
+type MemberStatus int
+
+const (
+	Unknown  MemberStatus = iota // iota provides automatic enumeration. Here, Pending = 0
+	Pending                      // Pending = 1
+	Approved                     // Approved = 2
+)
+
 type Config struct {
 	StoreDir string `yaml:"storeDir"`
 	// other fields
@@ -60,6 +70,8 @@ type (
 		keyStorer KeyStorer
 
 		p *ping.FxPing
+
+		members map[peer.ID]MemberStatus
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -516,4 +528,72 @@ func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	bl.c.CloseIdleConnections()
 	bl.ch.CloseIdleConnections()
 	return bl.s.Shutdown(ctx)
+}
+
+func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string) error {
+	// Convert topic from string to int
+	topic, err := strconv.Atoi(topicString)
+	if err != nil {
+		// Handle the error if the conversion fails
+		return fmt.Errorf("invalid topic, not an integer: %s", err)
+	}
+
+	// Create a struct for the POST payload
+	payload := PoolUserListRequest{
+		PoolID: topic,
+	}
+
+	// Call the existing function to make the request
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, payload)
+	if err != nil {
+		return err
+	}
+	var response PoolUserListResponse
+
+	// Unmarshal the response body into the response struct
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return err
+	}
+
+	// Now iterate through the users and populate the member map
+	for _, user := range response.Users {
+		pid, err := peer.Decode(user.PeerID)
+		if err != nil {
+			return err
+		}
+
+		// Determine the status based on pool_id and request_pool_id
+		var status MemberStatus
+		if user.PoolID != nil && *user.PoolID == topic {
+			status = Approved
+		} else if user.RequestPoolID != nil && *user.RequestPoolID == topic {
+			status = Pending
+		} else {
+			// Skip users that do not match the topic criteria
+			continue
+		}
+
+		existingStatus, exists := bl.members[pid]
+		if exists {
+			if existingStatus == Pending && status == Approved {
+				// If the user is already pending and now approved, update to ApprovedOrPending
+				bl.members[pid] = Approved
+			}
+			// If the user status is the same as before, there's no need to update
+		} else {
+			// If the user does not exist in the map, add them
+			bl.members[pid] = status
+		}
+	}
+
+	return nil
+}
+
+func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (MemberStatus, bool) {
+	status, exists := bl.members[id]
+	if !exists {
+		// If the peer.ID doesn't exist in the members map, we treat it as an error case.
+		return MemberStatus(0), false
+	}
+	return status, true
 }

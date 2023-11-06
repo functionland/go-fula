@@ -79,6 +79,35 @@ func New(o ...Option) (*Blox, error) {
 	return &p, nil
 }
 
+func (p *Blox) validateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
+	a := &Announcement{}
+	if err := a.UnmarshalBinary(msg.Data); err != nil {
+		log.Errorw("failed to unmarshal announcement data", "err", err)
+		return false
+	}
+	status, exists := p.bl.GetMemberStatus(id)
+
+	switch a.Type {
+	case NewManifestAnnouncementType:
+		// Check if sender is approved
+		if !exists {
+			log.Errorw("peer is not recognized", "peer", id)
+			return false
+		}
+		if status != blockchain.Approved {
+			log.Errorw("peer is not an approved member", "peer", id)
+			return false
+		}
+	case PoolJoinRequestAnnouncementType, PoolJoinApproveAnnouncementType, IExistAnnouncementType:
+		// Any member status is valid for a pool join announcement
+	default:
+		return false
+	}
+
+	// If all checks pass, the message is valid.
+	return true
+}
+
 func (p *Blox) Start(ctx context.Context) error {
 	if err := p.ex.Start(ctx); err != nil {
 		return err
@@ -86,6 +115,7 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.Start(ctx); err != nil {
 		return err
 	}
+	p.bl.FetchUsersAndPopulateSets(ctx, p.topicName)
 	go func() {
 		log.Infow("IPFS RPC server started on address http://localhost:5001")
 		switch err := http.ListenAndServe("localhost:5001", p.ServeIpfsRpc()); {
@@ -96,14 +126,21 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 	}()
 
+	// TODO: implement topic validators once there is some chain integration.
+	validator := func(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
+		return p.validateAnnouncement(ctx, id, msg)
+	}
+
 	gsub, err := pubsub.NewGossipSub(ctx, p.h,
 		pubsub.WithPeerExchange(true),
 		pubsub.WithFloodPublish(true),
+		pubsub.WithMessageSigning(true),
+		pubsub.WithDefaultValidator(validator),
 	)
 	if err != nil {
 		return err
 	}
-	// TODO: implement topic validators once there is some chain integration.
+
 	p.topic, err = gsub.Join(p.topicName)
 	if err != nil {
 		return err

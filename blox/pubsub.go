@@ -35,6 +35,9 @@ type (
 const (
 	UnknownAnnouncementType AnnouncementType = iota
 	IExistAnnouncementType
+	PoolJoinRequestAnnouncementType
+	PoolJoinApproveAnnouncementType
+	NewManifestAnnouncementType
 )
 
 func init() {
