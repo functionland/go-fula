@@ -1,6 +1,8 @@
 package blockchain
 
 import (
+	"sync"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -12,6 +14,7 @@ type (
 		allowTransientConnection bool
 		blockchainEndPoint       string
 		timeout                  int
+		wg                       *sync.WaitGroup
 	}
 )
 
@@ -56,6 +59,13 @@ func WithBlockchainEndPoint(b string) Option {
 func WithTimeout(to int) Option {
 	return func(o *options) error {
 		o.timeout = to
+		return nil
+	}
+}
+
+func WithWg(wg *sync.WaitGroup) Option {
+	return func(o *options) error {
+		o.wg = wg
 		return nil
 	}
 }

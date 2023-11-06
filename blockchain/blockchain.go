@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/functionland/go-fula/announcements"
+	"github.com/functionland/go-fula/common"
 	"github.com/functionland/go-fula/ping"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
@@ -40,15 +42,6 @@ var (
 	log = logging.Logger("fula/blockchain")
 )
 
-// MemberStatus represents the approval status of a peer
-type MemberStatus int
-
-const (
-	Unknown  MemberStatus = iota // iota provides automatic enumeration. Here, Pending = 0
-	Pending                      // Pending = 1
-	Approved                     // Approved = 2
-)
-
 type Config struct {
 	StoreDir string `yaml:"storeDir"`
 	// other fields
@@ -70,8 +63,9 @@ type (
 		keyStorer KeyStorer
 
 		p *ping.FxPing
+		a *announcements.FxAnnouncements
 
-		members map[peer.ID]MemberStatus
+		members map[peer.ID]common.MemberStatus
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -79,7 +73,7 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, p *ping.FxPing, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
+func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncements, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
@@ -88,6 +82,7 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, keyStorer KeyStorer, o ...Opti
 		options: opts,
 		h:       h,
 		p:       p,
+		a:       a,
 		s:       &http.Server{},
 		c: &http.Client{
 			Transport: &http.Transport{
@@ -563,11 +558,11 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		}
 
 		// Determine the status based on pool_id and request_pool_id
-		var status MemberStatus
+		var status common.MemberStatus
 		if user.PoolID != nil && *user.PoolID == topic {
-			status = Approved
+			status = common.Approved
 		} else if user.RequestPoolID != nil && *user.RequestPoolID == topic {
-			status = Pending
+			status = common.Pending
 		} else {
 			// Skip users that do not match the topic criteria
 			continue
@@ -575,9 +570,9 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 
 		existingStatus, exists := bl.members[pid]
 		if exists {
-			if existingStatus == Pending && status == Approved {
+			if existingStatus == common.Pending && status == common.Approved {
 				// If the user is already pending and now approved, update to ApprovedOrPending
-				bl.members[pid] = Approved
+				bl.members[pid] = common.Approved
 			}
 			// If the user status is the same as before, there's no need to update
 		} else {
@@ -589,11 +584,11 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	return nil
 }
 
-func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (MemberStatus, bool) {
+func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (common.MemberStatus, bool) {
 	status, exists := bl.members[id]
 	if !exists {
 		// If the peer.ID doesn't exist in the members map, we treat it as an error case.
-		return MemberStatus(0), false
+		return common.MemberStatus(0), false
 	}
 	return status, true
 }

@@ -8,7 +8,7 @@ import (
 
 	_ "embed"
 
-	"github.com/functionland/go-fula/blockchain"
+	"github.com/functionland/go-fula/common"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
@@ -123,7 +123,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 			return
 		case t := <-ticker.C:
 			a := &Announcement{
-				Version: an.version,
+				Version: common.Version0,
 				Type:    IExistAnnouncementType,
 			}
 			a.SetAddrs(an.h.Addrs()...)
@@ -159,7 +159,7 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 			return
 		case t := <-ticker.C:
 			a := &Announcement{
-				Version: an.version,
+				Version: common.Version0,
 				Type:    PoolJoinRequestAnnouncementType,
 			}
 			a.SetAddrs(an.h.Addrs()...)
@@ -185,7 +185,7 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 	}
 }
 
-func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message, status blockchain.MemberStatus, exists bool) bool {
+func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message, status common.MemberStatus, exists bool) bool {
 	a := &Announcement{}
 	if err := a.UnmarshalBinary(msg.Data); err != nil {
 		log.Errorw("failed to unmarshal announcement data", "err", err)
@@ -199,12 +199,12 @@ func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID,
 			log.Errorw("peer is not recognized", "peer", id)
 			return false
 		}
-		if status != blockchain.Approved {
+		if status != common.Approved {
 			log.Errorw("peer is not an approved member", "peer", id)
 			return false
 		}
 	case PoolJoinRequestAnnouncementType:
-		if status != blockchain.Unknown {
+		if status != common.Unknown {
 			log.Errorw("peer is no longer permitted to send this message type", "peer", id)
 			return false
 		}

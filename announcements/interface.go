@@ -5,7 +5,7 @@ import (
 	"context"
 	_ "embed"
 
-	"github.com/functionland/go-fula/blockchain"
+	"github.com/functionland/go-fula/common"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
@@ -18,7 +18,7 @@ type Announcements interface {
 	HandleAnnouncements(context.Context)
 	AnnounceIExistPeriodically(context.Context)
 	AnnounceJoinPoolRequestPeriodically(context.Context)
-	ValidateAnnouncement(context.Context, peer.ID, *pubsub.Message, blockchain.MemberStatus, bool) bool
+	ValidateAnnouncement(context.Context, peer.ID, *pubsub.Message, common.MemberStatus, bool) bool
 	Shutdown(context.Context) error
 }
 

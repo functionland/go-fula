@@ -1,10 +1,13 @@
 package ping
 
+import "sync"
+
 type (
 	Option  func(*options) error
 	options struct {
 		allowTransientConnection bool
 		timeout                  int
+		wg                       *sync.WaitGroup
 	}
 )
 
@@ -28,6 +31,13 @@ func WithAllowTransientConnection(t bool) Option {
 func WithTimeout(to int) Option {
 	return func(o *options) error {
 		o.timeout = to
+		return nil
+	}
+}
+
+func WithWg(wg *sync.WaitGroup) Option {
+	return func(o *options) error {
+		o.wg = wg
 		return nil
 	}
 }

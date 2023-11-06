@@ -11,7 +11,6 @@ type (
 		announceInterval time.Duration
 		timeout          int
 		topicName        string
-		version          string
 		wg               *sync.WaitGroup
 	}
 )
@@ -43,13 +42,6 @@ func WithTimeout(to int) Option {
 func WithTopicName(n string) Option {
 	return func(o *options) error {
 		o.topicName = n
-		return nil
-	}
-}
-
-func WithVersion(v string) Option {
-	return func(o *options) error {
-		o.version = v
 		return nil
 	}
 }

@@ -19,8 +19,6 @@ import (
 
 var log = logging.Logger("fula/blox")
 
-const Version0 = "0"
-
 type (
 	Blox struct {
 		ctx    context.Context
@@ -61,6 +59,7 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.pn, err = ping.NewFxPing(p.h,
 		ping.WithAllowTransientConnection(true),
+		ping.WithWg(&p.wg),
 		ping.WithTimeout(3))
 	if err != nil {
 		return nil, err
@@ -70,18 +69,18 @@ func New(o ...Option) (*Blox, error) {
 		announcements.WithAnnounceInterval(5),
 		announcements.WithTimeout(3),
 		announcements.WithTopicName(p.topicName),
-		announcements.WithVersion(Version0),
 		announcements.WithWg(&p.wg))
 	if err != nil {
 		return nil, err
 	}
 
-	p.bl, err = blockchain.NewFxBlockchain(p.h, p.pn,
+	p.bl, err = blockchain.NewFxBlockchain(p.h, p.pn, p.an,
 		blockchain.NewSimpleKeyStorer(""),
 		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
-		blockchain.WithTimeout(30))
+		blockchain.WithTimeout(30),
+		blockchain.WithWg(&p.wg))
 	if err != nil {
 		return nil, err
 	}

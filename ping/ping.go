@@ -91,17 +91,24 @@ func NewFxPing(h host.Host, o ...Option) (*FxPing, error) {
 
 func (pn *FxPing) Start(ctx context.Context) error {
 	pn.mu.Lock()
-	defer pn.mu.Unlock()
 	if pn.started {
+		pn.mu.Unlock()
 		return errors.New("ping already started")
 	}
+	pn.started = true
+	pn.mu.Unlock()
+
 	listen, err := gostream.Listen(pn.h, FxPingProtocolID)
 	if err != nil {
 		return err
 	}
 	pn.s.Handler = http.HandlerFunc(pn.serve)
-	go func() { pn.s.Serve(listen) }()
-	pn.started = true
+	pn.wg.Add(1)
+	go func() {
+		defer pn.wg.Done()
+		pn.s.Serve(listen)
+	}()
+
 	return nil
 }
 

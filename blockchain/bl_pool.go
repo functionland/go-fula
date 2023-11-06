@@ -88,6 +88,8 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 		if err != nil {
 			return b, err
 		}
+		bl.wg.Add(1)
+		go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
 		return b, nil
 	}
 }
