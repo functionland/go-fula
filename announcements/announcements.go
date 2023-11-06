@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	_ "embed"
@@ -27,9 +28,11 @@ var (
 type (
 	FxAnnouncements struct {
 		*options
-		h     host.Host
-		sub   *pubsub.Subscription
-		topic *pubsub.Topic
+		h                        host.Host
+		sub                      *pubsub.Subscription
+		topic                    *pubsub.Topic
+		stopJoinPoolRequestChan  chan struct{} // add this line
+		closeJoinPoolRequestOnce sync.Once
 	}
 )
 
@@ -44,8 +47,9 @@ func NewFxAnnouncements(h host.Host, o ...Option) (*FxAnnouncements, error) {
 		return nil, err
 	}
 	an := &FxAnnouncements{
-		options: opts,
-		h:       h,
+		options:                 opts,
+		h:                       h,
+		stopJoinPoolRequestChan: make(chan struct{}), // initialize the channel
 	}
 	return an, nil
 }
@@ -157,6 +161,9 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 		case <-ctx.Done():
 			log.Info("stopped making periodic announcements")
 			return
+		case <-an.stopJoinPoolRequestChan: // Assume an.stopChan is a `chan struct{}` used to signal stopping the ticker.
+			log.Info("stopped making periodic joinpoolrequest announcements due to stop signal")
+			return
 		case t := <-ticker.C:
 			a := &Announcement{
 				Version: common.Version0,
@@ -216,6 +223,12 @@ func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID,
 
 	// If all checks pass, the message is valid.
 	return true
+}
+
+func (an *FxAnnouncements) StopJoinPoolRequestAnnouncements() {
+	an.closeJoinPoolRequestOnce.Do(func() {
+		close(an.stopJoinPoolRequestChan)
+	})
 }
 
 func (an *FxAnnouncements) Shutdown(ctx context.Context) error {

@@ -149,6 +149,9 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		if err != nil {
 			return b, err
 		}
+		if bl.a != nil {
+			bl.a.StopJoinPoolRequestAnnouncements()
+		}
 		return b, nil
 	}
 }

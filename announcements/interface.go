@@ -19,6 +19,7 @@ type Announcements interface {
 	AnnounceIExistPeriodically(context.Context)
 	AnnounceJoinPoolRequestPeriodically(context.Context)
 	ValidateAnnouncement(context.Context, peer.ID, *pubsub.Message, common.MemberStatus, bool) bool
+	StopJoinPoolRequestAnnouncements()
 	Shutdown(context.Context) error
 }
 
