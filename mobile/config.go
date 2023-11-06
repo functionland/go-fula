@@ -171,7 +171,7 @@ func (cfg *Config) init(mc *Client) error {
 		if err != nil {
 			return err
 		}
-		mc.bl, err = blockchain.NewFxBlockchain(mc.h,
+		mc.bl, err = blockchain.NewFxBlockchain(mc.h, nil,
 			blockchain.NewSimpleKeyStorer(""),
 			blockchain.WithAuthorizer(mc.h.ID()),
 			blockchain.WithAllowTransientConnection(cfg.AllowTransientConnection),

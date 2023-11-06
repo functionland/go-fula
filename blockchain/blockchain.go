@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/functionland/go-fula/ping"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
@@ -57,6 +58,8 @@ type (
 		bufPool   *sync.Pool
 		reqPool   *sync.Pool
 		keyStorer KeyStorer
+
+		p *ping.FxPing
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -64,7 +67,7 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
+func NewFxBlockchain(h host.Host, p *ping.FxPing, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
@@ -72,6 +75,7 @@ func NewFxBlockchain(h host.Host, keyStorer KeyStorer, o ...Option) (*FxBlockcha
 	bl := &FxBlockchain{
 		options: opts,
 		h:       h,
+		p:       p,
 		s:       &http.Server{},
 		c: &http.Client{
 			Transport: &http.Transport{

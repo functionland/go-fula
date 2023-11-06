@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -83,8 +84,28 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
+		err := bl.StartPingServer(ctx)
+		if err != nil {
+			return b, err
+		}
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) StartPingServer(ctx context.Context) error {
+	if bl.p != nil {
+		err := bl.p.Start(ctx)
+		return err
+	}
+	return errors.New("ping server cannot be started because it is nil")
+}
+
+func (bl *FxBlockchain) StopPingServer(ctx context.Context) error {
+	if bl.p != nil {
+		err := bl.p.StopServer(ctx)
+		return err
+	}
+	return errors.New("ping server cannot be stopped because it is nil")
 }
 
 func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCancelJoinRequest) ([]byte, error) {
@@ -120,6 +141,10 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
+		err := bl.StopPingServer(ctx)
+		if err != nil {
+			return b, err
+		}
 		return b, nil
 	}
 }

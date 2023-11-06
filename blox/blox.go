@@ -9,6 +9,7 @@ import (
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
+	"github.com/functionland/go-fula/ping"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -31,6 +32,7 @@ type (
 		ls    ipld.LinkSystem
 		ex    *exchange.FxExchange
 		bl    *blockchain.FxBlockchain
+		pn    *ping.FxPing
 	}
 )
 
@@ -57,12 +59,23 @@ func New(o ...Option) (*Blox, error) {
 	if err != nil {
 		authorizedPeers = opts.authorizedPeers
 	}
-	p.bl, _ = blockchain.NewFxBlockchain(p.h,
+	p.pn, err = ping.NewFxPing(p.h,
+		ping.WithAllowTransientConnection(true),
+		ping.WithTimeout(3))
+	if err != nil {
+		return nil, err
+	}
+
+	p.bl, err = blockchain.NewFxBlockchain(p.h, p.pn,
 		blockchain.NewSimpleKeyStorer(""),
 		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
 		blockchain.WithTimeout(30))
+	if err != nil {
+		return nil, err
+	}
+
 	return &p, nil
 }
 
@@ -185,6 +198,7 @@ func (p *Blox) announceIExistPeriodically() {
 func (p *Blox) Shutdown(ctx context.Context) error {
 	bErr := p.bl.Shutdown(ctx)
 	xErr := p.ex.Shutdown(ctx)
+	pErr := p.pn.Shutdown(ctx)
 	p.sub.Cancel()
 	tErr := p.topic.Close()
 	p.cancel()
@@ -205,6 +219,9 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 		}
 		if bErr != nil {
 			return bErr
+		}
+		if pErr != nil {
+			return pErr
 		}
 		return xErr
 	case <-ctx.Done():
