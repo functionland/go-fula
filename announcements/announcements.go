@@ -82,6 +82,17 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 	return nil
 }
 
+func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID, atype AnnouncementType) error {
+	switch atype {
+	case IExistAnnouncementType:
+		log.Debug("IExist request")
+	case PoolJoinRequestAnnouncementType:
+		log.Debug("PoolJoin request")
+	default:
+		log.Debug("Unknown request")
+	}
+}
+
 func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 	defer an.wg.Done()
 	for {
@@ -114,6 +125,7 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 		}
 		an.h.Peerstore().AddAddrs(from, addrs, peerstore.PermanentAddrTTL)
 		log.Infow("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
+		an.processAnnouncement(ctx, from, a.Type)
 	}
 }
 

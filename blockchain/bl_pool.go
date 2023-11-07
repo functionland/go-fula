@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/functionland/go-fula/common"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -339,4 +340,21 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 	default:
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, topicString string) error {
+	err := bl.FetchUsersAndPopulateSets(ctx, topicString)
+	if err != nil {
+		return err
+	}
+	status, exists := bl.GetMemberStatus(from)
+	if !exists {
+		return fmt.Errorf("peerID does not exists in the list of pool requests or poool members: %s", from)
+	}
+	if status == common.Pending {
+
+	} else {
+		return fmt.Errorf("peerID does not exists in the list of pool requests: %s with status %d", from, status)
+	}
+	return nil
 }
