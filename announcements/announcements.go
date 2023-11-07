@@ -29,12 +29,14 @@ var (
 type (
 	FxAnnouncements struct {
 		*options
-		h                        host.Host
-		sub                      *pubsub.Subscription
-		topic                    *pubsub.Topic
-		stopJoinPoolRequestChan  chan struct{} // add this line
-		closeJoinPoolRequestOnce sync.Once
-		PoolJoinRequestHandler   PoolJoinRequestHandler
+		h                         host.Host
+		sub                       *pubsub.Subscription
+		topic                     *pubsub.Topic
+		stopJoinPoolRequestChan   chan struct{} // add this line
+		closeJoinPoolRequestOnce  sync.Once
+		PoolJoinRequestHandler    PoolJoinRequestHandler
+		announcingJoinPoolRequest bool
+		announcingJoinPoolMutex   sync.Mutex
 	}
 )
 
@@ -91,7 +93,7 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 	case PoolJoinRequestAnnouncementType:
 		log.Debug("PoolJoin request")
 		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, strconv.Itoa(int(atype))); err != nil {
-			log.Errorw("An error occured in handling pooljoinrequest announcement", err)
+			log.Errorw("An error occurred in handling pool join request announcement", err)
 			return err
 		}
 	default:
@@ -178,6 +180,19 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 
 func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
 	defer an.wg.Done()
+	an.announcingJoinPoolMutex.Lock()
+	if an.announcingJoinPoolRequest {
+		an.announcingJoinPoolMutex.Unlock()
+		log.Info("Join pool request announcements are already in progress.")
+		return
+	}
+	an.announcingJoinPoolRequest = true
+	an.announcingJoinPoolMutex.Unlock()
+	defer func() {
+		an.announcingJoinPoolMutex.Lock()
+		an.announcingJoinPoolRequest = false
+		an.announcingJoinPoolMutex.Unlock()
+	}()
 	ticker := time.NewTicker(an.announceInterval)
 	for {
 		select {
@@ -250,6 +265,9 @@ func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID,
 
 func (an *FxAnnouncements) StopJoinPoolRequestAnnouncements() {
 	an.closeJoinPoolRequestOnce.Do(func() {
+		an.announcingJoinPoolMutex.Lock()
+		an.announcingJoinPoolRequest = false
+		an.announcingJoinPoolMutex.Unlock()
 		close(an.stopJoinPoolRequestChan)
 	})
 }

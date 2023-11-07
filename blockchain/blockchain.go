@@ -557,6 +557,23 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			return err
 		}
 
+		if user.PeerID == bl.h.ID().String() {
+			log.Debugw("Found self peerID", user.PeerID)
+			if user.RequestPoolID != nil {
+				if !bl.p.Status() {
+					err = bl.p.Start(ctx)
+					if err != nil {
+						log.Errorw("Error when starting hte Ping Server", "PeerID", user.PeerID, "err", err)
+					} else {
+						bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+					}
+				} else {
+					log.Debugw("Ping Server is already running for self peerID", user.PeerID)
+				}
+			} else {
+				log.Debugw("PeerID is already a member of the pool", user.PeerID)
+			}
+		}
 		// Determine the status based on pool_id and request_pool_id
 		var status common.MemberStatus
 		if user.PoolID != nil && *user.PoolID == topic {
