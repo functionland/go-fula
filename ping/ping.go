@@ -202,8 +202,8 @@ func (pn *FxPing) authorized(pid peer.ID, action string) bool {
 	}
 }
 
-func (pn *FxPing) Ping(ctx context.Context, to peer.ID, count int) (int, int, error) {
-	if count <= 0 {
+func (pn *FxPing) Ping(ctx context.Context, to peer.ID) (int, int, error) {
+	if pn.count <= 0 {
 		return 0, 0, errors.New("count must be a positive integer")
 	}
 
@@ -214,7 +214,7 @@ func (pn *FxPing) Ping(ctx context.Context, to peer.ID, count int) (int, int, er
 	var totalDuration time.Duration
 	var successCount int
 
-	for i := 0; i < count; i++ {
+	for i := 0; i < pn.count; i++ {
 		// Setup a timeout for the ping operation
 		pingCtx, cancel := context.WithTimeout(ctx, time.Duration(pn.timeout)*time.Second) // Adjust the timeout as needed
 		defer cancel()

@@ -15,6 +15,8 @@ type (
 		blockchainEndPoint       string
 		timeout                  int
 		wg                       *sync.WaitGroup
+		minPingSuccessRate       int
+		maxPingTime              int
 	}
 )
 
@@ -66,6 +68,20 @@ func WithTimeout(to int) Option {
 func WithWg(wg *sync.WaitGroup) Option {
 	return func(o *options) error {
 		o.wg = wg
+		return nil
+	}
+}
+
+func WithSuccessPingRate(sr int) Option {
+	return func(o *options) error {
+		o.minPingSuccessRate = sr
+		return nil
+	}
+}
+
+func WithMaxPingRate(t int) Option {
+	return func(o *options) error {
+		o.maxPingTime = t
 		return nil
 	}
 }

@@ -23,6 +23,11 @@ type Announcements interface {
 	Shutdown(context.Context) error
 }
 
+// PoolJoinRequestHandler is the interface that will be called by the blockchain package.
+type PoolJoinRequestHandler interface {
+	HandlePoolJoinRequest(context.Context, peer.ID, string) error
+}
+
 var (
 	PubSubPrototypes struct {
 		Announcement schema.TypedPrototype

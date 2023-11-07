@@ -60,7 +60,8 @@ func New(o ...Option) (*Blox, error) {
 	p.pn, err = ping.NewFxPing(p.h,
 		ping.WithAllowTransientConnection(true),
 		ping.WithWg(&p.wg),
-		ping.WithTimeout(3))
+		ping.WithTimeout(3),
+		ping.WithCount(5))
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +85,8 @@ func New(o ...Option) (*Blox, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	p.an.SetPoolJoinRequestHandler(p.bl)
 
 	return &p, nil
 }

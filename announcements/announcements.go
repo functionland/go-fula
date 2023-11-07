@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,6 +34,7 @@ type (
 		topic                    *pubsub.Topic
 		stopJoinPoolRequestChan  chan struct{} // add this line
 		closeJoinPoolRequestOnce sync.Once
+		PoolJoinRequestHandler   PoolJoinRequestHandler
 	}
 )
 
@@ -88,6 +90,10 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 		log.Debug("IExist request")
 	case PoolJoinRequestAnnouncementType:
 		log.Debug("PoolJoin request")
+		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, strconv.Itoa(int(atype))); err != nil {
+			log.Errorw("An error occured in handling pooljoinrequest announcement", err)
+			return err
+		}
 	default:
 		log.Debug("Unknown request")
 	}
@@ -126,7 +132,11 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 		}
 		an.h.Peerstore().AddAddrs(from, addrs, peerstore.PermanentAddrTTL)
 		log.Infow("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
-		an.processAnnouncement(ctx, from, a.Type)
+		err = an.processAnnouncement(ctx, from, a.Type)
+		if err != nil {
+			log.Errorw("failed to process announcement", "err", err)
+			continue
+		}
 	}
 }
 
@@ -248,4 +258,10 @@ func (an *FxAnnouncements) Shutdown(ctx context.Context) error {
 	an.sub.Cancel()
 	tErr := an.topic.Close()
 	return tErr
+}
+
+// In the announcements package, add this to your concrete type that implements the Announcements interface.
+func (an *FxAnnouncements) SetPoolJoinRequestHandler(handler PoolJoinRequestHandler) {
+	// Set the handler
+	an.PoolJoinRequestHandler = handler
 }

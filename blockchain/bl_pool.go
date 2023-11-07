@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/functionland/go-fula/common"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -349,9 +350,47 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 	}
 	status, exists := bl.GetMemberStatus(from)
 	if !exists {
-		return fmt.Errorf("peerID does not exists in the list of pool requests or poool members: %s", from)
+		return fmt.Errorf("peerID does not exists in the list of pool requests or pool members: %s", from)
 	}
 	if status == common.Pending {
+		//Ping
+		averageDuration, successCount, err := bl.p.Ping(ctx, from)
+		if err != nil {
+			log.Errorw("An error occurred in ping", err)
+			return err
+		}
+		vote := averageDuration <= bl.maxPingTime && successCount >= bl.minPingSuccessRate
+
+		log.Debugw("Ping result", "averageDuration", averageDuration, "successCount", successCount, "vote", vote)
+
+		//Call PoolVote method
+		// Construct the PoolVoteRequest
+		// Convert topic from string to int
+		poolID, err := strconv.Atoi(topicString)
+		if err != nil {
+			// Handle the error if the conversion fails
+			return fmt.Errorf("invalid topic, not an integer: %s", err)
+		}
+		voteRequest := PoolVoteRequest{
+			PoolID:    poolID,
+			Account:   from.String(), // Assuming 'from' has the necessary account information
+			VoteValue: vote,
+		}
+
+		// Call PoolVote method
+		responseBytes, err := bl.PoolVote(ctx, from, voteRequest)
+		if err != nil {
+			return fmt.Errorf("failed to cast vote: %w", err)
+		}
+
+		// Interpret the response
+		var voteResponse PoolVoteResponse
+		if err := json.Unmarshal(responseBytes, &voteResponse); err != nil {
+			return fmt.Errorf("failed to unmarshal vote response: %w", err)
+		}
+
+		// Handle the response as needed
+		log.Infow("Vote cast successfully", "response", voteResponse)
 
 	} else {
 		return fmt.Errorf("peerID does not exists in the list of pool requests: %s with status %d", from, status)

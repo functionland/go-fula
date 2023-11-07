@@ -8,7 +8,7 @@ import (
 
 type Ping interface {
 	Start(context.Context) error
-	Ping(context.Context, peer.ID, int) (int, int, error)
+	Ping(context.Context, peer.ID) (int, int, error)
 	StopServer(context.Context) error
 	StopClient(context.Context)
 	Shutdown(context.Context) error
