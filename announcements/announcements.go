@@ -91,6 +91,7 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 	default:
 		log.Debug("Unknown request")
 	}
+	return nil
 }
 
 func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
