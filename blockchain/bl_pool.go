@@ -391,6 +391,10 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 
 		// Handle the response as needed
 		log.Infow("Vote cast successfully", "response", voteResponse)
+		// Update member status to unknown
+		bl.membersLock.Lock() // Lock before accessing the map
+		bl.members[from] = common.Unknown
+		bl.membersLock.Unlock() // Unlock after accessing the map
 
 	} else {
 		return fmt.Errorf("peerID does not exists in the list of pool requests: %s with status %d", from, status)

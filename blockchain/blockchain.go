@@ -65,7 +65,8 @@ type (
 		p *ping.FxPing
 		a *announcements.FxAnnouncements
 
-		members map[peer.ID]common.MemberStatus
+		members     map[peer.ID]common.MemberStatus
+		membersLock sync.RWMutex
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -551,6 +552,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Now iterate through the users and populate the member map
+	bl.membersLock.Lock()
 	for _, user := range response.Users {
 		pid, err := peer.Decode(user.PeerID)
 		if err != nil {
@@ -597,15 +599,18 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			bl.members[pid] = status
 		}
 	}
+	bl.membersLock.Unlock()
 
 	return nil
 }
 
 func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (common.MemberStatus, bool) {
+	bl.membersLock.RLock()
 	status, exists := bl.members[id]
 	if !exists {
 		// If the peer.ID doesn't exist in the members map, we treat it as an error case.
 		return common.MemberStatus(0), false
 	}
+	bl.membersLock.RUnlock()
 	return status, true
 }
