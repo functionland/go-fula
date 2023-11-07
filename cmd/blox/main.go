@@ -88,7 +88,7 @@ func init() {
 				Name:        "poolName",
 				Destination: &app.config.PoolName,
 				EnvVars:     []string{"FULA_BLOX_POOL_NAME"},
-				Value:       "my-pool",
+				Value:       "",
 			}),
 			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:        "logLevel",

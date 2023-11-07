@@ -67,6 +67,11 @@ type (
 
 		members     map[peer.ID]common.MemberStatus
 		membersLock sync.RWMutex
+
+		lastFetchTime    time.Time
+		fetchInterval    time.Duration
+		fetchCheckTicker *time.Ticker
+		fetchCheckStop   chan struct{}
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -113,14 +118,42 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 				return new(http.Request)
 			},
 		},
-		keyStorer: keyStorer,
+		keyStorer:      keyStorer,
+		lastFetchTime:  time.Now(),
+		fetchInterval:  opts.fetchFrequency * time.Hour,
+		fetchCheckStop: make(chan struct{}),
 	}
 	if bl.authorizer != "" {
 		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
 			return nil, err
 		}
 	}
+	bl.startFetchCheck()
 	return bl, nil
+}
+
+func (bl *FxBlockchain) startFetchCheck() {
+	bl.fetchCheckTicker = time.NewTicker(1 * time.Hour) // check every hour, adjust as needed
+
+	// Increment the WaitGroup counter before starting the goroutine
+	bl.wg.Add(1)
+
+	go func() {
+		defer bl.wg.Done() // Decrement the counter when the goroutine completes
+
+		for {
+			select {
+			case <-bl.fetchCheckTicker.C:
+				if time.Since(bl.lastFetchTime) >= bl.fetchInterval {
+					bl.FetchUsersAndPopulateSets(context.Background(), "someTopicString")
+					bl.lastFetchTime = time.Now() // update last fetch time
+				}
+			case <-bl.fetchCheckStop:
+				bl.fetchCheckTicker.Stop()
+				return
+			}
+		}
+	}()
 }
 
 func (bl *FxBlockchain) Start(ctx context.Context) error {
@@ -523,10 +556,15 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	bl.c.CloseIdleConnections()
 	bl.ch.CloseIdleConnections()
+	close(bl.fetchCheckStop)
+	bl.wg.Wait()
 	return bl.s.Shutdown(ctx)
 }
 
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string) error {
+	// Update last fetch time on successful fetch
+	bl.lastFetchTime = time.Now()
+
 	// Convert topic from string to int
 	topic, err := strconv.Atoi(topicString)
 	if err != nil {
@@ -559,6 +597,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			return err
 		}
 
+		//Check if self status is in pool request, start ping server and announce join request
 		if user.PeerID == bl.h.ID().String() {
 			log.Debugw("Found self peerID", user.PeerID)
 			if user.RequestPoolID != nil {

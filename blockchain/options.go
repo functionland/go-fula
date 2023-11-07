@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -17,6 +18,8 @@ type (
 		wg                       *sync.WaitGroup
 		minPingSuccessRate       int
 		maxPingTime              int
+		topicName                string
+		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 	}
 )
 
@@ -82,6 +85,20 @@ func WithSuccessPingRate(sr int) Option {
 func WithMaxPingRate(t int) Option {
 	return func(o *options) error {
 		o.maxPingTime = t
+		return nil
+	}
+}
+
+func WithFetchFrequency(t time.Duration) Option {
+	return func(o *options) error {
+		o.fetchFrequency = t
+		return nil
+	}
+}
+
+func WithTopicName(n string) Option {
+	return func(o *options) error {
+		o.topicName = n
 		return nil
 	}
 }

@@ -81,7 +81,9 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
 		blockchain.WithTimeout(30),
-		blockchain.WithWg(&p.wg))
+		blockchain.WithWg(&p.wg),
+		blockchain.WithFetchFrequency(3),
+		blockchain.WithTopicName(p.topicName))
 	if err != nil {
 		return nil, err
 	}
