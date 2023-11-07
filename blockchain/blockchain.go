@@ -10,10 +10,14 @@ import (
 	"net/http"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/functionland/go-fula/announcements"
+	"github.com/functionland/go-fula/common"
+	"github.com/functionland/go-fula/ping"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
@@ -57,6 +61,11 @@ type (
 		bufPool   *sync.Pool
 		reqPool   *sync.Pool
 		keyStorer KeyStorer
+
+		p *ping.FxPing
+		a *announcements.FxAnnouncements
+
+		members map[peer.ID]common.MemberStatus
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -64,7 +73,7 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
+func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncements, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
@@ -72,6 +81,8 @@ func NewFxBlockchain(h host.Host, keyStorer KeyStorer, o ...Option) (*FxBlockcha
 	bl := &FxBlockchain{
 		options: opts,
 		h:       h,
+		p:       p,
+		a:       a,
 		s:       &http.Server{},
 		c: &http.Client{
 			Transport: &http.Transport{
@@ -512,4 +523,72 @@ func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	bl.c.CloseIdleConnections()
 	bl.ch.CloseIdleConnections()
 	return bl.s.Shutdown(ctx)
+}
+
+func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string) error {
+	// Convert topic from string to int
+	topic, err := strconv.Atoi(topicString)
+	if err != nil {
+		// Handle the error if the conversion fails
+		return fmt.Errorf("invalid topic, not an integer: %s", err)
+	}
+
+	// Create a struct for the POST payload
+	payload := PoolUserListRequest{
+		PoolID: topic,
+	}
+
+	// Call the existing function to make the request
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, payload)
+	if err != nil {
+		return err
+	}
+	var response PoolUserListResponse
+
+	// Unmarshal the response body into the response struct
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return err
+	}
+
+	// Now iterate through the users and populate the member map
+	for _, user := range response.Users {
+		pid, err := peer.Decode(user.PeerID)
+		if err != nil {
+			return err
+		}
+
+		// Determine the status based on pool_id and request_pool_id
+		var status common.MemberStatus
+		if user.PoolID != nil && *user.PoolID == topic {
+			status = common.Approved
+		} else if user.RequestPoolID != nil && *user.RequestPoolID == topic {
+			status = common.Pending
+		} else {
+			// Skip users that do not match the topic criteria
+			continue
+		}
+
+		existingStatus, exists := bl.members[pid]
+		if exists {
+			if existingStatus == common.Pending && status == common.Approved {
+				// If the user is already pending and now approved, update to ApprovedOrPending
+				bl.members[pid] = common.Approved
+			}
+			// If the user status is the same as before, there's no need to update
+		} else {
+			// If the user does not exist in the map, add them
+			bl.members[pid] = status
+		}
+	}
+
+	return nil
+}
+
+func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (common.MemberStatus, bool) {
+	status, exists := bl.members[id]
+	if !exists {
+		// If the peer.ID doesn't exist in the members map, we treat it as an error case.
+		return common.MemberStatus(0), false
+	}
+	return status, true
 }

@@ -1,18 +1,11 @@
-package blockchain
+package ping
 
-import (
-	"sync"
-
-	"github.com/libp2p/go-libp2p/core/peer"
-)
+import "sync"
 
 type (
 	Option  func(*options) error
 	options struct {
-		authorizer               peer.ID
-		authorizedPeers          []peer.ID
 		allowTransientConnection bool
-		blockchainEndPoint       string
 		timeout                  int
 		wg                       *sync.WaitGroup
 	}
@@ -28,30 +21,9 @@ func newOptions(o ...Option) (*options, error) {
 	return &opts, nil
 }
 
-func WithAuthorizer(a peer.ID) Option {
-	return func(o *options) error {
-		o.authorizer = a
-		return nil
-	}
-}
-
-func WithAuthorizedPeers(l []peer.ID) Option {
-	return func(o *options) error {
-		o.authorizedPeers = l
-		return nil
-	}
-}
-
 func WithAllowTransientConnection(t bool) Option {
 	return func(o *options) error {
 		o.allowTransientConnection = t
-		return nil
-	}
-}
-
-func WithBlockchainEndPoint(b string) Option {
-	return func(o *options) error {
-		o.blockchainEndPoint = b
 		return nil
 	}
 }

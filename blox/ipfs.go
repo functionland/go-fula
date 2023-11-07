@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/functionland/go-fula/common"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
@@ -186,9 +187,9 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 			PublicKey       string   `json:"PublicKey"`
 		}{
 			Addresses:       addressStrings,
-			AgentVersion:    Version0,
+			AgentVersion:    common.Version0,
 			ID:              p.h.ID().String(),
-			ProtocolVersion: "fx_exchange/" + Version0,
+			ProtocolVersion: "fx_exchange/" + common.Version0,
 			Protocols:       []string{"fx_exchange"},
 			PublicKey:       pubKeyBase64,
 		}
@@ -250,7 +251,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 				RepoSize:   uint64(repoSize),
 				StorageMax: uint64(storage.Size),
 			},
-			Version: "fx-repo@" + Version0,
+			Version: "fx-repo@" + common.Version0,
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Errorw("failed to encode response to stats repo", "err", err)

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/functionland/go-fula/common"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -83,8 +85,32 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
+		err := bl.StartPingServer(ctx)
+		if err != nil {
+			return b, err
+		}
+		if bl.a != nil {
+			bl.wg.Add(1)
+			go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+		}
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) StartPingServer(ctx context.Context) error {
+	if bl.p != nil {
+		err := bl.p.Start(ctx)
+		return err
+	}
+	return errors.New("ping server cannot be started because it is nil")
+}
+
+func (bl *FxBlockchain) StopPingServer(ctx context.Context) error {
+	if bl.p != nil {
+		err := bl.p.StopServer(ctx)
+		return err
+	}
+	return errors.New("ping server cannot be stopped because it is nil")
 }
 
 func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCancelJoinRequest) ([]byte, error) {
@@ -120,6 +146,13 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
+		err := bl.StopPingServer(ctx)
+		if err != nil {
+			return b, err
+		}
+		if bl.a != nil {
+			bl.a.StopJoinPoolRequestAnnouncements()
+		}
 		return b, nil
 	}
 }
@@ -307,4 +340,21 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 	default:
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, topicString string) error {
+	err := bl.FetchUsersAndPopulateSets(ctx, topicString)
+	if err != nil {
+		return err
+	}
+	status, exists := bl.GetMemberStatus(from)
+	if !exists {
+		return fmt.Errorf("peerID does not exists in the list of pool requests or poool members: %s", from)
+	}
+	if status == common.Pending {
+
+	} else {
+		return fmt.Errorf("peerID does not exists in the list of pool requests: %s with status %d", from, status)
+	}
+	return nil
 }
