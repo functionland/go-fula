@@ -145,7 +145,7 @@ func (bl *FxBlockchain) startFetchCheck() {
 			select {
 			case <-bl.fetchCheckTicker.C:
 				if time.Since(bl.lastFetchTime) >= bl.fetchInterval {
-					bl.FetchUsersAndPopulateSets(context.Background(), "someTopicString")
+					bl.FetchUsersAndPopulateSets(context.Background(), bl.topicName, false)
 					bl.lastFetchTime = time.Now() // update last fetch time
 				}
 			case <-bl.fetchCheckStop:
@@ -167,48 +167,6 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 		defer bl.wg.Done()
 		bl.s.Serve(listen)
 	}()
-	/*
-		//This should be done in start not here
-		//If members list is empty we should check what peerIDs we already voted on and update to avoid re-voting
-		isMembersEmpty := bl.IsMembersEmpty()
-		if isMembersEmpty {
-			//Call the bl.PoolRequests and get the list of requests
-
-			//For each one check if voted field in the response, contains the bl.h.ID().String() and if so it means we already voted
-			//Move it to members with status UnKnown.
-		}
-	*/
-	/*
-		//This should be done in Start not here
-		//Check if self status is in pool request, start ping server and announce join request
-		if user.PeerID == bl.h.ID().String() {
-			log.Debugw("Found self peerID", user.PeerID)
-			if user.RequestPoolID != nil {
-				if !bl.p.Status() {
-					err = bl.p.Start(ctx)
-					if err != nil {
-						log.Errorw("Error when starting hte Ping Server", "PeerID", user.PeerID, "err", err)
-					} else {
-						bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
-					}
-				} else {
-					log.Debugw("Ping Server is already running for self peerID", user.PeerID)
-				}
-			} else {
-				log.Debugw("PeerID is already a member of the pool", user.PeerID)
-			}
-		}
-	*/
-	/*
-		//This should be done in Start in auto-runs not here
-		//Vote for any peer that has not votd already
-		if (exists && existingStatus != common.Unknown) || (!exists) {
-			err = bl.HandlePoolJoinRequest(ctx, pid, topicString, false)
-			if err == nil {
-				status = common.Unknown
-			}
-		}
-	*/
 	return nil
 }
 
@@ -612,7 +570,17 @@ func (bl *FxBlockchain) IsMembersEmpty() bool {
 	return len(bl.members) == 0
 }
 
-func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string) error {
+// contains is a helper function to check if the slice contains a string
+func contains(slice []string, str string) bool {
+	for _, v := range slice {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
+func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
 	// Update last fetch time on successful fetch
 	bl.lastFetchTime = time.Now()
 
@@ -627,6 +595,41 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		return nil
 	}
 
+	if initiate {
+		//If members list is empty we should check what peerIDs we already voted on and update to avoid re-voting
+		isMembersEmpty := bl.IsMembersEmpty()
+		if isMembersEmpty {
+			// Call the bl.PoolRequests and get the list of requests
+			req := PoolRequestsRequest{
+				PoolID: topic, // assuming 'topic' is your pool id
+			}
+			responseBody, err := bl.PoolRequests(ctx, bl.h.ID(), req)
+			if err != nil {
+				return err
+			}
+			var poolRequestsResponse PoolRequestsResponse
+
+			// Unmarshal the response body into the poolRequestsResponse struct
+			if err := json.Unmarshal(responseBody, &poolRequestsResponse); err != nil {
+				return err
+			}
+
+			// For each one check if voted field in the response, contains the bl.h.ID().String() and if so it means we already voted
+			// Move it to members with status UnKnown.
+			for _, request := range poolRequestsResponse.PoolRequests {
+				if contains(request.Voted, bl.h.ID().String()) {
+					pid, err := peer.Decode(request.PeerID)
+					if err != nil {
+						return err
+					}
+					bl.membersLock.Lock()
+					bl.members[pid] = common.Unknown
+					bl.membersLock.Unlock()
+				}
+			}
+		}
+	}
+
 	//Get hte list of both join requests and joined members for the pool
 	// Create a struct for the POST payload
 	payload := PoolUserListRequest{
@@ -634,7 +637,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Call the existing function to make the request
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, payload)
+	responseBody, err := bl.PoolUserList(ctx, bl.h.ID(), payload) // 'to' should be the peer ID you want to send requests to
 	if err != nil {
 		return err
 	}
@@ -653,8 +656,30 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			return err
 		}
 
+		if initiate {
+			//Check if self status is in pool request, start ping server and announce join request
+			if user.PeerID == bl.h.ID().String() {
+				log.Debugw("Found self peerID", user.PeerID)
+				if user.RequestPoolID != nil {
+					if !bl.p.Status() {
+						err = bl.p.Start(ctx)
+						if err != nil {
+							log.Errorw("Error when starting hte Ping Server", "PeerID", user.PeerID, "err", err)
+						} else {
+							bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+						}
+					} else {
+						log.Debugw("Ping Server is already running for self peerID", user.PeerID)
+					}
+				} else {
+					log.Debugw("PeerID is already a member of the pool", user.PeerID)
+				}
+			}
+		}
+
 		// Determine the status based on pool_id and request_pool_id
 		existingStatus, exists := bl.members[pid]
+
 		var status common.MemberStatus
 		if user.PoolID != nil && *user.PoolID == topic {
 			status = common.Approved
@@ -663,6 +688,16 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		} else {
 			// Skip users that do not match the topic criteria
 			continue
+		}
+
+		if initiate {
+			//Vote for any peer that has not votd already
+			if (exists && existingStatus != common.Unknown) || (!exists) {
+				err = bl.HandlePoolJoinRequest(ctx, pid, topicString, false)
+				if err == nil {
+					status = common.Unknown
+				}
+			}
 		}
 
 		if exists {

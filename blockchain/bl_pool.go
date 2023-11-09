@@ -345,7 +345,7 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 
 func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, topicString string, withMemberListUpdate bool) error {
 	if withMemberListUpdate {
-		err := bl.FetchUsersAndPopulateSets(ctx, topicString)
+		err := bl.FetchUsersAndPopulateSets(ctx, topicString, false)
 		if err != nil {
 			return err
 		}
@@ -380,7 +380,7 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		}
 
 		// Call PoolVote method
-		responseBytes, err := bl.PoolVote(ctx, from, voteRequest)
+		responseBytes, err := bl.PoolVote(ctx, bl.h.ID(), voteRequest)
 		if err != nil {
 			return fmt.Errorf("failed to cast vote: %w", err)
 		}
