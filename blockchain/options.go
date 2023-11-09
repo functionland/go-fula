@@ -19,6 +19,7 @@ type (
 		minPingSuccessRate       int
 		maxPingTime              int
 		topicName                string
+		relays                   []string
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 	}
 )
@@ -99,6 +100,15 @@ func WithFetchFrequency(t time.Duration) Option {
 func WithTopicName(n string) Option {
 	return func(o *options) error {
 		o.topicName = n
+		return nil
+	}
+}
+
+// WithStoreDir sets a the store directory we are using for datastore
+// Required.
+func WithRelays(r []string) Option {
+	return func(o *options) error {
+		o.relays = r
 		return nil
 	}
 }

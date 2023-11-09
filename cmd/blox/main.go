@@ -391,6 +391,7 @@ func action(ctx *cli.Context) error {
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
+		blox.WithRelays(app.config.StaticRelays),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),

@@ -31,6 +31,7 @@ type (
 		authorizer       peer.ID
 		authorizedPeers  []peer.ID
 		exchangeOpts     []exchange.Option
+		relays           []string
 	}
 )
 
@@ -148,6 +149,15 @@ func WithLinkSystem(ls *ipld.LinkSystem) Option {
 func WithExchangeOpts(eo ...exchange.Option) Option {
 	return func(o *options) error {
 		o.exchangeOpts = eo
+		return nil
+	}
+}
+
+// WithStoreDir sets a the store directory we are using for datastore
+// Required.
+func WithRelays(r []string) Option {
+	return func(o *options) error {
+		o.relays = r
 		return nil
 	}
 }

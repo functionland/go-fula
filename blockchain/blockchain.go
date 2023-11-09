@@ -24,6 +24,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 )
 
 var apiError struct {
@@ -34,6 +36,7 @@ var apiError struct {
 const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
 	actionAuth             = "auth"
+	devRelay               = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
 )
 
 var (
@@ -625,6 +628,22 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 					bl.membersLock.Lock()
 					bl.members[pid] = common.Unknown
 					bl.membersLock.Unlock()
+
+					// Create a slice to hold the multiaddresses for the peer
+					var addrs []multiaddr.Multiaddr
+
+					// Loop through the static relays and convert them to multiaddr
+					for _, relay := range bl.relays {
+						ma, err := multiaddr.NewMultiaddr(relay)
+						if err != nil {
+							bl.membersLock.Unlock()
+							return err
+						}
+						addrs = append(addrs, ma)
+					}
+
+					// Add the relay addresses to the peerstore for the peer ID
+					bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.PermanentAddrTTL)
 				}
 			}
 		}
@@ -692,7 +711,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 
 		if initiate {
 			//Vote for any peer that has not votd already
-			if (exists && existingStatus != common.Unknown) || (!exists) {
+			if exists && existingStatus != common.Unknown {
 				err = bl.HandlePoolJoinRequest(ctx, pid, topicString, false)
 				if err == nil {
 					status = common.Unknown
@@ -709,6 +728,21 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		} else {
 			// If the user does not exist in the map, add them
 			bl.members[pid] = status
+			// Create a slice to hold the multiaddresses for the peer
+			var addrs []multiaddr.Multiaddr
+
+			// Loop through the static relays and convert them to multiaddr
+			for _, relay := range bl.relays {
+				ma, err := multiaddr.NewMultiaddr(relay)
+				if err != nil {
+					bl.membersLock.Unlock()
+					return err
+				}
+				addrs = append(addrs, ma)
+			}
+
+			// Add the relay addresses to the peerstore for the peer ID
+			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.PermanentAddrTTL)
 		}
 	}
 	bl.membersLock.Unlock()

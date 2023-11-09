@@ -83,7 +83,8 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithTimeout(30),
 		blockchain.WithWg(&p.wg),
 		blockchain.WithFetchFrequency(3),
-		blockchain.WithTopicName(p.topicName))
+		blockchain.WithTopicName(p.topicName),
+		blockchain.WithRelays(p.relays))
 	if err != nil {
 		return nil, err
 	}
