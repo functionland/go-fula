@@ -75,6 +75,8 @@ type (
 		fetchInterval    time.Duration
 		fetchCheckTicker *time.Ticker
 		fetchCheckStop   chan struct{}
+
+		stopFetchUsersAfterJoinChan chan struct{}
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -583,8 +585,26 @@ func contains(slice []string, str string) bool {
 	return false
 }
 
+func (bl *FxBlockchain) cleanUnwantedPeers(keepPeers []peer.ID) {
+	// Convert the keepPeers slice to a map for efficient existence checks
+	keepMap := make(map[peer.ID]bool)
+	for _, p := range keepPeers {
+		keepMap[p] = true
+	}
+
+	// Retrieve all peers from the AddrBook
+	allPeers := bl.h.Peerstore().PeersWithAddrs()
+
+	// Iterate over all peers and clear addresses for those not in keepMap
+	for _, peerID := range allPeers {
+		if _, found := keepMap[peerID]; !found {
+			bl.h.Peerstore().ClearAddrs(peerID)
+		}
+	}
+}
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
 	// Update last fetch time on successful fetch
+	var keepPeers []peer.ID
 	bl.lastFetchTime = time.Now()
 
 	// Convert topic from string to int
@@ -643,7 +663,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 					}
 
 					// Add the relay addresses to the peerstore for the peer ID
-					bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.PermanentAddrTTL)
+					bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
+					keepPeers = append(keepPeers, pid)
 				}
 			}
 		}
@@ -676,6 +697,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		}
 
 		if initiate {
+			keepPeers = append(keepPeers, pid)
 			//Check if self status is in pool request, start ping server and announce join request
 			if user.PeerID == bl.h.ID().String() {
 				log.Debugw("Found self peerID", user.PeerID)
@@ -742,10 +764,13 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			}
 
 			// Add the relay addresses to the peerstore for the peer ID
-			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.PermanentAddrTTL)
+			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
 		}
 	}
 	bl.membersLock.Unlock()
+	if initiate {
+		bl.cleanUnwantedPeers(keepPeers)
+	}
 
 	return nil
 }

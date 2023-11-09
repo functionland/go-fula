@@ -20,6 +20,7 @@ type (
 		maxPingTime              int
 		topicName                string
 		relays                   []string
+		updatePoolName           func(string) error
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 	}
 )
@@ -100,6 +101,13 @@ func WithFetchFrequency(t time.Duration) Option {
 func WithTopicName(n string) Option {
 	return func(o *options) error {
 		o.topicName = n
+		return nil
+	}
+}
+
+func WithUpdatePoolName(updatePoolName func(string) error) Option {
+	return func(o *options) error {
+		o.updatePoolName = updatePoolName
 		return nil
 	}
 }

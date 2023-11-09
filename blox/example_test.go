@@ -71,7 +71,7 @@ func Example_poolDiscoverPeersViaPubSub() {
 		panic(err)
 	}
 	defer n2.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
+	fmt.Printf("Instantiated node in pool %s with ID: %s and addr %v\n", poolName, h2.ID().String(), h2.Addrs())
 
 	// Instantiate the third node in the pool
 	pid3, _, err := crypto.GenerateECDSAKeyPair(rng)

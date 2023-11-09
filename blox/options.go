@@ -19,8 +19,9 @@ import (
 )
 
 type (
-	Option  func(*options) error
-	options struct {
+	Option          func(*options) error
+	PoolNameUpdater func(string) error
+	options         struct {
 		h                host.Host
 		name             string
 		topicName        string
@@ -32,6 +33,7 @@ type (
 		authorizedPeers  []peer.ID
 		exchangeOpts     []exchange.Option
 		relays           []string
+		updatePoolName   PoolNameUpdater
 	}
 )
 
@@ -158,6 +160,13 @@ func WithExchangeOpts(eo ...exchange.Option) Option {
 func WithRelays(r []string) Option {
 	return func(o *options) error {
 		o.relays = r
+		return nil
+	}
+}
+
+func WithUpdatePoolName(updatePoolName PoolNameUpdater) Option {
+	return func(o *options) error {
+		o.updatePoolName = updatePoolName
 		return nil
 	}
 }

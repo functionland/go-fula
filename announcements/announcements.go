@@ -17,7 +17,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
 var (
@@ -127,12 +126,14 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 			log.Errorw("failed to decode announcement data", "err", err)
 			continue
 		}
-		addrs, err := a.GetAddrs()
-		if err != nil {
-			log.Errorw("failed to decode announcement addrs", "err", err)
-			continue
-		}
-		an.h.Peerstore().AddAddrs(from, addrs, peerstore.PermanentAddrTTL)
+		/*
+			addrs, err := a.GetAddrs()
+			if err != nil {
+				log.Errorw("failed to decode announcement addrs", "err", err)
+				continue
+			}
+			an.h.Peerstore().AddAddrs(from, addrs, peerstore.ConnectedAddrTTL)
+		*/
 		log.Infow("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
 		err = an.processAnnouncement(ctx, from, a.Type)
 		if err != nil {

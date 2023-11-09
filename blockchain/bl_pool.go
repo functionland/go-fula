@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/functionland/go-fula/common"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -86,10 +87,50 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
-		err := bl.StartPingServer(ctx)
+		poolID := r.PoolID
+		poolIDStr := strconv.Itoa(poolID)
+		err := bl.updatePoolName(poolIDStr)
 		if err != nil {
 			return b, err
 		}
+		err = bl.StartPingServer(ctx)
+		if err != nil {
+			return b, err
+		}
+		// Create a ticker that triggers every 10 minutes
+		err = bl.FetchUsersAndPopulateSets(ctx, poolIDStr, true)
+		if err != nil {
+			log.Errorw("Error fetching and populating users", "err", err)
+		}
+		bl.stopFetchUsersAfterJoinChan = make(chan struct{})
+		ticker := time.NewTicker(bl.fetchInterval * time.Minute)
+		bl.wg.Add(1) // Increment the wait group counter
+		go func() {
+			defer bl.wg.Done()  // Decrement the wait group counter when the goroutine completes
+			defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
+
+			for {
+				select {
+				case <-ticker.C:
+					// Call FetchUsersAndPopulateSets at every tick (10 minutes interval)
+					if err := bl.FetchUsersAndPopulateSets(ctx, strconv.Itoa(r.PoolID), false); err != nil {
+						log.Errorw("Error fetching and populating users", "err", err)
+					}
+					status, exists := bl.GetMemberStatus(to)
+					if exists && status == common.Approved {
+						ticker.Stop()
+						bl.StopPingServer(ctx)
+						if bl.a != nil {
+							bl.a.StopJoinPoolRequestAnnouncements()
+						}
+					}
+				case <-bl.stopFetchUsersAfterJoinChan:
+					// Stop the ticker when receiving a stop signal
+					ticker.Stop()
+					return
+				}
+			}
+		}()
 		if bl.a != nil {
 			bl.wg.Add(1)
 			go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
@@ -153,6 +194,12 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		}
 		if bl.a != nil {
 			bl.a.StopJoinPoolRequestAnnouncements()
+		}
+		// Send a stop signal if the channel is not nil
+		if bl.stopFetchUsersAfterJoinChan != nil {
+			close(bl.stopFetchUsersAfterJoinChan)
+			// Reset the channel to nil to avoid closing a closed channel
+			bl.stopFetchUsersAfterJoinChan = nil
 		}
 		return b, nil
 	}

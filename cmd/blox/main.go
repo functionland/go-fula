@@ -297,6 +297,37 @@ func updateConfig(p []peer.ID) error {
 	return nil
 }
 
+func updatePoolName(newPoolName string) error {
+	// Load existing config file
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return err
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return err
+	}
+
+	// Update the pool name
+	app.config.PoolName = newPoolName
+
+	logger.Infof("Updated pool name to: %s", app.config.PoolName)
+
+	// Marshal the updated config back to YAML
+	configData, err = yaml.Marshal(app.config)
+	if err != nil {
+		return err
+	}
+
+	// Write the updated config back to the file
+	if err := os.WriteFile(app.configPath, configData, 0700); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func action(ctx *cli.Context) error {
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
@@ -392,6 +423,7 @@ func action(ctx *cli.Context) error {
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
 		blox.WithRelays(app.config.StaticRelays),
+		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),
