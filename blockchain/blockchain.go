@@ -162,7 +162,53 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 		return err
 	}
 	bl.s.Handler = http.HandlerFunc(bl.serve)
-	go func() { bl.s.Serve(listen) }()
+	bl.wg.Add(1)
+	go func() {
+		defer bl.wg.Done()
+		bl.s.Serve(listen)
+	}()
+	/*
+		//This should be done in start not here
+		//If members list is empty we should check what peerIDs we already voted on and update to avoid re-voting
+		isMembersEmpty := bl.IsMembersEmpty()
+		if isMembersEmpty {
+			//Call the bl.PoolRequests and get the list of requests
+
+			//For each one check if voted field in the response, contains the bl.h.ID().String() and if so it means we already voted
+			//Move it to members with status UnKnown.
+		}
+	*/
+	/*
+		//This should be done in Start not here
+		//Check if self status is in pool request, start ping server and announce join request
+		if user.PeerID == bl.h.ID().String() {
+			log.Debugw("Found self peerID", user.PeerID)
+			if user.RequestPoolID != nil {
+				if !bl.p.Status() {
+					err = bl.p.Start(ctx)
+					if err != nil {
+						log.Errorw("Error when starting hte Ping Server", "PeerID", user.PeerID, "err", err)
+					} else {
+						bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+					}
+				} else {
+					log.Debugw("Ping Server is already running for self peerID", user.PeerID)
+				}
+			} else {
+				log.Debugw("PeerID is already a member of the pool", user.PeerID)
+			}
+		}
+	*/
+	/*
+		//This should be done in Start in auto-runs not here
+		//Vote for any peer that has not votd already
+		if (exists && existingStatus != common.Unknown) || (!exists) {
+			err = bl.HandlePoolJoinRequest(ctx, pid, topicString, false)
+			if err == nil {
+				status = common.Unknown
+			}
+		}
+	*/
 	return nil
 }
 
@@ -557,8 +603,13 @@ func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	bl.c.CloseIdleConnections()
 	bl.ch.CloseIdleConnections()
 	close(bl.fetchCheckStop)
-	bl.wg.Wait()
 	return bl.s.Shutdown(ctx)
+}
+
+func (bl *FxBlockchain) IsMembersEmpty() bool {
+	bl.membersLock.RLock()         // Use RLock for read-only access
+	defer bl.membersLock.RUnlock() // Defer the unlock operation
+	return len(bl.members) == 0
 }
 
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string) error {
@@ -571,7 +622,12 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		// Handle the error if the conversion fails
 		return fmt.Errorf("invalid topic, not an integer: %s", err)
 	}
+	if topic <= 0 {
+		log.Info("Not a member of any pool at the moment")
+		return nil
+	}
 
+	//Get hte list of both join requests and joined members for the pool
 	// Create a struct for the POST payload
 	payload := PoolUserListRequest{
 		PoolID: topic,
@@ -597,25 +653,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			return err
 		}
 
-		//Check if self status is in pool request, start ping server and announce join request
-		if user.PeerID == bl.h.ID().String() {
-			log.Debugw("Found self peerID", user.PeerID)
-			if user.RequestPoolID != nil {
-				if !bl.p.Status() {
-					err = bl.p.Start(ctx)
-					if err != nil {
-						log.Errorw("Error when starting hte Ping Server", "PeerID", user.PeerID, "err", err)
-					} else {
-						bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
-					}
-				} else {
-					log.Debugw("Ping Server is already running for self peerID", user.PeerID)
-				}
-			} else {
-				log.Debugw("PeerID is already a member of the pool", user.PeerID)
-			}
-		}
 		// Determine the status based on pool_id and request_pool_id
+		existingStatus, exists := bl.members[pid]
 		var status common.MemberStatus
 		if user.PoolID != nil && *user.PoolID == topic {
 			status = common.Approved
@@ -626,9 +665,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			continue
 		}
 
-		existingStatus, exists := bl.members[pid]
 		if exists {
-			if existingStatus == common.Pending && status == common.Approved {
+			if existingStatus != common.Approved && status == common.Approved {
 				// If the user is already pending and now approved, update to ApprovedOrPending
 				bl.members[pid] = common.Approved
 			}

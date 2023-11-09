@@ -141,12 +141,18 @@ func (p *Blox) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow b
 }
 
 func (p *Blox) Shutdown(ctx context.Context) error {
+	log.Info("Shutdown in progress")
 	bErr := p.bl.Shutdown(ctx)
+	log.Info("blockchain Shutdown in progress")
 	xErr := p.ex.Shutdown(ctx)
+	log.Info("exchange Shutdown in progress")
 	pErr := p.pn.Shutdown(ctx)
+	log.Info("ping Shutdown in progress")
 	tErr := p.an.Shutdown(ctx)
+	log.Info("announcement Shutdown in progress")
 	p.cancel()
 	dsErr := p.ds.Close()
+	log.Info("datastore Shutdown in progress")
 	done := make(chan struct{}, 1)
 	go func() {
 		defer close(done)
@@ -156,15 +162,19 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	select {
 	case <-done:
 		if tErr != nil {
+			log.Errorw("Error occurred in announcement shutdown", "tErr", tErr)
 			return tErr
 		}
 		if dsErr != nil {
+			log.Errorw("Error occurred in ds shutdown", "dsErr", dsErr)
 			return dsErr
 		}
 		if bErr != nil {
+			log.Errorw("Error occurred in blockchain shutdown", "bErr", bErr)
 			return bErr
 		}
 		if pErr != nil {
+			log.Errorw("Error occurred in Ping shutdown", "pErr", pErr)
 			return pErr
 		}
 		return xErr

@@ -92,7 +92,7 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 		log.Debug("IExist request")
 	case PoolJoinRequestAnnouncementType:
 		log.Debug("PoolJoin request")
-		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, strconv.Itoa(int(atype))); err != nil {
+		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, strconv.Itoa(int(atype)), true); err != nil {
 			log.Errorw("An error occurred in handling pool join request announcement", err)
 			return err
 		}
