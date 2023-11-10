@@ -116,8 +116,6 @@ func Example_poolDiscoverPeersViaPubSub(t *testing.T) {
 		case <-ctx.Done():
 			panic(ctx.Err())
 		default:
-			h1Peers := h1.Peerstore().Peers()
-			fmt.Printf("%s peerstore contains %d nodes:\n", h1.ID(), len(h1Peers))
 			time.Sleep(time.Second)
 		}
 	}
