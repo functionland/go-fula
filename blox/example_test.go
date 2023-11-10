@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"testing"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
@@ -22,7 +21,7 @@ import (
 // Example_poolDiscoverPeersViaPubSub starts a pool named "1" across three nodes, connects two of the nodes to
 // the other one to facilitate a path for pubsub to propagate and shows all three nodes discover
 // each other using pubsub.
-func Example_poolDiscoverPeersViaPubSub(t *testing.T) {
+func Example_poolDiscoverPeersViaPubSub() {
 	const poolName = "1"
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
