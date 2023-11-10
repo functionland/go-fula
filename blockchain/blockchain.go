@@ -184,8 +184,16 @@ func (bl *FxBlockchain) putReq(req *http.Request) {
 	bl.reqPool.Put(req)
 }
 
+func prependProtocol(addr string) string {
+	if strings.HasPrefix(addr, "localhost") || strings.HasPrefix(addr, "127.0.0.1") || strings.HasPrefix(addr, "192.168.") || strings.HasPrefix(addr, "10.") {
+		return "http://" + addr
+	}
+	return "https://" + addr
+}
+
 func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, action string, p interface{}) ([]byte, error) {
-	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
+	endpoint := prependProtocol(bl.blockchainEndPoint)
+	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
 
 	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
 	buf := bl.bufPool.Get().(*bytes.Buffer)
@@ -603,6 +611,10 @@ func (bl *FxBlockchain) cleanUnwantedPeers(keepPeers []peer.ID) {
 	}
 }
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
+	// Initialize the map if it's nil
+	if bl.members == nil {
+		bl.members = make(map[peer.ID]common.MemberStatus)
+	}
 	log.Debug("FetchUsersAndPopulateSets is called for ", "topicString: ", topicString, " ,initiate: ", initiate)
 	// Update last fetch time on successful fetch
 	var keepPeers []peer.ID
@@ -691,11 +703,12 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Now iterate through the users and populate the member map
+	log.Debugw("Now iterate through the users and populate the member map", "response", response.Users)
 	bl.membersLock.Lock()
 	for _, user := range response.Users {
 		pid, err := peer.Decode(user.PeerID)
 		if err != nil {
-			return err
+			log.Errorw("Could not debug PeerID in response.Users", "user.PeerID", user.PeerID, "err", err)
 		}
 
 		if initiate {
