@@ -230,7 +230,7 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
-	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		seed, err := bl.keyStorer.LoadKey(ctx)
 		if err != nil {
 			log.Errorw("seed is empty", "err", err)
@@ -627,7 +627,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			req := PoolRequestsRequest{
 				PoolID: topic, // assuming 'topic' is your pool id
 			}
-			responseBody, err := bl.PoolRequests(ctx, bl.h.ID(), req)
+			responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolRequests, req)
 			if err != nil {
 				return err
 			}
@@ -673,13 +673,13 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	//Get hte list of both join requests and joined members for the pool
-	// Create a struct for the POST payload
-	payload := PoolUserListRequest{
+	// Create a struct for the POST req
+	req := PoolUserListRequest{
 		PoolID: topic,
 	}
 
 	// Call the existing function to make the request
-	responseBody, err := bl.PoolUserList(ctx, bl.h.ID(), payload) // 'to' should be the peer ID you want to send requests to
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
 	if err != nil {
 		return err
 	}
