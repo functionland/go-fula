@@ -180,6 +180,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 }
 
 func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
+	log.Debug("Starting AnnounceJoinPoolRequestPeriodically")
 	defer an.wg.Done()
 	an.announcingJoinPoolMutex.Lock()
 	if an.announcingJoinPoolRequest {

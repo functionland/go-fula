@@ -603,6 +603,7 @@ func (bl *FxBlockchain) cleanUnwantedPeers(keepPeers []peer.ID) {
 	}
 }
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
+	log.Debug("FetchUsersAndPopulateSets is called for ", "topicString: ", topicString, " ,initiate: ", initiate)
 	// Update last fetch time on successful fetch
 	var keepPeers []peer.ID
 	bl.lastFetchTime = time.Now()
@@ -668,6 +669,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				}
 			}
 		}
+		log.Debugw("stored members are", bl.members)
 	}
 
 	//Get hte list of both join requests and joined members for the pool

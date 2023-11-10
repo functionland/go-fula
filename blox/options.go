@@ -50,7 +50,7 @@ func newOptions(o ...Option) (*options, error) {
 		return nil, errors.New("blox pool name must be specified")
 	}
 	if opts.topicName == "" {
-		opts.topicName = fmt.Sprintf("/explore.fula/pools/%s", path.Clean(opts.name))
+		opts.topicName = fmt.Sprintf("%s", path.Clean(opts.name))
 	}
 	if opts.h == nil {
 		var err error

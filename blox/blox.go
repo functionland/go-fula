@@ -110,7 +110,9 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.Start(ctx); err != nil {
 		return err
 	}
-	p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true)
+	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true); err != nil {
+		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
+	}
 	go func() {
 		log.Infow("IPFS RPC server started on address http://localhost:5001")
 		switch err := http.ListenAndServe("localhost:5001", p.ServeIpfsRpc()); {
