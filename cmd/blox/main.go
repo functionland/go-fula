@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -36,10 +37,11 @@ var (
 	logger = logging.Logger("fula/cmd/blox")
 	app    struct {
 		cli.App
-		initOnly   bool
-		wireless   bool
-		configPath string
-		config     struct {
+		initOnly        bool
+		generateNodeKey bool
+		wireless        bool
+		configPath      string
+		config          struct {
 			Identity                  string        `yaml:"identity"`
 			StoreDir                  string        `yaml:"storeDir"`
 			PoolName                  string        `yaml:"poolName"`
@@ -155,11 +157,43 @@ func init() {
 				Destination: &app.initOnly,
 				Value:       false,
 			},
+			&cli.BoolFlag{
+				Name:        "generateNodeKey",
+				Usage:       "Generate node key from identity",
+				Destination: &app.generateNodeKey,
+			},
 		},
 		Before:    before,
 		Action:    action,
 		Copyright: "fx.land",
 	}
+}
+
+func ConvertBase64PrivateKeyToHexNodeKey(base64PrivKey string) (string, error) {
+	// Decode the base64 string to get the private key bytes
+	privKeyBytes, err := base64.StdEncoding.DecodeString(base64PrivKey)
+	if err != nil {
+		return "", err
+	}
+
+	// Unmarshal the private key
+	privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Use the Raw() method to get the raw private key bytes
+	rawPrivKey, err := privKey.Raw()
+	if err != nil {
+		return "", err
+	}
+
+	// Extract the seed (first 32 bytes of the raw private key)
+	seed := rawPrivKey[:32]
+
+	// Convert the seed bytes to a hexadecimal string
+	hexString := hex.EncodeToString(seed)
+	return hexString, nil
 }
 
 func before(ctx *cli.Context) error {
@@ -329,6 +363,15 @@ func updatePoolName(newPoolName string) error {
 }
 
 func action(ctx *cli.Context) error {
+	if app.generateNodeKey {
+		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
+		nodeKey, err := ConvertBase64PrivateKeyToHexNodeKey(app.config.Identity)
+		if err != nil {
+			return fmt.Errorf("error converting node key: %v", err)
+		}
+		fmt.Print(nodeKey)
+		return nil // Exit after generating the node key
+	}
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		return err
