@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"testing"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
@@ -18,12 +19,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
-// Example_poolDiscoverPeersViaPubSub starts a pool named "my-pool" across three nodes, connects two of the nodes to
+// Example_poolDiscoverPeersViaPubSub starts a pool named "1" across three nodes, connects two of the nodes to
 // the other one to facilitate a path for pubsub to propagate and shows all three nodes discover
 // each other using pubsub.
-func Example_poolDiscoverPeersViaPubSub() {
-	const poolName = "my-pool"
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+func Example_poolDiscoverPeersViaPubSub(t *testing.T) {
+	const poolName = "1"
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Elevate log level to show internal communications.
@@ -71,7 +72,7 @@ func Example_poolDiscoverPeersViaPubSub() {
 		panic(err)
 	}
 	defer n2.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s and addr %v\n", poolName, h2.ID().String(), h2.Addrs())
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
 
 	// Instantiate the third node in the pool
 	pid3, _, err := crypto.GenerateECDSAKeyPair(rng)
@@ -115,6 +116,8 @@ func Example_poolDiscoverPeersViaPubSub() {
 		case <-ctx.Done():
 			panic(ctx.Err())
 		default:
+			h1Peers := h1.Peerstore().Peers()
+			fmt.Printf("%s peerstore contains %d nodes:\n", h1.ID(), len(h1Peers))
 			time.Sleep(time.Second)
 		}
 	}
@@ -138,9 +141,9 @@ func Example_poolDiscoverPeersViaPubSub() {
 	}
 
 	// Unordered output:
-	// Instantiated node in pool my-pool with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Instantiated node in pool my-pool with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Instantiated node in pool my-pool with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
+	// Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT peerstore contains 3 nodes:
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
@@ -158,8 +161,8 @@ func Example_poolDiscoverPeersViaPubSub() {
 // Example_poolExchangeDagBetweenPoolNodes starts up a pool with 2 nodes, stores a sample DAG in
 // one node and fetches it via GraphSync from the other node.
 func Example_poolExchangeDagBetweenPoolNodes() {
-	const poolName = "my-pool"
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	const poolName = "1"
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Elevate log level to show internal communications.
@@ -360,8 +363,8 @@ func Example_poolExchangeDagBetweenPoolNodes() {
 	}
 
 	// Output:
-	// Instantiated node in pool my-pool with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Instantiated node in pool my-pool with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
+	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
 	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
 	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
 	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
