@@ -18,6 +18,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 )
 
 var (
@@ -86,10 +87,11 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 	return nil
 }
 
-func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID, atype AnnouncementType) error {
+func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID, atype AnnouncementType, addrs []multiaddr.Multiaddr) error {
 	switch atype {
 	case IExistAnnouncementType:
 		log.Debug("IExist request")
+		an.h.Peerstore().AddAddrs(from, addrs, peerstore.ConnectedAddrTTL)
 	case PoolJoinRequestAnnouncementType:
 		log.Debug("PoolJoin request")
 		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, strconv.Itoa(int(atype)), true); err != nil {
@@ -128,16 +130,14 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 			continue
 		}
 
-		//TODO: We do not need to add peers that announce to peerstore
 		addrs, err := a.GetAddrs()
 		if err != nil {
 			log.Errorw("failed to decode announcement addrs", "err", err)
 			continue
 		}
-		an.h.Peerstore().AddAddrs(from, addrs, peerstore.ConnectedAddrTTL)
 
 		log.Infow("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
-		err = an.processAnnouncement(ctx, from, a.Type)
+		err = an.processAnnouncement(ctx, from, a.Type, addrs)
 		if err != nil {
 			log.Errorw("failed to process announcement", "err", err)
 			continue
