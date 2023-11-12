@@ -90,7 +90,7 @@ func init() {
 				Name:        "poolName",
 				Destination: &app.config.PoolName,
 				EnvVars:     []string{"FULA_BLOX_POOL_NAME"},
-				Value:       "",
+				Value:       "0",
 			}),
 			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:        "logLevel",
@@ -467,6 +467,7 @@ func action(ctx *cli.Context) error {
 		blox.WithStoreDir(app.config.StoreDir),
 		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),

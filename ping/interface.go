@@ -15,9 +15,11 @@ type Ping interface {
 }
 
 type PingRequest struct {
-	Data []byte `json:"data"`
+	ID   string `json:"id"`
+	Data string `json:"data"`
 }
 
 type PingResponse struct {
-	Data []byte `json:"data"`
+	ID   string `json:"id"`
+	Data string `json:"data"`
 }

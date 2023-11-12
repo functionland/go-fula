@@ -33,6 +33,7 @@ type (
 		exchangeOpts     []exchange.Option
 		relays           []string
 		updatePoolName   PoolNameUpdater
+		pingCount        int
 	}
 )
 
@@ -47,6 +48,10 @@ func newOptions(o ...Option) (*options, error) {
 	}
 	if opts.name == "" {
 		return nil, errors.New("blox pool name must be specified")
+	}
+	if opts.pingCount <= 0 {
+		log.Warnf("ping count is not specified, using default of 5 instead of %d", opts.pingCount)
+		opts.pingCount = 5
 	}
 	if opts.topicName == "" {
 		opts.topicName = path.Clean(opts.name)
@@ -166,6 +171,13 @@ func WithRelays(r []string) Option {
 func WithUpdatePoolName(updatePoolName PoolNameUpdater) Option {
 	return func(o *options) error {
 		o.updatePoolName = updatePoolName
+		return nil
+	}
+}
+
+func WithPingCount(pc int) Option {
+	return func(o *options) error {
+		o.pingCount = pc
 		return nil
 	}
 }

@@ -61,7 +61,7 @@ func New(o ...Option) (*Blox, error) {
 		ping.WithAllowTransientConnection(true),
 		ping.WithWg(&p.wg),
 		ping.WithTimeout(3),
-		ping.WithCount(5))
+		ping.WithCount(p.pingCount))
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +143,14 @@ func (p *Blox) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow b
 		return err
 	}
 	return p.ex.SetAuth(ctx, on, subject, allow)
+}
+
+func (p *Blox) StartPingServer(ctx context.Context) error {
+	return p.pn.Start(ctx)
+}
+
+func (p *Blox) Ping(ctx context.Context, to peer.ID) (int, int, error) {
+	return p.pn.Ping(ctx, to)
 }
 
 func (p *Blox) Shutdown(ctx context.Context) error {

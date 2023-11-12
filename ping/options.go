@@ -47,7 +47,7 @@ func WithWg(wg *sync.WaitGroup) Option {
 
 func WithCount(n int) Option {
 	return func(o *options) error {
-		o.timeout = n
+		o.count = n
 		return nil
 	}
 }
