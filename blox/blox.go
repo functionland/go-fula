@@ -8,6 +8,7 @@ import (
 
 	"github.com/functionland/go-fula/announcements"
 	"github.com/functionland/go-fula/blockchain"
+	"github.com/functionland/go-fula/common"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/functionland/go-fula/ping"
 	logging "github.com/ipfs/go-log/v2"
@@ -96,12 +97,14 @@ func New(o ...Option) (*Blox, error) {
 	return &p, nil
 }
 
+func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
+	status, exists := p.bl.GetMemberStatus(id)
+	return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
+}
+
 func (p *Blox) Start(ctx context.Context) error {
 	// implemented topic validators with chain integration.
-	validator := func(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
-		status, exists := p.bl.GetMemberStatus(id)
-		return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
-	}
+	validator := p.PubsubValidator
 
 	anErr := p.an.Start(ctx, validator)
 
@@ -114,7 +117,11 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
 	}
+	log.Debug("called wg.Add in blox start")
+	p.wg.Add(1)
 	go func() {
+		log.Debug("called wg.Done in Start blox")
+		defer p.wg.Done()
 		log.Infow("IPFS RPC server started on address http://localhost:5001")
 		switch err := http.ListenAndServe("localhost:5001", p.ServeIpfsRpc()); {
 		case errors.Is(err, http.ErrServerClosed):
@@ -125,8 +132,11 @@ func (p *Blox) Start(ctx context.Context) error {
 	}()
 
 	if anErr == nil {
+		log.Debug("called wg.Add in blox start anErr1")
 		p.wg.Add(1)
 		go p.an.AnnounceIExistPeriodically(ctx)
+		log.Debug("called wg.Add in blox start anErr2")
+
 		p.wg.Add(1)
 		go p.an.HandleAnnouncements(ctx)
 	} else {
@@ -146,11 +156,40 @@ func (p *Blox) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow b
 }
 
 func (p *Blox) StartPingServer(ctx context.Context) error {
+	//This is for unit testing and no need to call directly
 	return p.pn.Start(ctx)
 }
 
 func (p *Blox) Ping(ctx context.Context, to peer.ID) (int, int, error) {
+	//This is for unit testing and no need to call directly
 	return p.pn.Ping(ctx, to)
+}
+
+func (p *Blox) GetBlMembers() map[peer.ID]common.MemberStatus {
+	//This is for unit testing and no need to call directly
+	return p.bl.GetMembers()
+}
+
+func (p *Blox) StartAnnouncementServer(ctx context.Context) error {
+	//This is for unit testing and no need to call directly
+	p.wg.Add(1)
+	err := p.an.Start(ctx, p.PubsubValidator)
+	if err == nil {
+		log.Debug("called wg.Add in StartAnnouncementServer1")
+		p.wg.Add(1)
+		go p.an.AnnounceIExistPeriodically(ctx)
+		log.Debug("called wg.Add in StartAnnouncementServer2")
+		p.wg.Add(1)
+		go p.an.HandleAnnouncements(ctx)
+	}
+	return err
+}
+
+func (p *Blox) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
+	p.wg.Add(1)
+	//This is for unit testing and no need to call directly
+	log.Debugf("AnnounceJoinPoolRequest ping count %d", p.pingCount)
+	go p.an.AnnounceJoinPoolRequestPeriodically(ctx)
 }
 
 func (p *Blox) Shutdown(ctx context.Context) error {

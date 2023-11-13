@@ -101,8 +101,10 @@ func (pn *FxPing) Start(ctx context.Context) error {
 		return err
 	}
 	pn.s.Handler = http.HandlerFunc(pn.serve)
+	log.Debug("called wg.Add in ping start")
 	pn.wg.Add(1)
 	go func() {
+		log.Debug("called wg.Done in Start ping")
 		defer pn.wg.Done()
 		pn.s.Serve(listen)
 	}()

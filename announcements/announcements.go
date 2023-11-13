@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -60,6 +59,10 @@ func NewFxAnnouncements(h host.Host, o ...Option) (*FxAnnouncements, error) {
 }
 
 func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator) error {
+	if an.topicName == "" {
+		log.Warn("Announcement do not have any topic to subscribe to")
+		return errors.New("Announcement do not have any topic to subscribe to")
+	}
 	typeSystem, err := ipld.LoadSchemaBytes(schemaBytes)
 	if err != nil {
 		panic(fmt.Errorf("cannot load schema: %w", err))
@@ -87,65 +90,83 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 	return nil
 }
 
-func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID, atype AnnouncementType, addrs []multiaddr.Multiaddr) error {
+func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID, atype AnnouncementType, addrs []multiaddr.Multiaddr, topicString string) error {
+	log.Info("processing announcement")
 	switch atype {
 	case IExistAnnouncementType:
-		log.Debug("IExist request")
+		log.Info("IExist request")
 		an.h.Peerstore().AddAddrs(from, addrs, peerstore.ConnectedAddrTTL)
 	case PoolJoinRequestAnnouncementType:
-		log.Debug("PoolJoin request")
-		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, strconv.Itoa(int(atype)), true); err != nil {
+		log.Info("PoolJoin request")
+		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, topicString, true); err != nil {
 			log.Errorw("An error occurred in handling pool join request announcement", err)
 			return err
 		}
 	default:
-		log.Debug("Unknown request")
+		log.Info("Unknown request")
 	}
 	return nil
 }
 
 func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
+	log.Debug("called wg.Done in HandleAnnouncements")
 	defer an.wg.Done()
 	for {
 		msg, err := an.sub.Next(ctx)
-		switch {
-		case ctx.Err() != nil || err == pubsub.ErrSubscriptionCancelled || err == pubsub.ErrTopicClosed:
-			log.Info("stopped handling announcements")
-			return
-		case err != nil:
-			log.Errorw("failed to get the next announcement", "err", err)
-			continue
-		}
-		from, err := peer.IDFromBytes(msg.From)
-		if err != nil {
-			log.Errorw("failed to decode announcement sender", "err", err)
-			continue
-		}
-		if from == an.h.ID() {
-			continue
-		}
-		a := &Announcement{}
-		if err = a.UnmarshalBinary(msg.Data); err != nil {
-			log.Errorw("failed to decode announcement data", "err", err)
-			continue
-		}
+		if msg != nil {
+			log.Debugw("HandleAnnouncements", "msg.Topic", msg.Topic)
+			if err != nil {
+				log.Debugw("HandleAnnouncements Error", err)
+			}
+			switch {
+			case ctx.Err() != nil || err == pubsub.ErrSubscriptionCancelled || err == pubsub.ErrTopicClosed:
+				log.Info("stopped handling announcements")
+				return
+			case err != nil:
+				log.Errorw("failed to get the next announcement", "err", err)
+				continue
+			}
+			from, err := peer.IDFromBytes(msg.From)
+			if err != nil {
+				log.Errorw("failed to decode announcement sender", "err", err)
+				continue
+			}
+			if from == an.h.ID() {
+				log.Debug("ignoring announcement from self")
+				continue
+			}
+			a := &Announcement{}
+			if err = a.UnmarshalBinary(msg.Data); err != nil {
+				log.Errorw("failed to decode announcement data", "err", err)
+				continue
+			}
 
-		addrs, err := a.GetAddrs()
-		if err != nil {
-			log.Errorw("failed to decode announcement addrs", "err", err)
-			continue
-		}
+			addrs, err := a.GetAddrs()
+			if err != nil {
+				log.Errorw("failed to decode announcement addrs", "err", err)
+				continue
+			}
 
-		log.Infow("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
-		err = an.processAnnouncement(ctx, from, a.Type, addrs)
-		if err != nil {
-			log.Errorw("failed to process announcement", "err", err)
+			log.Debugw("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
+			log.Debug("processAnnouncement call")
+			if msg.Topic != nil {
+				err = an.processAnnouncement(ctx, from, a.Type, addrs, *msg.Topic)
+				if err != nil {
+					log.Errorw("failed to process announcement", "err", err)
+					continue
+				}
+			} else {
+				log.Debug("Topic is nil")
+				continue
+			}
+		} else {
 			continue
 		}
 	}
 }
 
 func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
+	log.Debug("called wg.Done in AnnounceIExistPeriodically")
 	defer an.wg.Done()
 	ticker := time.NewTicker(an.announceInterval)
 	for {
@@ -182,6 +203,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 }
 
 func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
+	log.Debug("called wg.Done in AnnounceJoinPoolRequestPeriodically")
 	log.Debug("Starting AnnounceJoinPoolRequestPeriodically")
 	defer an.wg.Done()
 	an.announcingJoinPoolMutex.Lock()
@@ -229,17 +251,19 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 				log.Errorw("failed to publish pool join request announcement", "err", err)
 				continue
 			}
-			log.Infow("announced pool join request message", "from", an.h.ID(), "announcement", a, "time", t)
+			log.Debugw("announced pool join request message", "from", an.h.ID(), "announcement", a, "time", t)
 		}
 	}
 }
 
 func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message, status common.MemberStatus, exists bool) bool {
+	log.Debug("ValidateAnnouncement")
 	a := &Announcement{}
 	if err := a.UnmarshalBinary(msg.Data); err != nil {
 		log.Errorw("failed to unmarshal announcement data", "err", err)
 		return false
 	}
+	log.Debugw("ValidateAnnouncement", "peerID", id, "type", a.Type)
 
 	switch a.Type {
 	case NewManifestAnnouncementType:
@@ -256,10 +280,13 @@ func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID,
 		if status != common.Unknown {
 			log.Errorw("peer is no longer permitted to send this message type", "peer", id)
 			return false
+		} else {
+			log.Debugw("PoolJoinRequestAnnouncementType status is Unknown and ok")
 		}
 	case PoolJoinApproveAnnouncementType, IExistAnnouncementType:
 		// Any member status is valid for a pool join announcement
 	default:
+		log.Errorw("The Type is not set ", a.Type)
 		return false
 	}
 

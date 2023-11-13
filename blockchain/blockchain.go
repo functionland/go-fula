@@ -141,9 +141,11 @@ func (bl *FxBlockchain) startFetchCheck() {
 	bl.fetchCheckTicker = time.NewTicker(1 * time.Hour) // check every hour, adjust as needed
 
 	// Increment the WaitGroup counter before starting the goroutine
+	log.Debug("called wg.Add in blockchain startFetchCheck")
 	bl.wg.Add(1)
 
 	go func() {
+		log.Debug("called wg.Done in startFetchCheck ticker")
 		defer bl.wg.Done() // Decrement the counter when the goroutine completes
 
 		for {
@@ -167,8 +169,10 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 		return err
 	}
 	bl.s.Handler = http.HandlerFunc(bl.serve)
+	log.Debug("called wg.Add in blockchain start")
 	bl.wg.Add(1)
 	go func() {
+		log.Debug("called wg.Done in Start blockchain")
 		defer bl.wg.Done()
 		bl.s.Serve(listen)
 	}()
@@ -799,4 +803,15 @@ func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (common.MemberStatus, bool) 
 	}
 	bl.membersLock.RUnlock()
 	return status, true
+}
+
+func (bl *FxBlockchain) GetMembers() map[peer.ID]common.MemberStatus {
+	bl.membersLock.RLock()
+	defer bl.membersLock.RUnlock()
+
+	copy := make(map[peer.ID]common.MemberStatus)
+	for k, v := range bl.members {
+		copy[k] = v
+	}
+	return copy
 }

@@ -24,7 +24,7 @@ func main() {
 	defer cancel()
 
 	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "info"); err != nil {
+	if err := logging.SetLogLevel("*", "error"); err != nil {
 		panic(err)
 	}
 
@@ -110,32 +110,6 @@ func main() {
 	defer n3.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
 
-	// Instantiate the fourth node not in the pool
-	pid4, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	h4, err := libp2p.New(libp2p.Identity(pid4))
-	if err != nil {
-		panic(err)
-	}
-	n4, err := blox.New(
-		blox.WithPoolName("0"),
-		blox.WithTopicName("0"),
-		blox.WithHost(h4),
-		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithPingCount(5),
-	)
-	if err != nil {
-		panic(err)
-	}
-	if err := n4.Start(ctx); err != nil {
-		panic(err)
-	}
-	defer n4.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", "", h4.ID().String())
-
 	// Connect n1 to n2 and n3 so that there is a path for gossip propagation.
 	// Note that we are not connecting n2 to n3 as they should discover
 	// each other via pool's iexist announcements.
@@ -154,10 +128,6 @@ func main() {
 			len(h2.Peerstore().Peers()) == 3 &&
 			len(h3.Peerstore().Peers()) == 3 {
 			break
-		} else {
-			fmt.Printf("%s peerstore contains %d nodes:\n", h1.ID(), len(h1.Peerstore().Peers()))
-			fmt.Printf("%s peerstore contains %d nodes:\n", h2.ID(), len(h2.Peerstore().Peers()))
-			fmt.Printf("%s peerstore contains %d nodes:\n", h3.ID(), len(h3.Peerstore().Peers()))
 		}
 		select {
 		case <-ctx.Done():
@@ -185,28 +155,50 @@ func main() {
 		fmt.Printf("- %s\n", id)
 	}
 
+	// Instantiate the fourth node not in the pool
+	pid4, _, err := crypto.GenerateECDSAKeyPair(rng)
+	if err != nil {
+		panic(err)
+	}
+	h4, err := libp2p.New(libp2p.Identity(pid4))
+	if err != nil {
+		panic(err)
+	}
+	n4, err := blox.New(
+		blox.WithPoolName(poolName),
+		blox.WithTopicName(poolName),
+		blox.WithHost(h4),
+		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithPingCount(5),
+	)
+	if err != nil {
+		panic(err)
+	}
+	if err := n4.Start(ctx); err != nil {
+		panic(err)
+	}
+	defer n4.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", "", h4.ID().String())
+
 	//Manually adding h4 as it is not in the same pool
-	h1.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
+	h4.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
+	if err = h4.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()}); err != nil {
 		panic(err)
 	}
-	h2.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
+	h4.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
+	if err = h4.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
 		panic(err)
 	}
-	h3.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
+	h4.Peerstore().AddAddrs(h3.ID(), h3.Addrs(), peerstore.PermanentAddrTTL)
+	if err = h4.Connect(ctx, peer.AddrInfo{ID: h3.ID(), Addrs: h3.Addrs()}); err != nil {
 		panic(err)
 	}
 
 	// Wait until the fourth node discover others
 	for {
-		if len(h4.Peerstore().Peers()) >= 2 {
-			fmt.Println("n4 peerstore", h4.Peerstore().Peers())
-			fmt.Println("n1 peerstore", h1.Peerstore().Peers())
+		if len(h4.Peerstore().Peers()) >= 3 {
 			break
-		} else {
-			fmt.Printf("%s peerstore contains %d nodes:\n", h4.ID(), len(h4.Peerstore().Peers()))
 		}
 		select {
 		case <-ctx.Done():
@@ -222,30 +214,25 @@ func main() {
 		fmt.Printf("- %s\n", id)
 	}
 
-	if err = n4.StartPingServer(ctx); err != nil {
-		panic(err)
-	} else {
-		fmt.Print("Node 4 ping server started")
-	}
+	n4.AnnounceJoinPoolRequestPeriodically(ctx)
 
-	average, rate, err := n1.Ping(ctx, h4.ID())
-	if err != nil {
-		fmt.Println("Error occured in Ping", "err", err)
-		panic(err)
+	// Wait until the fourth node discover others
+	for {
+		members := n4.GetBlMembers()
+		if len(members) >= 2 {
+			for id, status := range members {
+				memberInfo := fmt.Sprintf("Member ID: %s, Status: %v", id.String(), status)
+				fmt.Println(memberInfo)
+			}
+			break
+		}
+		select {
+		case <-ctx.Done():
+			panic(ctx.Err())
+		default:
+			time.Sleep(3 * time.Second)
+		}
 	}
-	fmt.Printf("%s ping results average: %d, duration: %d:\n", h1.ID(), average, rate)
-
-	average, rate, err = n2.Ping(ctx, h4.ID())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%s ping results average: %d, duration: %d:\n", h2.ID(), average, rate)
-
-	average, rate, err = n3.Ping(ctx, h4.ID())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%s ping results average: %d, duration: %d:\n", h3.ID(), average, rate)
 
 	// Unordered output:
 	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
@@ -264,4 +251,11 @@ func main() {
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// Finally QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe peerstore contains 4 nodes:
+	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
+	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
+	// Member ID: , Status: 2
+	// Member ID: 12D3KooWACVcVsQh18jM9UudRQzeYEjxCJQJgFUaAgs41tayjxC4, Status: 1
 }
