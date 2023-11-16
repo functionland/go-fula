@@ -802,12 +802,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		if pid != bl.h.ID() {
 			//bl.h.Connect(ctx, peer.AddrInfo{ID: pid, Addrs: addrs})
 			log.Debugw("Connecting to other peer", "from", bl.h.ID(), "to", pid)
-			conn, err := bl.h.Network().DialPeer(ctx, pid)
-			if err == nil {
-				maddr := conn.RemoteMultiaddr()
-				log.Debugw("Connected to peer", "from", bl.h.ID(), "to", pid, "maddr", maddr)
-				conn.Close()
-			} else {
+			err := bl.h.Connect(ctx, bl.h.Peerstore().PeerInfo(pid))
+			if err != nil {
 				log.Debugw("Not Connected to peer", "from", bl.h.ID(), "to", pid, "err", err)
 			}
 

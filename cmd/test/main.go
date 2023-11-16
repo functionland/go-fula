@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -161,6 +162,28 @@ func startMockServer(addr string) *http.Server {
 	return server
 }
 
+type Config struct {
+	StaticRelays []string
+
+	// ForceReachabilityPrivate configures weather the libp2p should always think that it is behind
+	// NAT.
+	ForceReachabilityPrivate bool
+
+	// AllowTransientConnection allows transient connectivity via relay when direct connection is
+	// not possible. Defaults to enabled if unspecified.
+	AllowTransientConnection bool
+}
+
+func NewConfig() *Config {
+	return &Config{
+		StaticRelays:             []string{devRelay},
+		ForceReachabilityPrivate: true,
+		AllowTransientConnection: true,
+	}
+}
+
+const devRelay = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
+
 func main() {
 	server := startMockServer("127.0.0.1:4000")
 	defer func() {
@@ -172,6 +195,7 @@ func main() {
 
 	const poolName = "1"
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	//ctx = network.WithUseTransient(ctx, "fx.exchange")
 	defer cancel()
 
 	// Elevate log level to show internal communications.
@@ -182,34 +206,36 @@ func main() {
 	// Use a deterministic random generator to generate deterministic
 	// output for the example.
 	rng := rand.New(rand.NewSource(42))
+	cfg := NewConfig()
 
-	relays := []string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}
-	var addrInfos []peer.AddrInfo
-	for _, relay := range relays {
-		// Parse the multiaddr
-		ma, err := multiaddr.NewMultiaddr(relay)
-		if err != nil {
-			fmt.Println("Error parsing multiaddr:", err)
-			continue
-		}
-
-		// Extract the peer ID
-		addrInfo, err := peer.AddrInfoFromP2pAddr(ma)
-		if err != nil {
-			fmt.Println("Error extracting peer ID:", err)
-			continue
-		}
-		if addrInfo != nil {
-			addrInfos = append(addrInfos, *addrInfo)
-		}
+	hopts := []libp2p.Option{
+		libp2p.EnableNATService(),
+		libp2p.NATPortMap(),
+		libp2p.EnableRelay(),
+		libp2p.EnableHolePunching(),
 	}
+	sr := make([]peer.AddrInfo, 0, len(cfg.StaticRelays))
+	for _, relay := range cfg.StaticRelays {
+		rma, err := multiaddr.NewMultiaddr(relay)
+		if err != nil {
+			fmt.Println(err)
+		}
+		rai, err := peer.AddrInfoFromP2pAddr(rma)
+		if err != nil {
+			fmt.Println(err)
+		}
+		sr = append(sr, *rai)
+	}
+	libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1))
+	hopts = append(hopts, libp2p.ForceReachabilityPrivate())
 
 	// Instantiate the first node in the pool
 	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
 	if err != nil {
 		panic(err)
 	}
-	h1, err := libp2p.New(libp2p.Identity(pid1), libp2p.EnableRelay(), libp2p.EnableNATService(), libp2p.EnableHolePunching(), libp2p.EnableAutoRelayWithStaticRelays(addrInfos))
+	hopts1 := append(hopts, libp2p.Identity(pid1))
+	h1, err := libp2p.New(hopts1...)
 	if err != nil {
 		panic(err)
 	}
@@ -218,7 +244,7 @@ func main() {
 		blox.WithTopicName(poolName),
 		blox.WithHost(h1),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
 	)
 	if err != nil {
@@ -235,7 +261,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	h2, err := libp2p.New(libp2p.Identity(pid2), libp2p.EnableRelay(), libp2p.EnableNATService(), libp2p.EnableHolePunching(), libp2p.EnableAutoRelayWithStaticRelays(addrInfos))
+	hopts2 := append(hopts, libp2p.Identity(pid2))
+	h2, err := libp2p.New(hopts2...)
 	if err != nil {
 		panic(err)
 	}
@@ -261,7 +288,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	h3, err := libp2p.New(libp2p.Identity(pid3), libp2p.EnableRelay(), libp2p.EnableNATService(), libp2p.EnableHolePunching(), libp2p.EnableAutoRelayWithStaticRelays(addrInfos))
+	hopts3 := append(hopts, libp2p.Identity(pid3))
+	h3, err := libp2p.New(hopts3...)
 	if err != nil {
 		panic(err)
 	}
@@ -270,7 +298,7 @@ func main() {
 		blox.WithTopicName(poolName),
 		blox.WithHost(h3),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
 	)
 	if err != nil {
@@ -323,7 +351,8 @@ func main() {
 		panic(err)
 	}
 	log.Debug("Now creating host of n4")
-	h4, err := libp2p.New(libp2p.Identity(pid4))
+	hopts4 := append(hopts, libp2p.Identity(pid4))
+	h4, err := libp2p.New(hopts4...)
 	if err != nil {
 		log.Errorw("An error happened in creating libp2p  instance of n4", "Err", err)
 		panic(err)
@@ -334,7 +363,7 @@ func main() {
 		blox.WithTopicName(poolName),
 		blox.WithHost(h4),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
 	)
 	if err != nil {
