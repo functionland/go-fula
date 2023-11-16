@@ -71,7 +71,7 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 
 	gr := pubsub.DefaultGossipSubRouter(an.h)
 
-	var addrInfos []peer.AddrInfo
+	/*var addrInfos []peer.AddrInfo
 	for _, relay := range an.relays {
 		// Parse the multiaddr
 		ma, err := multiaddr.NewMultiaddr(relay)
@@ -89,7 +89,7 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 		if addrInfo != nil {
 			addrInfos = append(addrInfos, *addrInfo)
 		}
-	}
+	}*/
 
 	gsub, err := pubsub.NewGossipSubWithRouter(ctx, an.h, gr,
 		pubsub.WithPeerExchange(true),
