@@ -71,7 +71,9 @@ func New(o ...Option) (*Blox, error) {
 		announcements.WithAnnounceInterval(5),
 		announcements.WithTimeout(3),
 		announcements.WithTopicName(p.topicName),
-		announcements.WithWg(&p.wg))
+		announcements.WithWg(&p.wg),
+		announcements.WithRelays(p.relays),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +82,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.NewSimpleKeyStorer(""),
 		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithAuthorizedPeers(authorizedPeers),
-		//blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
-		blockchain.WithBlockchainEndPoint("api.node3.functionyard.fula.network"),
+		blockchain.WithBlockchainEndPoint(p.blockchainEndpoint),
 		blockchain.WithTimeout(30),
 		blockchain.WithWg(&p.wg),
 		blockchain.WithFetchFrequency(3),

@@ -59,8 +59,8 @@ func NewFxAnnouncements(h host.Host, o ...Option) (*FxAnnouncements, error) {
 }
 
 func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator) error {
-	if an.topicName == "" {
-		log.Warn("Announcement do not have any topic to subscribe to")
+	if an.topicName == "" || an.topicName == "0" {
+		log.Warnw("Announcement do not have any topic to subscribe to", "on peer", an.h.ID())
 		return errors.New("Announcement do not have any topic to subscribe to")
 	}
 	typeSystem, err := ipld.LoadSchemaBytes(schemaBytes)
@@ -69,41 +69,68 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 	}
 	PubSubPrototypes.Announcement = bindnode.Prototype((*Announcement)(nil), typeSystem.TypeByName("Announcement"))
 
-	gsub, err := pubsub.NewGossipSub(ctx, an.h,
+	gr := pubsub.DefaultGossipSubRouter(an.h)
+
+	var addrInfos []peer.AddrInfo
+	for _, relay := range an.relays {
+		// Parse the multiaddr
+		ma, err := multiaddr.NewMultiaddr(relay)
+		if err != nil {
+			fmt.Println("Error parsing multiaddr:", err)
+			continue
+		}
+
+		// Extract the peer ID
+		addrInfo, err := peer.AddrInfoFromP2pAddr(ma)
+		if err != nil {
+			fmt.Println("Error extracting peer ID:", err)
+			continue
+		}
+		if addrInfo != nil {
+			addrInfos = append(addrInfos, *addrInfo)
+		}
+	}
+
+	gsub, err := pubsub.NewGossipSubWithRouter(ctx, an.h, gr,
 		pubsub.WithPeerExchange(true),
 		pubsub.WithFloodPublish(true),
 		pubsub.WithMessageSigning(true),
 		pubsub.WithDefaultValidator(validator),
 	)
+
 	if err != nil {
+		log.Errorw("Error happened while creating pubsub", "peer", an.h.ID())
 		return err
 	}
 
+	log.Debugw("Created topic", "on peer", an.h.ID(), "topic", an.topicName)
 	an.topic, err = gsub.Join(an.topicName)
 	if err != nil {
+		log.Errorw("Error happened while joining the topic", "peer", an.h.ID())
 		return err
 	}
 	an.sub, err = an.topic.Subscribe()
 	if err != nil {
+		log.Errorw("Error happened while subscribing the topic", "peer", an.h.ID())
 		return err
 	}
 	return nil
 }
 
 func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID, atype AnnouncementType, addrs []multiaddr.Multiaddr, topicString string) error {
-	log.Info("processing announcement")
+	log.Infow("processing announcement", "on", an.h.ID(), "from", from)
 	switch atype {
 	case IExistAnnouncementType:
-		log.Info("IExist request")
+		log.Info("IExist request", "on", an.h.ID(), "from", from)
 		an.h.Peerstore().AddAddrs(from, addrs, peerstore.ConnectedAddrTTL)
 	case PoolJoinRequestAnnouncementType:
-		log.Info("PoolJoin request")
+		log.Info("PoolJoin request", "on", an.h.ID(), "from", from)
 		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, topicString, true); err != nil {
-			log.Errorw("An error occurred in handling pool join request announcement", err)
+			log.Errorw("An error occurred in handling pool join request announcement", "on", an.h.ID(), "from", from, err)
 			return err
 		}
 	default:
-		log.Info("Unknown request")
+		log.Info("Unknown request", "on", an.h.ID(), "from", from)
 	}
 	return nil
 }
@@ -203,13 +230,15 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 }
 
 func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
-	log.Debug("called wg.Done in AnnounceJoinPoolRequestPeriodically")
-	log.Debug("Starting AnnounceJoinPoolRequestPeriodically")
+	log.Debugw("called wg.Done in AnnounceJoinPoolRequestPeriodically pool join request", "peer", an.h.ID())
+	log.Debugw("Starting AnnounceJoinPoolRequestPeriodically pool join request", "peer", an.h.ID())
+	log.Debugw("peerlist before AnnounceJoinPoolRequestPeriodically pool join request", "on", an.h.ID(), "peerlist", an.topic.ListPeers())
+
 	defer an.wg.Done()
 	an.announcingJoinPoolMutex.Lock()
 	if an.announcingJoinPoolRequest {
 		an.announcingJoinPoolMutex.Unlock()
-		log.Info("Join pool request announcements are already in progress.")
+		log.Info("pool join request announcements are already in progress.", "peer", an.h.ID())
 		return
 	}
 	an.announcingJoinPoolRequest = true
@@ -221,12 +250,13 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 	}()
 	ticker := time.NewTicker(an.announceInterval)
 	for {
+		log.Debugw("inside ticker for join pool request", "peer", an.h.ID())
 		select {
 		case <-ctx.Done():
-			log.Info("stopped making periodic announcements")
+			log.Info("stopped making periodic pool join request announcements", "peer", an.h.ID())
 			return
 		case <-an.stopJoinPoolRequestChan: // Assume an.stopChan is a `chan struct{}` used to signal stopping the ticker.
-			log.Info("stopped making periodic joinpoolrequest announcements due to stop signal")
+			log.Info("stopped making periodic pool join request announcements due to stop signal", "peer", an.h.ID())
 			return
 		case t := <-ticker.C:
 			a := &Announcement{
@@ -236,19 +266,20 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 			a.SetAddrs(an.h.Addrs()...)
 			b, err := a.MarshalBinary()
 			if err != nil {
-				log.Errorw("failed to encode pool join request announcement", "err", err)
+				log.Errorw("failed to encode pool join request announcement", "peer", an.h.ID(), "err", err)
 				continue
 			}
+			log.Debugw("inside ticker for join pool request now publishing", "peer", an.h.ID())
 			if err := an.topic.Publish(ctx, b); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					log.Info("stopped making periodic announcements")
+					log.Info("stopped making periodic pool join request announcements", "peer", an.h.ID(), "err", err)
 					return
 				}
 				if errors.Is(err, pubsub.ErrTopicClosed) || errors.Is(err, pubsub.ErrSubscriptionCancelled) {
-					log.Info("stopped making periodic iexist announcements as topic is closed or subscription cancelled")
+					log.Info("stopped making periodic pool join request announcements as topic is closed or subscription cancelled", "peer", an.h.ID(), "err", err)
 					return
 				}
-				log.Errorw("failed to publish pool join request announcement", "err", err)
+				log.Errorw("failed to publish pool join request announcement", "peer", an.h.ID(), "err", err)
 				continue
 			}
 			log.Debugw("announced pool join request message", "from", an.h.ID(), "announcement", a, "time", t)
@@ -257,36 +288,36 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 }
 
 func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message, status common.MemberStatus, exists bool) bool {
-	log.Debug("ValidateAnnouncement")
+	log.Debugw("ValidateAnnouncement", "on peer", an.h.ID(), "from peerID", id)
 	a := &Announcement{}
 	if err := a.UnmarshalBinary(msg.Data); err != nil {
 		log.Errorw("failed to unmarshal announcement data", "err", err)
 		return false
 	}
-	log.Debugw("ValidateAnnouncement", "peerID", id, "type", a.Type)
+	log.Debugw("ValidateAnnouncement", "on peer", an.h.ID(), "from peerID", id, "type", a.Type)
 
 	switch a.Type {
 	case NewManifestAnnouncementType:
 		// Check if sender is approved
 		if !exists {
-			log.Errorw("peer is not recognized", "peer", id)
+			log.Debugw("peer is not recognized", "on peer", an.h.ID(), "from peer", id)
 			return false
 		}
 		if status != common.Approved {
-			log.Errorw("peer is not an approved member", "peer", id)
+			log.Debugw("peer is not an approved member", "on peer", an.h.ID(), "from peer", id)
 			return false
 		}
 	case PoolJoinRequestAnnouncementType:
-		if status != common.Unknown {
-			log.Errorw("peer is no longer permitted to send this message type", "peer", id)
+		if status == common.Unknown {
+			log.Debugw("peer is no longer permitted to send this message type", "on peer", an.h.ID(), "from peer", id, "status", status)
 			return false
 		} else {
-			log.Debugw("PoolJoinRequestAnnouncementType status is Unknown and ok")
+			log.Debugw("PoolJoinRequestAnnouncementType status is not Unknown and ok")
 		}
 	case PoolJoinApproveAnnouncementType, IExistAnnouncementType:
 		// Any member status is valid for a pool join announcement
 	default:
-		log.Errorw("The Type is not set ", a.Type)
+		log.Debugw("The Type is not set ", a.Type)
 		return false
 	}
 
@@ -304,6 +335,7 @@ func (an *FxAnnouncements) StopJoinPoolRequestAnnouncements() {
 }
 
 func (an *FxAnnouncements) Shutdown(ctx context.Context) error {
+	log.Debugw("closed topic", "peer", an.h.ID())
 	an.sub.Cancel()
 	tErr := an.topic.Close()
 	return tErr

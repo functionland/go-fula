@@ -21,19 +21,20 @@ type (
 	Option          func(*options) error
 	PoolNameUpdater func(string) error
 	options         struct {
-		h                host.Host
-		name             string
-		topicName        string
-		storeDir         string
-		announceInterval time.Duration
-		ds               datastore.Batching
-		ls               *ipld.LinkSystem
-		authorizer       peer.ID
-		authorizedPeers  []peer.ID
-		exchangeOpts     []exchange.Option
-		relays           []string
-		updatePoolName   PoolNameUpdater
-		pingCount        int
+		h                  host.Host
+		name               string
+		topicName          string
+		storeDir           string
+		announceInterval   time.Duration
+		ds                 datastore.Batching
+		ls                 *ipld.LinkSystem
+		authorizer         peer.ID
+		authorizedPeers    []peer.ID
+		exchangeOpts       []exchange.Option
+		relays             []string
+		updatePoolName     PoolNameUpdater
+		pingCount          int
+		blockchainEndpoint string
 	}
 )
 
@@ -178,6 +179,16 @@ func WithUpdatePoolName(updatePoolName PoolNameUpdater) Option {
 func WithPingCount(pc int) Option {
 	return func(o *options) error {
 		o.pingCount = pc
+		return nil
+	}
+}
+
+func WithBlockchainEndPoint(b string) Option {
+	return func(o *options) error {
+		if b == "" {
+			b = "127.0.0.1:4000"
+		}
+		o.blockchainEndpoint = b
 		return nil
 	}
 }

@@ -37,11 +37,12 @@ var (
 	logger = logging.Logger("fula/cmd/blox")
 	app    struct {
 		cli.App
-		initOnly        bool
-		generateNodeKey bool
-		wireless        bool
-		configPath      string
-		config          struct {
+		initOnly           bool
+		blockchainEndpoint string
+		generateNodeKey    bool
+		wireless           bool
+		configPath         string
+		config             struct {
 			Identity                  string        `yaml:"identity"`
 			StoreDir                  string        `yaml:"storeDir"`
 			PoolName                  string        `yaml:"poolName"`
@@ -161,6 +162,12 @@ func init() {
 				Name:        "generateNodeKey",
 				Usage:       "Generate node key from identity",
 				Destination: &app.generateNodeKey,
+			},
+			&cli.StringFlag{
+				Name:        "blockchainEndpoint",
+				Usage:       "Change the blockchain APIs endpoint",
+				Destination: &app.blockchainEndpoint,
+				Value:       "127.0.0.1:4000",
 			},
 		},
 		Before:    before,
@@ -467,6 +474,7 @@ func action(ctx *cli.Context) error {
 		blox.WithStoreDir(app.config.StoreDir),
 		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
 		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
