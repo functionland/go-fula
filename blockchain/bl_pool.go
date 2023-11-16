@@ -442,7 +442,7 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		}
 
 		// Handle the response as needed
-		log.Infow("Vote cast successfully", "response", voteResponse)
+		log.Infow("Vote cast successfully", "response", voteResponse, "on", from, "by", bl.h.ID())
 		// Update member status to unknown
 		bl.membersLock.Lock() // Lock before accessing the map
 		bl.members[from] = common.Unknown
