@@ -430,14 +430,14 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		}
 
 		// Call PoolVote method
-		responseBytes, err := bl.PoolVote(ctx, bl.h.ID(), voteRequest)
+		responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolVote, voteRequest)
 		if err != nil {
-			return fmt.Errorf("failed to cast vote: %w", err)
+			return err
 		}
 
 		// Interpret the response
 		var voteResponse PoolVoteResponse
-		if err := json.Unmarshal(responseBytes, &voteResponse); err != nil {
+		if err := json.Unmarshal(responseBody, &voteResponse); err != nil {
 			return fmt.Errorf("failed to unmarshal vote response: %w", err)
 		}
 

@@ -786,7 +786,9 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 
 			// Loop through the static relays and convert them to multiaddr
 			for _, relay := range bl.relays {
-				ma, err := multiaddr.NewMultiaddr(relay + "/p2p-circuit/p2p/" + pid.String())
+				fullAddr := relay + "/p2p-circuit/p2p/" + pid.String()
+				log.Debugw("full relay address", "peer", bl.h.ID(), "for", pid, "fullAddr", fullAddr)
+				ma, err := multiaddr.NewMultiaddr(fullAddr)
 				if err != nil {
 					bl.membersLock.Unlock()
 					return err
@@ -797,12 +799,13 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			// Add the relay addresses to the peerstore for the peer ID
 
 			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
-			log.Debugw("Added peer to peerstore", "h.ID", bl.h.ID(), "pid", pid)
+			log.Debugw("Added peer to peerstore", "h.ID", bl.h.ID(), "pid", pid, "addrs", addrs)
 		}
 		if pid != bl.h.ID() {
 			//bl.h.Connect(ctx, peer.AddrInfo{ID: pid, Addrs: addrs})
-			log.Debugw("Connecting to other peer", "from", bl.h.ID(), "to", pid)
-			err := bl.h.Connect(ctx, bl.h.Peerstore().PeerInfo(pid))
+			peerAddr := bl.h.Peerstore().PeerInfo(pid)
+			log.Debugw("Connecting to other peer", "from", bl.h.ID(), "to", pid, "with address", peerAddr)
+			err := bl.h.Connect(ctx, peerAddr)
 			if err != nil {
 				log.Debugw("Not Connected to peer", "from", bl.h.ID(), "to", pid, "err", err)
 			}
