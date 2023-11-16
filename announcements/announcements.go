@@ -76,14 +76,14 @@ func (an *FxAnnouncements) Start(ctx context.Context, validator pubsub.Validator
 		// Parse the multiaddr
 		ma, err := multiaddr.NewMultiaddr(relay)
 		if err != nil {
-			fmt.Println("Error parsing multiaddr:", err)
+			log.Warnln("Error parsing multiaddr:", err)
 			continue
 		}
 
 		// Extract the peer ID
 		addrInfo, err := peer.AddrInfoFromP2pAddr(ma)
 		if err != nil {
-			fmt.Println("Error extracting peer ID:", err)
+			log.Warnln("Error extracting peer ID:", err)
 			continue
 		}
 		if addrInfo != nil {
