@@ -177,6 +177,10 @@ type Config struct {
 	AllowTransientConnection bool
 }
 
+//const devRelay = "/dns/relay2.functionyard.fula.network/tcp/4001/p2p/12D3KooW9rygvHzDeciGf1DmPLfnNWb9GDPAzuvLydUdxizCsNay"
+
+const devRelay = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
+
 func NewConfig() *Config {
 	return &Config{
 		StaticRelays:             []string{devRelay},
@@ -184,8 +188,6 @@ func NewConfig() *Config {
 		AllowTransientConnection: true,
 	}
 }
-
-const devRelay = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
 
 func main() {
 	server := startMockServer("127.0.0.1:4000")
@@ -202,7 +204,7 @@ func main() {
 	defer cancel()
 
 	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "debug"); err != nil {
+	if err := logging.SetLogLevel("*", "info"); err != nil {
 		panic(err)
 	}
 
@@ -242,6 +244,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	n1, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
@@ -249,6 +252,8 @@ func main() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
+		blox.WithMaxPingTime(10),
+		blox.WithMinSuccessPingRate(60),
 	)
 	if err != nil {
 		panic(err)
@@ -269,13 +274,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	n2, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
 		blox.WithHost(h2),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
+		blox.WithMaxPingTime(10),
+		blox.WithMinSuccessPingRate(60),
 	)
 	if err != nil {
 		panic(err)
@@ -296,6 +304,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	n3, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
@@ -303,6 +312,8 @@ func main() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
+		blox.WithMaxPingTime(10),
+		blox.WithMinSuccessPingRate(60),
 	)
 	if err != nil {
 		panic(err)
@@ -313,12 +324,21 @@ func main() {
 	defer n3.Shutdown(ctx)
 	fmt.Printf("n3 Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
 
+	if err = h1.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
+		panic(err)
+	}
+	if err = h1.Connect(ctx, peer.AddrInfo{ID: h3.ID(), Addrs: h3.Addrs()}); err != nil {
+		panic(err)
+	}
+
 	// Wait until the nodes discover each other
 	for {
-		if len(h1.Peerstore().Peers()) >= 3 &&
-			len(h2.Peerstore().Peers()) >= 3 &&
-			len(h3.Peerstore().Peers()) >= 3 {
+		if len(h1.Peerstore().Peers()) == 4 &&
+			len(h2.Peerstore().Peers()) == 4 &&
+			len(h3.Peerstore().Peers()) == 4 {
 			break
+		} else {
+			fmt.Printf("n1 Finally %s peerstore contains %d nodes:\n", h1.ID(), len(h1.Peerstore().Peers()))
 		}
 		select {
 		case <-ctx.Done():
@@ -368,6 +388,8 @@ func main() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
+		blox.WithMaxPingTime(10),
+		blox.WithMinSuccessPingRate(60),
 	)
 	if err != nil {
 		log.Errorw("An error happened in creating blox instance of n4", "Err", err)
@@ -381,21 +403,15 @@ func main() {
 	defer n4.Shutdown(ctx)
 	fmt.Printf("n4 Instantiated node in pool %s with ID: %s\n", poolName, h4.ID().String())
 
-	h4Peers := h4.Peerstore().Peers()
-	fmt.Printf("n4 Finally %s peerstore contains %d nodes:\n", h4.ID(), len(h4Peers))
-	for _, id := range h4Peers {
-		fmt.Printf("- %s\n", id)
-	}
-
 	n4.AnnounceJoinPoolRequestPeriodically(ctx)
 
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
-		panic(err)
-	}
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h3.ID(), Addrs: h3.Addrs()}); err != nil {
-		panic(err)
-	}
 	if err = h1.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
+		panic(err)
+	}
+	if err = h2.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
+		panic(err)
+	}
+	if err = h3.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
 		panic(err)
 	}
 
@@ -409,16 +425,24 @@ func main() {
 		}
 		if len(members) >= 2 {
 			break
+		} else {
+			fmt.Println(members)
 		}
 		select {
 		case <-ctx.Done():
 			panic(ctx.Err())
 		default:
-			time.Sleep(3 * time.Second)
+			time.Sleep(2 * time.Second)
 		}
 	}
 
-	//wait for 30 seconds
+	h4Peers := h4.Peerstore().Peers()
+	fmt.Printf("n4 Finally %s peerstore contains %d nodes:\n", h4.ID(), len(h4Peers))
+	for _, id := range h4Peers {
+		fmt.Printf("- %s\n", id)
+	}
+
+	//wait for 60 seconds
 	count := 1
 	for {
 		count = count + 1
@@ -432,34 +456,37 @@ func main() {
 			time.Sleep(1 * time.Second)
 		}
 	}
-	panic("end")
 
 	// Unordered output:
-	//Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// Finally QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT peerstore contains 3 nodes:
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// n1 Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// n2 Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
+	// n3 Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// n1 Finally QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT peerstore contains 4 nodes:
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Finally QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF peerstore contains 3 nodes:
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// Finally QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA peerstore contains 3 nodes:
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// n2 Finally QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF peerstore contains 4 nodes:
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Instantiated node in pool 1 with ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// Finally QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe peerstore contains 4 nodes:
+	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// n3 Finally QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA peerstore contains 4 nodes:
+	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
+	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
+	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// n4 Instantiated node in pool 1 with ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
+	// n4 Finally QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe peerstore contains 5 nodes:
 	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
+	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// - 12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835
 	// Member ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe, Status: 1
 	// Member ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA, Status: 2
 	// Member ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT, Status: 2
-	//Member ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF, Status: 2
+	// Member ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF, Status: 2
 	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
 	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
 	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}

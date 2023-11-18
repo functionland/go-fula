@@ -808,6 +808,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			err := bl.h.Connect(ctx, peerAddr)
 			if err != nil {
 				log.Debugw("Not Connected to peer", "from", bl.h.ID(), "to", pid, "err", err)
+			} else {
+				log.Debugw("OK Connected to peer", "from", bl.h.ID(), "to", pid)
 			}
 
 		}

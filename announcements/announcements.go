@@ -336,9 +336,13 @@ func (an *FxAnnouncements) StopJoinPoolRequestAnnouncements() {
 
 func (an *FxAnnouncements) Shutdown(ctx context.Context) error {
 	log.Debugw("closed topic", "peer", an.h.ID())
-	an.sub.Cancel()
-	tErr := an.topic.Close()
-	return tErr
+	if an.sub != nil {
+		an.sub.Cancel()
+		tErr := an.topic.Close()
+		return tErr
+	}
+	log.Debug("Announcements are already closed")
+	return nil
 }
 
 // In the announcements package, add this to your concrete type that implements the Announcements interface.

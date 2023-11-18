@@ -88,7 +88,10 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithFetchFrequency(3),
 		blockchain.WithTopicName(p.topicName),
 		blockchain.WithUpdatePoolName(p.updatePoolName),
-		blockchain.WithRelays(p.relays))
+		blockchain.WithRelays(p.relays),
+		blockchain.WithMaxPingTime(p.maxPingTime),
+		blockchain.WithMinSuccessPingCount(p.minSuccessRate*p.pingCount/100),
+	)
 	if err != nil {
 		return nil, err
 	}

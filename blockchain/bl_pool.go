@@ -411,7 +411,7 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 			log.Errorw("An error occurred in ping", err)
 			return err
 		}
-		vote := averageDuration <= bl.maxPingTime && successCount >= bl.minPingSuccessRate
+		vote := averageDuration <= bl.maxPingTime && successCount >= bl.minPingSuccessCount
 
 		log.Debugw("Ping result", "averageDuration", averageDuration, "successCount", successCount, "vote", vote)
 

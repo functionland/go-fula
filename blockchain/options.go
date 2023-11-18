@@ -16,7 +16,7 @@ type (
 		blockchainEndPoint       string
 		timeout                  int
 		wg                       *sync.WaitGroup
-		minPingSuccessRate       int
+		minPingSuccessCount      int
 		maxPingTime              int
 		topicName                string
 		relays                   []string
@@ -80,14 +80,14 @@ func WithWg(wg *sync.WaitGroup) Option {
 	}
 }
 
-func WithSuccessPingRate(sr int) Option {
+func WithMinSuccessPingCount(sr int) Option {
 	return func(o *options) error {
-		o.minPingSuccessRate = sr
+		o.minPingSuccessCount = sr
 		return nil
 	}
 }
 
-func WithMaxPingRate(t int) Option {
+func WithMaxPingTime(t int) Option {
 	return func(o *options) error {
 		o.maxPingTime = t
 		return nil

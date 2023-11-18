@@ -34,6 +34,8 @@ type (
 		relays             []string
 		updatePoolName     PoolNameUpdater
 		pingCount          int
+		maxPingTime        int
+		minSuccessRate     int
 		blockchainEndpoint string
 	}
 )
@@ -179,6 +181,20 @@ func WithUpdatePoolName(updatePoolName PoolNameUpdater) Option {
 func WithPingCount(pc int) Option {
 	return func(o *options) error {
 		o.pingCount = pc
+		return nil
+	}
+}
+
+func WithMaxPingTime(pt int) Option {
+	return func(o *options) error {
+		o.maxPingTime = pt
+		return nil
+	}
+}
+
+func WithMinSuccessPingRate(sr int) Option {
+	return func(o *options) error {
+		o.minSuccessRate = sr
 		return nil
 	}
 }
