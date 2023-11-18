@@ -1166,8 +1166,8 @@ func Example_blserver() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
-		blox.WithMaxPingTime(10),
-		blox.WithMinSuccessPingRate(60),
+		blox.WithMaxPingTime(100),
+		blox.WithMinSuccessPingRate(80),
 	)
 	if err != nil {
 		panic(err)
@@ -1196,8 +1196,8 @@ func Example_blserver() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
-		blox.WithMaxPingTime(10),
-		blox.WithMinSuccessPingRate(60),
+		blox.WithMaxPingTime(100),
+		blox.WithMinSuccessPingRate(80),
 	)
 	if err != nil {
 		panic(err)
@@ -1226,8 +1226,8 @@ func Example_blserver() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
-		blox.WithMaxPingTime(10),
-		blox.WithMinSuccessPingRate(60),
+		blox.WithMaxPingTime(100),
+		blox.WithMinSuccessPingRate(80),
 	)
 	if err != nil {
 		panic(err)
@@ -1302,8 +1302,8 @@ func Example_blserver() {
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{devRelay}),
 		blox.WithPingCount(5),
-		blox.WithMaxPingTime(10),
-		blox.WithMinSuccessPingRate(60),
+		blox.WithMaxPingTime(100),
+		blox.WithMinSuccessPingRate(80),
 	)
 	if err != nil {
 		log.Errorw("An error happened in creating blox instance of n4", "Err", err)
