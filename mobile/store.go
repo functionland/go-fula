@@ -11,6 +11,7 @@ import (
 )
 
 var failedPushKeyPrefix = datastore.NewKey("/failed-push")
+var recentCidKeyPrefix = datastore.NewKey("/recent-cid")
 
 func (c *Client) markAsFailedPush(ctx context.Context, l ipld.Link) error {
 	k := failedPushKeyPrefix.ChildString(l.String())
@@ -74,6 +75,72 @@ func (c *Client) listFailedPushesAsString(ctx context.Context) ([]string, error)
 			return nil, err
 		}
 		links = append(links, c.String())
+	}
+	return links, nil
+}
+
+func (c *Client) markAsRecentCid(ctx context.Context, l ipld.Link) error {
+	k := recentCidKeyPrefix.ChildString(l.String())
+	return c.ds.Put(ctx, k, nil)
+}
+
+func (c *Client) clearRecentCid(ctx context.Context, l ipld.Link) error {
+	k := recentCidKeyPrefix.ChildString(l.String())
+	return c.ds.Delete(ctx, k)
+}
+
+func (c *Client) listRecentCidsAsString(ctx context.Context) ([]string, error) {
+	q := query.Query{
+		KeysOnly: true,
+		Prefix:   recentCidKeyPrefix.String(),
+	}
+	results, err := c.ds.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer results.Close()
+	var links []string
+	for r := range results.Next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if r.Error != nil {
+			return nil, r.Error
+		}
+		key := datastore.RawKey(r.Key)
+		c, err := cid.Decode(key.BaseNamespace())
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, c.String())
+	}
+	return links, nil
+}
+
+func (c *Client) listRecentCids(ctx context.Context) ([]ipld.Link, error) {
+	q := query.Query{
+		KeysOnly: true,
+		Prefix:   recentCidKeyPrefix.String(),
+	}
+	results, err := c.ds.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer results.Close()
+	var links []ipld.Link
+	for r := range results.Next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if r.Error != nil {
+			return nil, r.Error
+		}
+		key := datastore.RawKey(r.Key)
+		c, err := cid.Decode(key.BaseNamespace())
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, cidlink.Link{Cid: c})
 	}
 	return links, nil
 }

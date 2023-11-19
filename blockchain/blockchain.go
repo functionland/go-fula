@@ -147,6 +147,7 @@ func (bl *FxBlockchain) startFetchCheck() {
 	go func() {
 		log.Debug("called wg.Done in startFetchCheck ticker")
 		defer bl.wg.Done() // Decrement the counter when the goroutine completes
+		defer log.Debug("startFetchCheck go routine is ending")
 
 		for {
 			select {
@@ -174,6 +175,7 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 	go func() {
 		log.Debug("called wg.Done in Start blockchain")
 		defer bl.wg.Done()
+		defer log.Debug("Start blockchain go routine is ending")
 		bl.s.Serve(listen)
 	}()
 	return nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net/http"
 	"path"
 	"time"
 
@@ -37,6 +38,7 @@ type (
 		maxPingTime        int
 		minSuccessRate     int
 		blockchainEndpoint string
+		IPFShttpServer     *http.Server
 	}
 )
 

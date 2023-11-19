@@ -136,58 +136,64 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 }
 
 func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
-	log.Debug("called wg.Done in HandleAnnouncements")
+	log.Debug("Starting to handle announcements")
+	log.Debug("called wg.Done in handle announcements")
 	defer an.wg.Done()
+	defer log.Debug("HandleAnnouncements go routine is ending")
+
 	for {
-		msg, err := an.sub.Next(ctx)
-		if msg != nil {
-			log.Debugw("HandleAnnouncements", "msg.Topic", msg.Topic)
+		select {
+		case <-ctx.Done():
+			log.Info("Context cancelled, stopping handle announcements")
+			return
+		default:
+			// Directly retrieve the next message
+			msg, err := an.sub.Next(ctx)
 			if err != nil {
-				log.Debugw("HandleAnnouncements Error", err)
-			}
-			switch {
-			case ctx.Err() != nil || err == pubsub.ErrSubscriptionCancelled || err == pubsub.ErrTopicClosed:
-				log.Info("stopped handling announcements")
-				return
-			case err != nil:
-				log.Errorw("failed to get the next announcement", "err", err)
-				continue
-			}
-			from, err := peer.IDFromBytes(msg.From)
-			if err != nil {
-				log.Errorw("failed to decode announcement sender", "err", err)
-				continue
-			}
-			if from == an.h.ID() {
-				log.Debug("ignoring announcement from self")
-				continue
-			}
-			a := &Announcement{}
-			if err = a.UnmarshalBinary(msg.Data); err != nil {
-				log.Errorw("failed to decode announcement data", "err", err)
-				continue
+				if err == pubsub.ErrSubscriptionCancelled || err == pubsub.ErrTopicClosed {
+					log.Info("Subscription cancelled or topic closed, stopping handle announcements")
+				} else {
+					log.Errorw("Error while getting next announcement", "err", err)
+				}
+				return // Exit the loop in case of error
 			}
 
-			addrs, err := a.GetAddrs()
-			if err != nil {
-				log.Errorw("failed to decode announcement addrs", "err", err)
-				continue
-			}
-
-			log.Debugw("received announcement", "from", from, "self", an.h.ID(), "announcement", a)
-			log.Debug("processAnnouncement call")
-			if msg.Topic != nil {
-				err = an.processAnnouncement(ctx, from, a.Type, addrs, *msg.Topic)
+			// Process the message
+			if msg != nil {
+				from, err := peer.IDFromBytes(msg.From)
 				if err != nil {
-					log.Errorw("failed to process announcement", "err", err)
+					log.Errorw("Failed to decode announcement sender", "err", err)
 					continue
 				}
-			} else {
-				log.Debug("Topic is nil")
-				continue
+				if from == an.h.ID() {
+					log.Debug("Ignoring announcement from self")
+					continue
+				}
+				a := &Announcement{}
+				if err = a.UnmarshalBinary(msg.Data); err != nil {
+					log.Errorw("Failed to decode announcement data", "err", err)
+					continue
+				}
+
+				addrs, err := a.GetAddrs()
+				if err != nil {
+					log.Errorw("Failed to decode announcement addrs", "err", err)
+					continue
+				}
+
+				log.Debugw("Received announcement", "from", from, "self", an.h.ID(), "announcement", a)
+				log.Debug("processAnnouncement call")
+				if msg.Topic != nil {
+					err = an.processAnnouncement(ctx, from, a.Type, addrs, *msg.Topic)
+					if err != nil {
+						log.Errorw("failed to process announcement", "err", err)
+						continue
+					}
+				} else {
+					log.Debug("Topic is nil")
+					continue
+				}
 			}
-		} else {
-			continue
 		}
 	}
 }
@@ -195,11 +201,15 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 	log.Debug("called wg.Done in AnnounceIExistPeriodically")
 	defer an.wg.Done()
+	defer log.Debug("AnnounceIExistPeriodically go routine is ending")
+
 	ticker := time.NewTicker(an.announceInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("stopped making periodic iexist announcements")
+			log.Info("Context cancelled, stopped making periodic iexist announcements")
 			return
 		case t := <-ticker.C:
 			a := &Announcement{
@@ -209,32 +219,33 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 			a.SetAddrs(an.h.Addrs()...)
 			b, err := a.MarshalBinary()
 			if err != nil {
-				log.Errorw("failed to encode iexist announcement", "err", err)
+				log.Errorw("Failed to encode iexist announcement", "err", err)
 				continue
 			}
 			if err := an.topic.Publish(ctx, b); err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					log.Info("stopped making periodic iexist announcements")
+					log.Info("Context cancelled or deadline exceeded, stopped making periodic iexist announcements")
 					return
 				}
 				if errors.Is(err, pubsub.ErrTopicClosed) || errors.Is(err, pubsub.ErrSubscriptionCancelled) {
-					log.Info("stopped making periodic iexist announcements as topic is closed or subscription cancelled")
+					log.Info("Topic closed or subscription cancelled, stopped making periodic iexist announcements")
 					return
 				}
-				log.Errorw("failed to publish iexist announcement", "err", err)
+				log.Errorw("Failed to publish iexist announcement", "err", err)
 				continue
 			}
-			log.Infow("announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
+			log.Infow("Announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
 		}
 	}
 }
 
 func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
+	defer an.wg.Done()
+	defer log.Debug("AnnounceJoinPoolRequestPeriodically go routine is ending")
 	log.Debugw("called wg.Done in AnnounceJoinPoolRequestPeriodically pool join request", "peer", an.h.ID())
 	log.Debugw("Starting AnnounceJoinPoolRequestPeriodically pool join request", "peer", an.h.ID())
 	log.Debugw("peerlist before AnnounceJoinPoolRequestPeriodically pool join request", "on", an.h.ID(), "peerlist", an.topic.ListPeers())
 
-	defer an.wg.Done()
 	an.announcingJoinPoolMutex.Lock()
 	if an.announcingJoinPoolRequest {
 		an.announcingJoinPoolMutex.Unlock()
@@ -249,6 +260,7 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 		an.announcingJoinPoolMutex.Unlock()
 	}()
 	ticker := time.NewTicker(an.announceInterval)
+	defer ticker.Stop()
 	for {
 		log.Debugw("inside ticker for join pool request", "peer", an.h.ID())
 		select {

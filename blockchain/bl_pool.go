@@ -104,11 +104,13 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 		}
 		bl.stopFetchUsersAfterJoinChan = make(chan struct{})
 		ticker := time.NewTicker(bl.fetchInterval * time.Minute)
+		defer ticker.Stop()
 		log.Debug("called wg.Add in PoolJoin ticker")
 		bl.wg.Add(1) // Increment the wait group counter
 		go func() {
 			log.Debug("called wg.Done in PoolJoin ticker")
-			defer bl.wg.Done()  // Decrement the wait group counter when the goroutine completes
+			defer bl.wg.Done() // Decrement the wait group counter when the goroutine completes
+			defer log.Debug("PoolJoin go routine is ending")
 			defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
 
 			for {

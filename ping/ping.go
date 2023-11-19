@@ -106,6 +106,7 @@ func (pn *FxPing) Start(ctx context.Context) error {
 	go func() {
 		log.Debug("called wg.Done in Start ping")
 		defer pn.wg.Done()
+		defer log.Debug("Start ping go routine is ending")
 		pn.s.Serve(listen)
 	}()
 	pn.started = true
