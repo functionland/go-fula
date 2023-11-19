@@ -2,6 +2,7 @@ package blockchain
 
 import (
 	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -15,6 +16,12 @@ type (
 		blockchainEndPoint       string
 		timeout                  int
 		wg                       *sync.WaitGroup
+		minPingSuccessCount      int
+		maxPingTime              int
+		topicName                string
+		relays                   []string
+		updatePoolName           func(string) error
+		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 	}
 )
 
@@ -51,6 +58,9 @@ func WithAllowTransientConnection(t bool) Option {
 
 func WithBlockchainEndPoint(b string) Option {
 	return func(o *options) error {
+		if b == "" {
+			b = "127.0.0.1:4000"
+		}
 		o.blockchainEndPoint = b
 		return nil
 	}
@@ -66,6 +76,50 @@ func WithTimeout(to int) Option {
 func WithWg(wg *sync.WaitGroup) Option {
 	return func(o *options) error {
 		o.wg = wg
+		return nil
+	}
+}
+
+func WithMinSuccessPingCount(sr int) Option {
+	return func(o *options) error {
+		o.minPingSuccessCount = sr
+		return nil
+	}
+}
+
+func WithMaxPingTime(t int) Option {
+	return func(o *options) error {
+		o.maxPingTime = t
+		return nil
+	}
+}
+
+func WithFetchFrequency(t time.Duration) Option {
+	return func(o *options) error {
+		o.fetchFrequency = t
+		return nil
+	}
+}
+
+func WithTopicName(n string) Option {
+	return func(o *options) error {
+		o.topicName = n
+		return nil
+	}
+}
+
+func WithUpdatePoolName(updatePoolName func(string) error) Option {
+	return func(o *options) error {
+		o.updatePoolName = updatePoolName
+		return nil
+	}
+}
+
+// WithStoreDir sets a the store directory we are using for datastore
+// Required.
+func WithRelays(r []string) Option {
+	return func(o *options) error {
+		o.relays = r
 		return nil
 	}
 }

@@ -1,6 +1,8 @@
 package ping
 
-import "sync"
+import (
+	"sync"
+)
 
 type (
 	Option  func(*options) error
@@ -8,6 +10,7 @@ type (
 		allowTransientConnection bool
 		timeout                  int
 		wg                       *sync.WaitGroup
+		count                    int
 	}
 )
 
@@ -38,6 +41,13 @@ func WithTimeout(to int) Option {
 func WithWg(wg *sync.WaitGroup) Option {
 	return func(o *options) error {
 		o.wg = wg
+		return nil
+	}
+}
+
+func WithCount(n int) Option {
+	return func(o *options) error {
+		o.count = n
 		return nil
 	}
 }

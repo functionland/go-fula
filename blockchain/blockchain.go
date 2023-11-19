@@ -24,6 +24,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 )
 
 var apiError struct {
@@ -34,6 +36,7 @@ var apiError struct {
 const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
 	actionAuth             = "auth"
+	devRelay               = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
 )
 
 var (
@@ -65,7 +68,15 @@ type (
 		p *ping.FxPing
 		a *announcements.FxAnnouncements
 
-		members map[peer.ID]common.MemberStatus
+		members     map[peer.ID]common.MemberStatus
+		membersLock sync.RWMutex
+
+		lastFetchTime    time.Time
+		fetchInterval    time.Duration
+		fetchCheckTicker *time.Ticker
+		fetchCheckStop   chan struct{}
+
+		stopFetchUsersAfterJoinChan chan struct{}
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -112,14 +123,44 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 				return new(http.Request)
 			},
 		},
-		keyStorer: keyStorer,
+		keyStorer:      keyStorer,
+		lastFetchTime:  time.Now(),
+		fetchInterval:  opts.fetchFrequency * time.Hour,
+		fetchCheckStop: make(chan struct{}),
 	}
 	if bl.authorizer != "" {
 		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
 			return nil, err
 		}
 	}
+	bl.startFetchCheck()
 	return bl, nil
+}
+
+func (bl *FxBlockchain) startFetchCheck() {
+	bl.fetchCheckTicker = time.NewTicker(1 * time.Hour) // check every hour, adjust as needed
+
+	// Increment the WaitGroup counter before starting the goroutine
+	log.Debug("called wg.Add in blockchain startFetchCheck")
+	bl.wg.Add(1)
+
+	go func() {
+		log.Debug("called wg.Done in startFetchCheck ticker")
+		defer bl.wg.Done() // Decrement the counter when the goroutine completes
+
+		for {
+			select {
+			case <-bl.fetchCheckTicker.C:
+				if time.Since(bl.lastFetchTime) >= bl.fetchInterval {
+					bl.FetchUsersAndPopulateSets(context.Background(), bl.topicName, false)
+					bl.lastFetchTime = time.Now() // update last fetch time
+				}
+			case <-bl.fetchCheckStop:
+				bl.fetchCheckTicker.Stop()
+				return
+			}
+		}
+	}()
 }
 
 func (bl *FxBlockchain) Start(ctx context.Context) error {
@@ -128,7 +169,13 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 		return err
 	}
 	bl.s.Handler = http.HandlerFunc(bl.serve)
-	go func() { bl.s.Serve(listen) }()
+	log.Debug("called wg.Add in blockchain start")
+	bl.wg.Add(1)
+	go func() {
+		log.Debug("called wg.Done in Start blockchain")
+		defer bl.wg.Done()
+		bl.s.Serve(listen)
+	}()
 	return nil
 }
 
@@ -141,8 +188,16 @@ func (bl *FxBlockchain) putReq(req *http.Request) {
 	bl.reqPool.Put(req)
 }
 
+func prependProtocol(addr string) string {
+	if strings.HasPrefix(addr, "localhost") || strings.HasPrefix(addr, "127.0.0.1") || strings.HasPrefix(addr, "192.168.") || strings.HasPrefix(addr, "10.") {
+		return "http://" + addr
+	}
+	return "https://" + addr
+}
+
 func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, action string, p interface{}) ([]byte, error) {
-	addr := "http://" + bl.blockchainEndPoint + "/" + strings.Replace(action, "-", "/", -1)
+	endpoint := prependProtocol(bl.blockchainEndPoint)
+	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
 
 	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
 	buf := bl.bufPool.Get().(*bytes.Buffer)
@@ -187,7 +242,7 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
-	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		seed, err := bl.keyStorer.LoadKey(ctx)
 		if err != nil {
 			log.Errorw("seed is empty", "err", err)
@@ -238,13 +293,13 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 
 	from, err := peer.Decode(r.RemoteAddr)
 	if err != nil {
-		log.Debug("cannot parse remote addr as peer ID: %v", err)
+		log.Errorw("cannot parse remote addr as peer ID: %v", err)
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 	action := path.Base(r.URL.Path)
 	if !bl.authorized(from, action) {
-		log.Debug("rejected unauthorized request from %s for action %s", from, action)
+		log.Errorw("rejected unauthorized request from %s for action %s", from, action)
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
@@ -522,24 +577,127 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	bl.c.CloseIdleConnections()
 	bl.ch.CloseIdleConnections()
+	close(bl.fetchCheckStop)
 	return bl.s.Shutdown(ctx)
 }
 
-func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string) error {
+func (bl *FxBlockchain) IsMembersEmpty() bool {
+	bl.membersLock.RLock()         // Use RLock for read-only access
+	defer bl.membersLock.RUnlock() // Defer the unlock operation
+	return len(bl.members) == 0
+}
+
+// contains is a helper function to check if the slice contains a string
+func contains(slice []string, str string) bool {
+	for _, v := range slice {
+		if v == str {
+			return true
+		}
+	}
+	return false
+}
+
+func (bl *FxBlockchain) cleanUnwantedPeers(keepPeers []peer.ID) {
+	// Convert the keepPeers slice to a map for efficient existence checks
+	keepMap := make(map[peer.ID]bool)
+	for _, p := range keepPeers {
+		keepMap[p] = true
+	}
+
+	// Retrieve all peers from the AddrBook
+	allPeers := bl.h.Peerstore().PeersWithAddrs()
+
+	// Iterate over all peers and clear addresses for those not in keepMap
+	for _, peerID := range allPeers {
+		if _, found := keepMap[peerID]; !found {
+			bl.h.Peerstore().ClearAddrs(peerID)
+		}
+	}
+}
+func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
+	// Initialize the map if it's nil
+	if bl.members == nil {
+		bl.members = make(map[peer.ID]common.MemberStatus)
+	}
+	log.Debug("FetchUsersAndPopulateSets is called for ", "topicString: ", topicString, " ,initiate: ", initiate)
+	// Update last fetch time on successful fetch
+	var keepPeers []peer.ID
+	bl.lastFetchTime = time.Now()
+
 	// Convert topic from string to int
 	topic, err := strconv.Atoi(topicString)
 	if err != nil {
 		// Handle the error if the conversion fails
 		return fmt.Errorf("invalid topic, not an integer: %s", err)
 	}
+	if topic <= 0 {
+		log.Info("Not a member of any pool at the moment")
+		return nil
+	}
 
-	// Create a struct for the POST payload
-	payload := PoolUserListRequest{
+	if initiate {
+		//If members list is empty we should check what peerIDs we already voted on and update to avoid re-voting
+		isMembersEmpty := bl.IsMembersEmpty()
+		if isMembersEmpty {
+			log.Debugw("Members list is empty", "peer", bl.h.ID())
+			// Call the bl.PoolRequests and get the list of requests
+			req := PoolRequestsRequest{
+				PoolID: topic, // assuming 'topic' is your pool id
+			}
+			responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolRequests, req)
+			if err != nil {
+				return err
+			}
+			var poolRequestsResponse PoolRequestsResponse
+
+			// Unmarshal the response body into the poolRequestsResponse struct
+			if err := json.Unmarshal(responseBody, &poolRequestsResponse); err != nil {
+				return err
+			}
+
+			// For each one check if voted field in the response, contains the bl.h.ID().String() and if so it means we already voted
+			// Move it to members with status UnKnown.
+			log.Debugw("Empty members for ", "peer", bl.h.ID(), "Received response from blockchian", poolRequestsResponse.PoolRequests)
+			for _, request := range poolRequestsResponse.PoolRequests {
+				if contains(request.Voted, bl.h.ID().String()) {
+					pid, err := peer.Decode(request.PeerID)
+					if err != nil {
+						return err
+					}
+					bl.membersLock.Lock()
+					bl.members[pid] = common.Unknown
+					bl.membersLock.Unlock()
+
+					// Create a slice to hold the multiaddresses for the peer
+					var addrs []multiaddr.Multiaddr
+
+					// Loop through the static relays and convert them to multiaddr
+					for _, relay := range bl.relays {
+						ma, err := multiaddr.NewMultiaddr(relay + "/p2p-circuit/p2p/" + pid.String())
+						if err != nil {
+							bl.membersLock.Unlock()
+							return err
+						}
+						addrs = append(addrs, ma)
+					}
+
+					// Add the relay addresses to the peerstore for the peer ID
+					bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
+					keepPeers = append(keepPeers, pid)
+				}
+			}
+		}
+		log.Debugw("stored members after empty member list", "peer", bl.h.ID(), "members", bl.members)
+	}
+
+	//Get the list of both join requests and joined members for the pool
+	// Create a struct for the POST req
+	req := PoolUserListRequest{
 		PoolID: topic,
 	}
 
 	// Call the existing function to make the request
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, payload)
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
 	if err != nil {
 		return err
 	}
@@ -551,13 +709,42 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Now iterate through the users and populate the member map
+	log.Debugw("Now iterate through the users and populate the member map", "peer", bl.h.ID(), "response", response.Users)
+	bl.membersLock.Lock()
 	for _, user := range response.Users {
 		pid, err := peer.Decode(user.PeerID)
 		if err != nil {
-			return err
+			log.Errorw("Could not debug PeerID in response.Users", "user.PeerID", user.PeerID, "err", err)
+		}
+
+		if initiate {
+			keepPeers = append(keepPeers, pid)
+			//Check if self status is in pool request, start ping server and announce join request
+			if user.PeerID == bl.h.ID().String() {
+				log.Debugw("Found self peerID", user.PeerID)
+				if user.RequestPoolID != nil {
+					if !bl.p.Status() {
+						log.Debugw("Found self peerID and running Ping Server now", "peer", user.PeerID)
+						err = bl.p.Start(ctx)
+						if err != nil {
+							log.Errorw("Error when starting the Ping Server", "PeerID", user.PeerID, "err", err)
+						} else {
+							log.Debugw("Found self peerID and ran Ping Server and announcing pooljoinrequest now", "peer", user.PeerID)
+							bl.wg.Add(1)
+							go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+						}
+					} else {
+						log.Debugw("Ping Server is already running for self peerID", user.PeerID)
+					}
+				} else {
+					log.Debugw("PeerID is already a member of the pool", user.PeerID)
+				}
+			}
 		}
 
 		// Determine the status based on pool_id and request_pool_id
+		existingStatus, exists := bl.members[pid]
+
 		var status common.MemberStatus
 		if user.PoolID != nil && *user.PoolID == topic {
 			status = common.Approved
@@ -568,27 +755,92 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			continue
 		}
 
-		existingStatus, exists := bl.members[pid]
-		if exists {
-			if existingStatus == common.Pending && status == common.Approved {
-				// If the user is already pending and now approved, update to ApprovedOrPending
-				bl.members[pid] = common.Approved
+		if initiate {
+			//Vote for any peer that has not voted already
+			if exists && existingStatus == common.Pending {
+				log.Debugw("Voting for peers", "pool", topicString, "from", bl.h.ID(), "for", pid)
+				err = bl.HandlePoolJoinRequest(ctx, pid, topicString, false)
+				if err == nil {
+					status = common.Unknown
+				} else {
+					log.Errorw("Error happened while voting", "pool", topicString, "from", bl.h.ID(), "for", pid)
+				}
 			}
-			// If the user status is the same as before, there's no need to update
+		}
+
+		if exists {
+			log.Debugw("peer already exists in members", "h.ID", bl.h.ID(), "pid", pid, "existingStatus", existingStatus, "status", status)
+			if existingStatus != status && (existingStatus != common.Approved) {
+				// If the user is already pending and now approved, update to ApprovedOrPending
+				bl.members[pid] = status
+			} else {
+				// If the user status is the same as before, there's no need to update
+				log.Debugw("member exists but is not approved so no need to change status", "h.ID", bl.h.ID(), "pid", pid, "Status", status, "existingStatus", existingStatus)
+			}
 		} else {
+			log.Debugw("member does not exists", "h.ID", bl.h.ID(), "pid", pid)
 			// If the user does not exist in the map, add them
 			bl.members[pid] = status
+			// Create a slice to hold the multiaddresses for the peer
+			var addrs []multiaddr.Multiaddr
+
+			// Loop through the static relays and convert them to multiaddr
+			for _, relay := range bl.relays {
+				fullAddr := relay + "/p2p-circuit/p2p/" + pid.String()
+				log.Debugw("full relay address", "peer", bl.h.ID(), "for", pid, "fullAddr", fullAddr)
+				ma, err := multiaddr.NewMultiaddr(fullAddr)
+				if err != nil {
+					bl.membersLock.Unlock()
+					return err
+				}
+				addrs = append(addrs, ma)
+			}
+
+			// Add the relay addresses to the peerstore for the peer ID
+
+			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
+			log.Debugw("Added peer to peerstore", "h.ID", bl.h.ID(), "pid", pid, "addrs", addrs)
 		}
+		if pid != bl.h.ID() {
+			//bl.h.Connect(ctx, peer.AddrInfo{ID: pid, Addrs: addrs})
+			peerAddr := bl.h.Peerstore().PeerInfo(pid)
+			log.Debugw("Connecting to other peer", "from", bl.h.ID(), "to", pid, "with address", peerAddr)
+			err := bl.h.Connect(ctx, peerAddr)
+			if err != nil {
+				log.Debugw("Not Connected to peer", "from", bl.h.ID(), "to", pid, "err", err)
+			} else {
+				log.Debugw("OK Connected to peer", "from", bl.h.ID(), "to", pid)
+			}
+
+		}
+	}
+	bl.membersLock.Unlock()
+	log.Debugw("peerstore for ", "id", bl.h.ID(), "peers", bl.h.Peerstore().Peers())
+	if initiate {
+		bl.cleanUnwantedPeers(keepPeers)
 	}
 
 	return nil
 }
 
 func (bl *FxBlockchain) GetMemberStatus(id peer.ID) (common.MemberStatus, bool) {
+	bl.membersLock.RLock()
 	status, exists := bl.members[id]
 	if !exists {
 		// If the peer.ID doesn't exist in the members map, we treat it as an error case.
 		return common.MemberStatus(0), false
 	}
+	bl.membersLock.RUnlock()
 	return status, true
+}
+
+func (bl *FxBlockchain) GetMembers() map[peer.ID]common.MemberStatus {
+	bl.membersLock.RLock()
+	defer bl.membersLock.RUnlock()
+
+	copy := make(map[peer.ID]common.MemberStatus)
+	for k, v := range bl.members {
+		copy[k] = v
+	}
+	return copy
 }

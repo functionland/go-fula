@@ -8,16 +8,18 @@ import (
 
 type Ping interface {
 	Start(context.Context) error
-	Ping(context.Context, peer.ID, int) (int, int, error)
+	Ping(context.Context, peer.ID) (int, int, error)
 	StopServer(context.Context) error
 	StopClient(context.Context)
 	Shutdown(context.Context) error
 }
 
 type PingRequest struct {
-	Data []byte `json:"data"`
+	ID   string `json:"id"`
+	Data string `json:"data"`
 }
 
 type PingResponse struct {
-	Data []byte `json:"data"`
+	ID   string `json:"id"`
+	Data string `json:"data"`
 }

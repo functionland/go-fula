@@ -12,6 +12,7 @@ type (
 		timeout          int
 		topicName        string
 		wg               *sync.WaitGroup
+		relays           []string
 	}
 )
 
@@ -49,6 +50,13 @@ func WithTopicName(n string) Option {
 func WithWg(wg *sync.WaitGroup) Option {
 	return func(o *options) error {
 		o.wg = wg
+		return nil
+	}
+}
+
+func WithRelays(r []string) Option {
+	return func(o *options) error {
+		o.relays = r
 		return nil
 	}
 }

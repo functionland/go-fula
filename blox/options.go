@@ -3,7 +3,6 @@ package blox
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"path"
 	"time"
@@ -19,18 +18,25 @@ import (
 )
 
 type (
-	Option  func(*options) error
-	options struct {
-		h                host.Host
-		name             string
-		topicName        string
-		storeDir         string
-		announceInterval time.Duration
-		ds               datastore.Batching
-		ls               *ipld.LinkSystem
-		authorizer       peer.ID
-		authorizedPeers  []peer.ID
-		exchangeOpts     []exchange.Option
+	Option          func(*options) error
+	PoolNameUpdater func(string) error
+	options         struct {
+		h                  host.Host
+		name               string
+		topicName          string
+		storeDir           string
+		announceInterval   time.Duration
+		ds                 datastore.Batching
+		ls                 *ipld.LinkSystem
+		authorizer         peer.ID
+		authorizedPeers    []peer.ID
+		exchangeOpts       []exchange.Option
+		relays             []string
+		updatePoolName     PoolNameUpdater
+		pingCount          int
+		maxPingTime        int
+		minSuccessRate     int
+		blockchainEndpoint string
 	}
 )
 
@@ -46,8 +52,12 @@ func newOptions(o ...Option) (*options, error) {
 	if opts.name == "" {
 		return nil, errors.New("blox pool name must be specified")
 	}
+	if opts.pingCount <= 0 {
+		log.Warnf("ping count is not specified, using default of 5 instead of %d", opts.pingCount)
+		opts.pingCount = 5
+	}
 	if opts.topicName == "" {
-		opts.topicName = fmt.Sprintf("/explore.fula/pools/%s", path.Clean(opts.name))
+		opts.topicName = path.Clean(opts.name)
 	}
 	if opts.h == nil {
 		var err error
@@ -148,6 +158,53 @@ func WithLinkSystem(ls *ipld.LinkSystem) Option {
 func WithExchangeOpts(eo ...exchange.Option) Option {
 	return func(o *options) error {
 		o.exchangeOpts = eo
+		return nil
+	}
+}
+
+// WithStoreDir sets a the store directory we are using for datastore
+// Required.
+func WithRelays(r []string) Option {
+	return func(o *options) error {
+		o.relays = r
+		return nil
+	}
+}
+
+func WithUpdatePoolName(updatePoolName PoolNameUpdater) Option {
+	return func(o *options) error {
+		o.updatePoolName = updatePoolName
+		return nil
+	}
+}
+
+func WithPingCount(pc int) Option {
+	return func(o *options) error {
+		o.pingCount = pc
+		return nil
+	}
+}
+
+func WithMaxPingTime(pt int) Option {
+	return func(o *options) error {
+		o.maxPingTime = pt
+		return nil
+	}
+}
+
+func WithMinSuccessPingRate(sr int) Option {
+	return func(o *options) error {
+		o.minSuccessRate = sr
+		return nil
+	}
+}
+
+func WithBlockchainEndPoint(b string) Option {
+	return func(o *options) error {
+		if b == "" {
+			b = "127.0.0.1:4000"
+		}
+		o.blockchainEndpoint = b
 		return nil
 	}
 }

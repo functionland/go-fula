@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -36,10 +37,12 @@ var (
 	logger = logging.Logger("fula/cmd/blox")
 	app    struct {
 		cli.App
-		initOnly   bool
-		wireless   bool
-		configPath string
-		config     struct {
+		initOnly           bool
+		blockchainEndpoint string
+		generateNodeKey    bool
+		wireless           bool
+		configPath         string
+		config             struct {
 			Identity                  string        `yaml:"identity"`
 			StoreDir                  string        `yaml:"storeDir"`
 			PoolName                  string        `yaml:"poolName"`
@@ -88,7 +91,7 @@ func init() {
 				Name:        "poolName",
 				Destination: &app.config.PoolName,
 				EnvVars:     []string{"FULA_BLOX_POOL_NAME"},
-				Value:       "my-pool",
+				Value:       "0",
 			}),
 			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:        "logLevel",
@@ -155,11 +158,49 @@ func init() {
 				Destination: &app.initOnly,
 				Value:       false,
 			},
+			&cli.BoolFlag{
+				Name:        "generateNodeKey",
+				Usage:       "Generate node key from identity",
+				Destination: &app.generateNodeKey,
+			},
+			&cli.StringFlag{
+				Name:        "blockchainEndpoint",
+				Usage:       "Change the blockchain APIs endpoint",
+				Destination: &app.blockchainEndpoint,
+				Value:       "127.0.0.1:4000",
+			},
 		},
 		Before:    before,
 		Action:    action,
 		Copyright: "fx.land",
 	}
+}
+
+func ConvertBase64PrivateKeyToHexNodeKey(base64PrivKey string) (string, error) {
+	// Decode the base64 string to get the private key bytes
+	privKeyBytes, err := base64.StdEncoding.DecodeString(base64PrivKey)
+	if err != nil {
+		return "", err
+	}
+
+	// Unmarshal the private key
+	privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Use the Raw() method to get the raw private key bytes
+	rawPrivKey, err := privKey.Raw()
+	if err != nil {
+		return "", err
+	}
+
+	// Extract the seed (first 32 bytes of the raw private key)
+	seed := rawPrivKey[:32]
+
+	// Convert the seed bytes to a hexadecimal string
+	hexString := hex.EncodeToString(seed)
+	return hexString, nil
 }
 
 func before(ctx *cli.Context) error {
@@ -297,7 +338,47 @@ func updateConfig(p []peer.ID) error {
 	return nil
 }
 
+func updatePoolName(newPoolName string) error {
+	// Load existing config file
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return err
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return err
+	}
+
+	// Update the pool name
+	app.config.PoolName = newPoolName
+
+	logger.Infof("Updated pool name to: %s", app.config.PoolName)
+
+	// Marshal the updated config back to YAML
+	configData, err = yaml.Marshal(app.config)
+	if err != nil {
+		return err
+	}
+
+	// Write the updated config back to the file
+	if err := os.WriteFile(app.configPath, configData, 0700); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func action(ctx *cli.Context) error {
+	if app.generateNodeKey {
+		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
+		nodeKey, err := ConvertBase64PrivateKeyToHexNodeKey(app.config.Identity)
+		if err != nil {
+			return fmt.Errorf("error converting node key: %v", err)
+		}
+		fmt.Print(nodeKey)
+		return nil // Exit after generating the node key
+	}
 	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		return err
@@ -391,6 +472,10 @@ func action(ctx *cli.Context) error {
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
+		blox.WithRelays(app.config.StaticRelays),
+		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
+		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithAuthorizer(authorizer),
