@@ -212,7 +212,7 @@ func (c *Client) ListRecentCidsAsString() (*StringIterator, error) {
 	return &StringIterator{links: links}, nil
 }
 
-func (c *Client) ClearRecentCids(cidsBytes []byte) error {
+func (c *Client) ClearCidsFromRecent(cidsBytes []byte) error {
 	ctx := context.TODO()
 
 	// Convert byte slice back into a slice of strings
