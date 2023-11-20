@@ -25,8 +25,24 @@ type (
 	}
 )
 
+func defaultUpdatePoolName(newPoolName string) error {
+	return nil
+}
 func newOptions(o ...Option) (*options, error) {
-	var opts options
+	opts := options{
+		authorizer:               "",                    // replace with an appropriate default peer.ID
+		authorizedPeers:          []peer.ID{},           // default to an empty slice
+		allowTransientConnection: true,                  // or false, as per your default
+		blockchainEndPoint:       "127.0.0.1:4000",      // default endpoint
+		timeout:                  30,                    // default timeout in seconds
+		wg:                       nil,                   // initialized WaitGroup
+		minPingSuccessCount:      3,                     // default minimum success count
+		maxPingTime:              10,                    // default maximum ping time in seconds
+		topicName:                "0",                   // default topic name
+		relays:                   []string{},            // default to an empty slice
+		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
+		fetchFrequency:           time.Hour * 1,         // default frequency, e.g., 1 hour
+	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
 			return nil, err

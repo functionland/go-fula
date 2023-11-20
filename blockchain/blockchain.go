@@ -140,13 +140,17 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 func (bl *FxBlockchain) startFetchCheck() {
 	bl.fetchCheckTicker = time.NewTicker(1 * time.Hour) // check every hour, adjust as needed
 
-	// Increment the WaitGroup counter before starting the goroutine
-	log.Debug("called wg.Add in blockchain startFetchCheck")
-	bl.wg.Add(1)
+	if bl.wg != nil {
+		// Increment the WaitGroup counter before starting the goroutine
+		log.Debug("called wg.Add in blockchain startFetchCheck")
+		bl.wg.Add(1)
+	}
 
 	go func() {
-		log.Debug("called wg.Done in startFetchCheck ticker")
-		defer bl.wg.Done() // Decrement the counter when the goroutine completes
+		if bl.wg != nil {
+			log.Debug("called wg.Done in startFetchCheck ticker")
+			defer bl.wg.Done() // Decrement the counter when the goroutine completes
+		}
 		defer log.Debug("startFetchCheck go routine is ending")
 
 		for {
@@ -170,11 +174,15 @@ func (bl *FxBlockchain) Start(ctx context.Context) error {
 		return err
 	}
 	bl.s.Handler = http.HandlerFunc(bl.serve)
-	log.Debug("called wg.Add in blockchain start")
-	bl.wg.Add(1)
+	if bl.wg != nil {
+		log.Debug("called wg.Add in blockchain start")
+		bl.wg.Add(1)
+	}
 	go func() {
-		log.Debug("called wg.Done in Start blockchain")
-		defer bl.wg.Done()
+		if bl.wg != nil {
+			log.Debug("called wg.Done in Start blockchain")
+			defer bl.wg.Done()
+		}
 		defer log.Debug("Start blockchain go routine is ending")
 		bl.s.Serve(listen)
 	}()
@@ -732,7 +740,10 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 							log.Errorw("Error when starting the Ping Server", "PeerID", user.PeerID, "err", err)
 						} else {
 							log.Debugw("Found self peerID and ran Ping Server and announcing pooljoinrequest now", "peer", user.PeerID)
-							bl.wg.Add(1)
+							if bl.wg != nil {
+								log.Debug("Called wg.Add in somewhere before AnnounceJoinPoolRequestPeriodically")
+								bl.wg.Add(1)
+							}
 							go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
 						}
 					} else {

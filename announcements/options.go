@@ -17,7 +17,13 @@ type (
 )
 
 func newOptions(o ...Option) (*options, error) {
-	var opts options
+	opts := options{
+		announceInterval: 5 * time.Minute, // Example: 5 minutes
+		timeout:          30,              // Example: 30 seconds
+		topicName:        "0",             // Example: default topic name
+		wg:               nil,
+		relays:           []string{}, // Example: empty slice by default
+	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
 			return nil, err
