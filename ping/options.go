@@ -15,7 +15,12 @@ type (
 )
 
 func newOptions(o ...Option) (*options, error) {
-	var opts options
+	opts := options{
+		allowTransientConnection: true, // Example: 5 minutes
+		timeout:                  30,   // Example: 30 seconds
+		count:                    5,    // Example: default topic name
+		wg:                       nil,
+	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
 			return nil, err

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
@@ -183,6 +184,7 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.markAsRecentCid(ctx, link.(cidlink.Link))
 	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
@@ -200,6 +202,38 @@ func (c *Client) ListFailedPushesAsString() (*StringIterator, error) {
 		return nil, err
 	}
 	return &StringIterator{links: links}, nil
+}
+
+func (c *Client) ListRecentCidsAsString() (*StringIterator, error) {
+	links, err := c.listRecentCidsAsString(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	return &StringIterator{links: links}, nil
+}
+
+func (c *Client) ClearCidsFromRecent(cidsBytes []byte) error {
+	ctx := context.TODO()
+
+	// Convert byte slice back into a slice of strings
+	cidStrs := strings.Split(string(cidsBytes), "|")
+
+	for _, cidStr := range cidStrs {
+		// Decode the CID from the string
+		cid, err := cid.Decode(cidStr)
+		if err != nil {
+			continue
+		}
+
+		// Generate the datastore key for this CID
+		l := cidlink.Link{Cid: cid}
+
+		// Delete the key from the datastore
+		if err := c.clearRecentCid(ctx, l); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RetryFailedPushes retries pushing all links that failed to push.

@@ -2,7 +2,6 @@ package blox
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"sync"
 
@@ -121,26 +120,33 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
 	}
+
+	// Create an HTTP server instance
+	p.IPFShttpServer = &http.Server{
+		Addr:    "localhost:5001",
+		Handler: p.ServeIpfsRpc(),
+	}
+
 	log.Debug("called wg.Add in blox start")
 	p.wg.Add(1)
 	go func() {
 		log.Debug("called wg.Done in Start blox")
 		defer p.wg.Done()
+		defer log.Debug("Start blox go routine is ending")
 		log.Infow("IPFS RPC server started on address http://localhost:5001")
-		switch err := http.ListenAndServe("localhost:5001", p.ServeIpfsRpc()); {
-		case errors.Is(err, http.ErrServerClosed):
-			log.Infow("IPFS RPC server stopped")
-		default:
+		if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Errorw("IPFS RPC server stopped erroneously", "err", err)
+		} else {
+			log.Infow("IPFS RPC server stopped")
 		}
 	}()
 
 	if anErr == nil {
-		log.Debug("called wg.Add in blox start anErr1")
+		log.Debug("called wg.Add in AnnounceIExistPeriodically")
 		p.wg.Add(1)
 		go p.an.AnnounceIExistPeriodically(ctx)
-		log.Debug("called wg.Add in blox start anErr2")
 
+		log.Debug("called wg.Add in HandleAnnouncements")
 		p.wg.Add(1)
 		go p.an.HandleAnnouncements(ctx)
 	} else {
@@ -198,43 +204,62 @@ func (p *Blox) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
 
 func (p *Blox) Shutdown(ctx context.Context) error {
 	log.Info("Shutdown in progress")
-	bErr := p.bl.Shutdown(ctx)
-	log.Info("blockchain Shutdown in progress")
-	xErr := p.ex.Shutdown(ctx)
-	log.Info("exchange Shutdown in progress")
-	pErr := p.pn.Shutdown(ctx)
-	log.Info("ping Shutdown in progress")
-	tErr := p.an.Shutdown(ctx)
-	log.Info("announcement Shutdown in progress")
+
+	// Cancel the context to signal all operations to stop
 	p.cancel()
-	dsErr := p.ds.Close()
-	log.Info("datastore Shutdown in progress")
-	done := make(chan struct{}, 1)
+
+	// Shutdown the various components
+	if bErr := p.bl.Shutdown(ctx); bErr != nil {
+		log.Errorw("Error occurred in blockchain shutdown", "bErr", bErr)
+		return bErr
+	} else {
+		log.Debug("Blockchain shutdown done")
+	}
+	if xErr := p.ex.Shutdown(ctx); xErr != nil {
+		log.Errorw("Error occurred in exchange shutdown", "xErr", xErr)
+		return xErr
+	} else {
+		log.Debug("exchange shutdown done")
+	}
+	if pErr := p.pn.Shutdown(ctx); pErr != nil {
+		log.Errorw("Error occurred in ping shutdown", "pErr", pErr)
+		return pErr
+	} else {
+		log.Debug("ping shutdown done")
+	}
+	if tErr := p.an.Shutdown(ctx); tErr != nil {
+		log.Errorw("Error occurred in announcements shutdown", "tErr", tErr)
+		return tErr
+	} else {
+		log.Debug("announcements shutdown done")
+	}
+	if dsErr := p.ds.Close(); dsErr != nil {
+		log.Errorw("Error occurred in datastore shutdown", "dsErr", dsErr)
+		return dsErr
+	} else {
+		log.Debug("datastore shutdown done")
+	}
+
+	// Shutdown the HTTP server
+	if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
+		log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
+	}
+
+	// Wait for all goroutines to complete
+	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		p.wg.Wait()
-		done <- struct{}{}
 	}()
+
 	select {
 	case <-done:
-		if tErr != nil {
-			log.Errorw("Error occurred in announcement shutdown", "tErr", tErr)
-			return tErr
-		}
-		if dsErr != nil {
-			log.Errorw("Error occurred in ds shutdown", "dsErr", dsErr)
-			return dsErr
-		}
-		if bErr != nil {
-			log.Errorw("Error occurred in blockchain shutdown", "bErr", bErr)
-			return bErr
-		}
-		if pErr != nil {
-			log.Errorw("Error occurred in Ping shutdown", "pErr", pErr)
-			return pErr
-		}
-		return xErr
+		// Handle remaining errors after all goroutines have finished
+		log.Debug("Shutdown done")
+		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+		log.Infow("Shutdown completed with timeout", "err", err)
+		return err
 	}
 }
