@@ -19,6 +19,7 @@ import (
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multicodec"
 )
 
@@ -113,6 +114,14 @@ func toLink(key []byte) (cidlink.Link, error) {
 	return cidlink.Link{Cid: cc}, nil
 }
 
+func toLinkFromString(l string) (cidlink.Link, error) {
+	decodedBytes, err := base58.Decode(l)
+	if err != nil {
+		return cidlink.Link{}, err
+	}
+	return toLink(decodedBytes)
+}
+
 // Pull downloads the data corresponding to the given key from blox at Config.BloxAddr.
 // The key must be a valid ipld.Link.
 func (c *Client) Pull(key []byte) error {
@@ -185,7 +194,6 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 		return nil, err
 	}
 	c.markAsRecentCid(ctx, link.(cidlink.Link))
-	c.ex.IpniNotifyLink(link.(cidlink.Link))
 	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
@@ -270,6 +278,13 @@ func (c *Client) SetAuth(on string, subject string, allow bool) error {
 		return err
 	}
 	return c.ex.SetAuth(context.TODO(), onp, subp, allow)
+}
+
+func (c *Client) IpniNotifyLink(l string) {
+	link, err := toLinkFromString(l)
+	if err == nil {
+		c.ex.IpniNotifyLink(link)
+	}
 }
 
 // Shutdown closes all resources used by Client.
