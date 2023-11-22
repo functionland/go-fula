@@ -185,6 +185,7 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 		return nil, err
 	}
 	c.markAsRecentCid(ctx, link.(cidlink.Link))
+	c.ex.IpniNotifyLink(link.(cidlink.Link))
 	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
