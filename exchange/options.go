@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ipni/index-provider/engine"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -19,6 +20,7 @@ type (
 		ipniPublishChanBuffer    int
 		ipniPublishMaxBatchSize  int
 		ipniProviderEngineOpts   []engine.Option
+		dhtProviderOpts          []dht.Option
 		updateConfig             ConfigUpdater
 	}
 )
@@ -100,6 +102,13 @@ func WithIpniPublishMaxBatchSize(s int) Option {
 func WithIpniProviderEngineOptions(e ...engine.Option) Option {
 	return func(o *options) error {
 		o.ipniProviderEngineOpts = e
+		return nil
+	}
+}
+
+func WithDhtProviderOptions(d ...dht.Option) Option {
+	return func(o *options) error {
+		o.dhtProviderOpts = d
 		return nil
 	}
 }

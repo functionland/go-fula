@@ -202,6 +202,24 @@ func (p *Blox) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
 	go p.an.AnnounceJoinPoolRequestPeriodically(ctx)
 }
 
+func (p *Blox) ProvideLinkByDht(l ipld.Link) error {
+	//This is for unit testing and no need to call directly
+	log.Debug("ProvideLinkByDht test")
+	return p.ex.ProvideDht(l)
+}
+
+func (p *Blox) FindLinkProvidersByDht(l ipld.Link) ([]peer.AddrInfo, error) {
+	//This is for unit testing and no need to call directly
+	log.Debug("FindLinkProvidersByDht test")
+	return p.ex.FindProvidersDht(l)
+}
+
+func (p *Blox) UpdateDhtPeers(peers []peer.ID) error {
+	//This is for unit testing and no need to call directly
+	log.Debug("UpdateDhtPeers test")
+	return p.ex.UpdateDhtPeers(peers)
+}
+
 func (p *Blox) Shutdown(ctx context.Context) error {
 	log.Info("Shutdown in progress")
 

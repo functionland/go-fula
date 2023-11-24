@@ -57,6 +57,7 @@ type (
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
 		pub                 *ipniPublisher
+		dht                 *fulaDht
 	}
 	pushRequest struct {
 		Link cid.Cid `json:"link"`
@@ -95,17 +96,39 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 			return nil, err
 		}
 	}
-	if !e.ipniPublishDisabled {
-		e.pub, err = newIpniPublisher(h, opts)
-		if err != nil {
-			return nil, err
-		}
+	//if !e.ipniPublishDisabled {
+	e.pub, err = newIpniPublisher(h, opts)
+	if err != nil {
+		return nil, err
+	}
+	//}
+	e.dht, err = newDhtProvider(h, opts)
+	if err != nil {
+		return nil, err
 	}
 	return e, nil
 }
 
+func (e *FxExchange) UpdateDhtPeers(peers []peer.ID) error {
+	for _, ma := range peers {
+		e.dht.AddPeer(ma)
+	}
+	log.Infow("peers are set", "peers", peers)
+	return nil
+}
+
 func (e *FxExchange) GetAuth(ctx context.Context) (peer.ID, error) {
 	return e.authorizer, nil
+}
+
+// The below method is exposed for unit testing only
+func (e *FxExchange) ProvideDht(l ipld.Link) error {
+	return e.dht.Provide(l)
+}
+
+// The below method is exposed for unit testing only
+func (e *FxExchange) FindProvidersDht(l ipld.Link) ([]peer.AddrInfo, error) {
+	return e.dht.FindProviders(l)
 }
 
 func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) {
@@ -120,14 +143,20 @@ func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) 
 	return peerList, nil
 }
 
+func (e *FxExchange) IpniNotifyLink(link ipld.Link) {
+	log.Debugw("Notifying link to IPNI publisher...", "link", link)
+	e.pub.notifyReceivedLink(link)
+	log.Debugw("Successfully notified link to IPNI publisher", "link", link)
+}
+
 func (e *FxExchange) Start(ctx context.Context) error {
 	gsn := gsnet.NewFromLibp2pHost(e.h)
 	e.gx = gs.New(ctx, gsn, e.ls)
 
+	if err := e.pub.Start(ctx); err != nil {
+		return err
+	}
 	if !e.ipniPublishDisabled {
-		if err := e.pub.Start(ctx); err != nil {
-			return err
-		}
 		e.gx.RegisterIncomingBlockHook(func(p peer.ID, responseData graphsync.ResponseData, blockData graphsync.BlockData, hookActions graphsync.IncomingBlockHookActions) {
 			go func(link ipld.Link) {
 				log.Debugw("Notifying link to IPNI publisher...", "link", link)
@@ -374,11 +403,11 @@ func (e *FxExchange) authorized(pid peer.ID, action string) bool {
 }
 
 func (e *FxExchange) Shutdown(ctx context.Context) error {
-	if !e.ipniPublishDisabled {
-		if err := e.pub.shutdown(); err != nil {
-			log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
-		}
+	//if !e.ipniPublishDisabled {
+	if err := e.pub.shutdown(); err != nil {
+		log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
 	}
+	//}
 	e.c.CloseIdleConnections()
 	return e.s.Shutdown(ctx)
 }

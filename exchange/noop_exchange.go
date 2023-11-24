@@ -35,3 +35,7 @@ func (n NoopExchange) Shutdown(context.Context) error {
 	log.Debug("Shut down noop exchange.")
 	return nil
 }
+
+func (n NoopExchange) IpniNotifyLink(l ipld.Link) {
+	log.Debugw("IpniNotifyLink noop exchange.", "link", l)
+}
