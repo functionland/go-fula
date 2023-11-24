@@ -57,6 +57,7 @@ type (
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
 		pub                 *ipniPublisher
+		dht                 *fulaDht
 	}
 	pushRequest struct {
 		Link cid.Cid `json:"link"`
@@ -101,11 +102,33 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 		return nil, err
 	}
 	//}
+	e.dht, err = newDhtProvider(h, opts)
+	if err != nil {
+		return nil, err
+	}
 	return e, nil
+}
+
+func (e *FxExchange) UpdateDhtPeers(peers []peer.ID) error {
+	for _, ma := range peers {
+		e.dht.AddPeer(ma)
+	}
+	log.Infow("peers are set", "peers", peers)
+	return nil
 }
 
 func (e *FxExchange) GetAuth(ctx context.Context) (peer.ID, error) {
 	return e.authorizer, nil
+}
+
+// The below method is exposed for unit testing only
+func (e *FxExchange) ProvideDht(l ipld.Link) error {
+	return e.dht.Provide(l)
+}
+
+// The below method is exposed for unit testing only
+func (e *FxExchange) FindProvidersDht(l ipld.Link) ([]peer.AddrInfo, error) {
+	return e.dht.FindProviders(l)
 }
 
 func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) {

@@ -21,9 +21,11 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/mdp/qrterminal"
 	"github.com/multiformats/go-multiaddr"
@@ -145,7 +147,7 @@ func init() {
 				Name:        "ipniPublishDirectAnnounce",
 				Usage:       "The list of IPNI URLs to which make direct announcements.",
 				Destination: &app.config.directAnnounce,
-				Value:       cli.NewStringSlice("https://cid.contact/ingest/announce"),
+				Value:       cli.NewStringSlice("https://announce.relay2.functionyard.fula.network/ingest/announce"),
 			}),
 			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:        "ipniPublisherIdentity",
@@ -488,6 +490,13 @@ func action(ctx *cli.Context) error {
 				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
 				engine.WithPublisherKind(engine.DataTransferPublisher),
 				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
+			),
+			exchange.WithDhtProviderOptions(
+				dht.Datastore(namespace.Wrap(ds, datastore.NewKey("dht"))),
+				dht.ProtocolExtension(protocol.ID("/"+app.config.PoolName)),
+				dht.ProtocolPrefix("/fula"),
+				dht.Resiliency(1),
+				dht.Mode(dht.ModeAutoServer),
 			),
 		),
 	)

@@ -9,14 +9,17 @@ import (
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
 	dssync "github.com/ipfs/go-datastore/sync"
 	badger "github.com/ipfs/go-ds-badger"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -54,6 +57,7 @@ type Config struct {
 	// AllowTransientConnection allows transient connectivity via relay when direct connection is
 	// not possible. Defaults to enabled if unspecified.
 	AllowTransientConnection bool
+	PoolName                 string
 
 	// TODO: we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
 	//       For now we manually take BloxAddr as config.
@@ -65,6 +69,7 @@ func NewConfig() *Config {
 		StaticRelays:             []string{devRelay},
 		ForceReachabilityPrivate: true,
 		AllowTransientConnection: true,
+		PoolName:                 "0",
 	}
 }
 
@@ -167,6 +172,12 @@ func (cfg *Config) init(mc *Client) error {
 			exchange.WithAuthorizer(mc.h.ID()),
 			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(true),
+			exchange.WithDhtProviderOptions(
+				dht.Datastore(namespace.Wrap(mc.ds, datastore.NewKey("dht"))),
+				dht.ProtocolExtension(protocol.ID("/"+cfg.PoolName)),
+				dht.ProtocolPrefix("/fula"),
+				dht.Resiliency(1),
+			),
 		)
 		if err != nil {
 			return err
