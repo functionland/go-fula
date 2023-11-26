@@ -24,6 +24,7 @@ const (
 	actionPoolLeave            = "fula-pool-leave"
 	actionManifestUpload       = "fula-manifest-upload"
 	actionManifestStore        = "fula-manifest-storage"
+	actionManifestBatchStore   = "fula-manifest-batch_storage"
 	actionManifestAvailable    = "fula-manifest-available"
 	actionManifestRemove       = "fula-manifest-remove"
 	actionManifestRemoveStorer = "fula-manifest-remove_storer"
@@ -210,6 +211,17 @@ type ManifestStoreResponse struct {
 	Cid      string `json:"cid"`
 }
 
+type ManifestBatchStoreRequest struct {
+	Cid    []string `json:"cid"`
+	PoolID int      `json:"pool_id"`
+}
+
+type ManifestBatchStoreResponse struct {
+	PoolID int      `json:"pool_id"`
+	Storer string   `json:"storer"`
+	Cid    []string `json:"cid"`
+}
+
 type ManifestAvailableRequest struct {
 	PoolID int `json:"pool_id"`
 }
@@ -311,6 +323,7 @@ var requestTypes = map[string]reflect.Type{
 	actionPoolLeave:            reflect.TypeOf(PoolLeaveRequest{}),
 	actionManifestUpload:       reflect.TypeOf(ManifestUploadRequest{}),
 	actionManifestStore:        reflect.TypeOf(ManifestStoreRequest{}),
+	actionManifestBatchStore:   reflect.TypeOf(ManifestBatchStoreRequest{}),
 	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableRequest{}),
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
@@ -339,6 +352,7 @@ var responseTypes = map[string]reflect.Type{
 	actionPoolLeave:            reflect.TypeOf(PoolLeaveResponse{}),
 	actionManifestUpload:       reflect.TypeOf(ManifestUploadResponse{}),
 	actionManifestStore:        reflect.TypeOf(ManifestStoreResponse{}),
+	actionManifestBatchStore:   reflect.TypeOf(ManifestBatchStoreResponse{}),
 	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableResponse{}),
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),

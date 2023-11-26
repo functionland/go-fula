@@ -2,6 +2,7 @@ package blox
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 
@@ -103,6 +104,63 @@ func New(o ...Option) (*Blox, error) {
 func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Message) bool {
 	status, exists := p.bl.GetMemberStatus(id)
 	return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
+}
+
+func (p *Blox) StoreCid(ctx context.Context, l ipld.Link) error {
+	providers, err := p.ex.FindProvidersDht(l)
+	if err != nil {
+		log.Errorw("And Error happened in StoreCid", "err", err)
+		return err
+	}
+	// Iterate over the providers and ping
+	for _, provider := range providers {
+		log.Debugw("Pinging storer", "peerID", provider.ID)
+		err := p.ex.PingDht(provider.ID)
+		if err == nil {
+			//Found a storer, now pull the cid
+			//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
+			//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
+			log.Debugw("Found a storer", "id", provider.ID)
+			err := p.ex.Pull(ctx, provider.ID, l)
+			if err != nil {
+				log.Errorw("Error happened in pulling from provider", "err", err)
+				continue
+			}
+			return nil
+		}
+	}
+	return errors.New("no provider found")
+}
+
+func (p *Blox) StoreManifest(ctx context.Context, links []ipld.Link) error {
+	var storedLinks []ipld.Link // Initialize an empty slice for successful storage
+
+	for _, l := range links {
+		err := p.StoreCid(ctx, l) // Assuming StoreCid is a function that stores the link and returns an error if it fails
+		if err != nil {
+			// If there's an error, log it and continue with the next link
+			log.Errorw("Error storing CID", "link", l, "err", err)
+			continue // Skip appending this link to the storedLinks slice
+		}
+		// Append to storedLinks only if StoreCid is successful
+		storedLinks = append(storedLinks, l)
+	}
+
+	// Handle the successfully stored links with the blockchain
+	if len(storedLinks) > 0 {
+		_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, storedLinks)
+		if err != nil {
+			log.Errorw("Error happened in storing manifest", "err", err)
+			return err
+		}
+	}
+
+	// If all links failed to store, return an error
+	if len(storedLinks) == 0 {
+		return errors.New("all links failed to store")
+	}
+
+	return nil
 }
 
 func (p *Blox) Start(ctx context.Context) error {

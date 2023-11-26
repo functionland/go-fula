@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
+	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -78,6 +80,35 @@ func (bl *FxBlockchain) ManifestStore(ctx context.Context, to peer.ID, r Manifes
 	default:
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDString string, links []ipld.Link) ([]string, error) {
+	var linksString []string
+	for _, link := range links {
+		linksString = append(linksString, link.String())
+	}
+	poolID, err := strconv.Atoi(poolIDString)
+	if err != nil {
+		// Handle the error if the conversion fails
+		return nil, fmt.Errorf("invalid topic, not an integer: %s", err)
+	}
+	manifestBatchStoreRequest := ManifestBatchStoreRequest{
+		PoolID: poolID,
+		Cid:    linksString,
+	}
+
+	// Call manifestBatchStore method
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionManifestBatchStore, manifestBatchStoreRequest)
+	if err != nil {
+		return nil, err
+	}
+	// Interpret the response
+	var manifestBatchStoreResponse ManifestBatchStoreResponse
+	if err := json.Unmarshal(responseBody, &manifestBatchStoreResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal manifestBatchStore response: %w", err)
+	}
+	return manifestBatchStoreResponse.Cid, nil
+
 }
 
 func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r ManifestAvailableRequest) ([]byte, error) {
