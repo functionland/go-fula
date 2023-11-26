@@ -36,10 +36,14 @@ func newDhtProvider(h host.Host, opts *options) (*fulaDht, error) {
 	return d, nil
 }
 
+func (d *fulaDht) PingDht(p peer.ID) error {
+	err := d.dh.Ping(d.ctx, p)
+	return err
+}
+
 func (d *fulaDht) AddPeer(p peer.ID) {
 	d.dh.RoutingTable().PeerAdded(p)
-	err := d.dh.Ping(d.ctx, p)
-	log.Infow("AddPeer", "self", d.dh.PeerID(), "added", p, "err", err)
+	log.Infow("AddPeer", "self", d.dh.PeerID(), "added", p)
 	d.dh.RefreshRoutingTable()
 }
 

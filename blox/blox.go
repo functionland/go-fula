@@ -175,6 +175,11 @@ func (p *Blox) Ping(ctx context.Context, to peer.ID) (int, int, error) {
 	return p.pn.Ping(ctx, to)
 }
 
+func (p *Blox) PingDht(to peer.ID) error {
+	//This is for unit testing and no need to call directly
+	return p.ex.PingDht(to)
+}
+
 func (p *Blox) GetBlMembers() map[peer.ID]common.MemberStatus {
 	//This is for unit testing and no need to call directly
 	return p.bl.GetMembers()

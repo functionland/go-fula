@@ -8,12 +8,12 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"testing"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
 	"github.com/functionland/go-fula/exchange"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/fluent"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/libp2p/go-libp2p"
@@ -170,7 +170,7 @@ func updatePoolName(newPoolName string) error {
 	return nil
 }
 
-func TestDHTFunctionality(t *testing.T) {
+func Example_provideAfterPull() {
 	server := startMockServer("127.0.0.1:4001")
 	defer func() {
 		// Shutdown the server after test
@@ -447,14 +447,83 @@ func TestDHTFunctionality(t *testing.T) {
 
 	err = n1.ProvideLinkByDht(n1RootLink)
 	if err != nil {
-		fmt.Print("Error happened here")
+		fmt.Print("Error happened in ProvideLinkByDht")
 		panic(err)
 	}
 	peerlist1, err := n2.FindLinkProvidersByDht(n1RootLink)
 	if err != nil {
+		fmt.Print("Error happened in FindLinkProvidersByDht")
 		panic(err)
 	}
-	fmt.Println(peerlist1)
+	// Iterate over the slice and print the peer ID of each AddrInfo
+	for _, addrInfo := range peerlist1 {
+		fmt.Printf("Found %s on %s\n", n1RootLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
+	}
+
+	err = n1.PingDht(h3.ID())
+	if err != nil {
+		fmt.Print("Error happened in PingDht")
+		panic(err)
+	}
+
+	fmt.Println("exchanging by Pull...")
+	// Pull the sample DAG stored on node 1 from node 2 by only asking for the root link.
+	// Because fetch implementation is recursive, it should fetch the leaf link too.
+	if err := n2.Pull(ctx, h1.ID(), n1RootLink); err != nil {
+		panic(err)
+	}
+
+	// Assert that n2 now has both root and leaf links
+	if exists, err := n2.Has(ctx, n1RootLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1RootLink, h1.ID())
+		n, err := n2.Load(ctx, n1RootLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+	if exists, err := n2.Has(ctx, n1leafLink); err != nil {
+		panic(err)
+	} else if !exists {
+		panic("expected n2 to have fetched the entire sample DAG")
+	} else {
+		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1leafLink, h1.ID())
+		n, err := n2.Load(ctx, n1leafLink, basicnode.Prototype.Any)
+		if err != nil {
+			panic(err)
+		}
+		var buf bytes.Buffer
+		if err := dagjson.Encode(n, &buf); err != nil {
+			panic(err)
+		}
+		fmt.Printf("    content: %s\n", buf.String())
+	}
+
+	fmt.Println("exchanging by Push...")
+	// Push the sample DAG stored on node 2 to node 1 by only pushing the root link.
+	// Because Push implementation is recursive, it should push the leaf link too.
+	if err := n2.Push(ctx, h1.ID(), n2leafLink); err != nil {
+		panic(err)
+	}
+
+	peerlist3, err := n3.FindLinkProvidersByDht(n2leafLink)
+	if err != nil {
+		fmt.Print("Error happened in FindLinkProvidersByDht3")
+		panic(err)
+	}
+
+	// Iterate over the slice and print the peer ID of each AddrInfo
+	for _, addrInfo := range peerlist3 {
+		fmt.Printf("Found %s on %s", n2leafLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
+	}
 
 	// Unordered output:
 	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
@@ -462,19 +531,36 @@ func TestDHTFunctionality(t *testing.T) {
 	// Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// Instantiated node in pool 0 with ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// Finally QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT peerstore contains 4 nodes:
+	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// Finally QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF peerstore contains 4 nodes:
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
+	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// Finally QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA peerstore contains 4 nodes:
 	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
 	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// [{QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT: [/ip4/127.0.0.1/udp/62495/quic-v1/webtransport/certhash/uEiA8nNwsF3xgNvpbRn7TBQgFKFmTFHka5os9D8yXYaeK2Q/certhash/uEiCDw6zn5RGqUe6FHv_bz45QnLPkCoZDwNdx6wETFMx4pA /ip4/192.168.2.14/tcp/42433 /ip4/192.168.2.14/udp/62494/quic-v1 /ip6/::1/udp/62497/quic-v1/webtransport/certhash/uEiA8nNwsF3xgNvpbRn7TBQgFKFmTFHka5os9D8yXYaeK2Q/certhash/uEiCDw6zn5RGqUe6FHv_bz45QnLPkCoZDwNdx6wETFMx4pA /ip4/127.0.0.1/tcp/42433 /ip4/127.0.0.1/udp/62494/quic-v1 /ip4/192.168.2.14/udp/62495/quic-v1/webtransport/certhash/uEiA8nNwsF3xgNvpbRn7TBQgFKFmTFHka5os9D8yXYaeK2Q/certhash/uEiCDw6zn5RGqUe6FHv_bz45QnLPkCoZDwNdx6wETFMx4pA /ip6/::1/tcp/42434 /ip6/::1/udp/62496/quic /ip6/::1/udp/62496/quic-v1 /dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit /ip4/127.0.0.1/udp/62494/quic /ip4/192.168.2.14/udp/62494/quic]}]
+	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
+	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
+	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
+	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
+	//     root: bafyreiekrzm6lpylw7hhrgvmzqfsek7og6ucqgpzns3ysbc5wj3imfrsge
+	//     leaf:bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4
+	// Found bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy on QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// exchanging by Pull...
+	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully fetched:
+	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
+	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     content: {"oneLeafLink":{"/":"bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"},"that":42}
+	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully fetched:
+	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
+	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     content: {"this":true}
+	// exchanging by Push...
+	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 }
