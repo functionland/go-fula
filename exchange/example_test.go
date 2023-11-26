@@ -568,7 +568,7 @@ func Example_provideAfterPull() {
 // Example_poolExchangeDagBetweenPoolNodes starts up a pool with 2 nodes, stores a sample DAG in
 // one node and fetches it via GraphSync from the other node.
 func Example_poolExchangeDagBetweenPoolNodes() {
-	server := startMockServer("127.0.0.1:4000")
+	server := startMockServer("127.0.0.1:4001")
 	defer func() {
 		// Shutdown the server after test
 		if err := server.Shutdown(context.Background()); err != nil {
