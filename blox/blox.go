@@ -3,6 +3,7 @@ package blox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -133,6 +134,7 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link) error {
 }
 
 func (p *Blox) StoreManifest(ctx context.Context, links []ipld.Link) error {
+	log.Debugw("StoreManifest", "links", links)
 	var storedLinks []ipld.Link // Initialize an empty slice for successful storage
 
 	for _, l := range links {
@@ -145,7 +147,7 @@ func (p *Blox) StoreManifest(ctx context.Context, links []ipld.Link) error {
 		// Append to storedLinks only if StoreCid is successful
 		storedLinks = append(storedLinks, l)
 	}
-
+	log.Debugw("StoreManifest", "storedLinks", storedLinks)
 	// Handle the successfully stored links with the blockchain
 	if len(storedLinks) > 0 {
 		_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, storedLinks)
@@ -158,6 +160,33 @@ func (p *Blox) StoreManifest(ctx context.Context, links []ipld.Link) error {
 	// If all links failed to store, return an error
 	if len(storedLinks) == 0 {
 		return errors.New("all links failed to store")
+	}
+
+	return nil
+}
+
+// FetchAvailableManifestsAndStore fetches available manifests and stores them.
+func (p *Blox) FetchAvailableManifestsAndStore(ctx context.Context, maxCids int) error {
+	// Fetch the available manifests for a specific pool_id
+	availableLinks, err := p.bl.HandleManifestsAvailable(ctx, p.topicName, maxCids)
+	if err != nil {
+		return fmt.Errorf("failed to fetch available manifests: %w", err)
+	}
+	log.Debugw("FetchAvailableManifestsAndStore", "availableLinks", availableLinks)
+	// Check if there are enough manifests available
+	if len(availableLinks) == 0 {
+		return errors.New("no available manifests to store")
+	}
+
+	// If there are more available links than the max limit, truncate the slice
+	if len(availableLinks) > maxCids {
+		availableLinks = availableLinks[:maxCids]
+	}
+
+	// Attempt to store the fetched manifests
+	err = p.StoreManifest(ctx, availableLinks)
+	if err != nil {
+		return fmt.Errorf("failed to store manifests: %w", err)
 	}
 
 	return nil

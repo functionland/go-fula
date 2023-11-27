@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -109,6 +111,52 @@ func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDStri
 	}
 	return manifestBatchStoreResponse.Cid, nil
 
+}
+func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDString string, limit int) ([]ipld.Link, error) {
+
+	poolID, err := strconv.Atoi(poolIDString)
+	if err != nil {
+		// Handle the error if the conversion fails
+		return nil, fmt.Errorf("invalid topic, not an integer: %s", err)
+	}
+	manifestAvailableRequest := ManifestAvailableRequest{
+		PoolID: poolID,
+	}
+
+	// Call manifestBatchStore method
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionManifestAvailable, manifestAvailableRequest)
+	if err != nil {
+		return nil, err
+	}
+	// Interpret the response
+	var manifestAvailableResponse ManifestAvailableResponse
+	if err := json.Unmarshal(responseBody, &manifestAvailableResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal manifestAvailable response: %w", err)
+	}
+
+	var selectedLinks []ipld.Link
+
+	// Group links by uploader
+	for _, manifest := range manifestAvailableResponse.Manifests {
+		if manifest.ManifestMetadata.Job.Uri == "" {
+			// Skip this manifest or handle it as needed
+			log.Warn("Skipping manifest due to missing data")
+			continue
+		}
+		c, err := cid.Decode(manifest.ManifestMetadata.Job.Uri)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode CID: %w", err)
+		}
+		link := cidlink.Link{Cid: c}
+
+		if len(selectedLinks) < limit {
+			selectedLinks = append(selectedLinks, link)
+		} else {
+			break
+		}
+	}
+
+	return selectedLinks, nil
 }
 
 func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r ManifestAvailableRequest) ([]byte, error) {

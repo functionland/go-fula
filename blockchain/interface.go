@@ -232,9 +232,9 @@ type ManifestData struct {
 }
 
 type Manifest struct {
-	PoolID               int          `json:"pool_id"`
-	ReplicationAvailable int          `json:"replication_available"`
-	ManifestData         ManifestData `json:"manifest_data"`
+	PoolID               int              `json:"pool_id"`
+	ReplicationAvailable int              `json:"replication_available"`
+	ManifestMetadata     ManifestMetadata `json:"manifest_metadata"`
 }
 
 type ManifestAvailableResponse struct {
