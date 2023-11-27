@@ -37,7 +37,7 @@ func requestLoggerMiddleware(next http.Handler) http.Handler {
 		if r.URL.Path == "/fula/pool/vote" {
 			fmt.Printf("Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe %s", string(body))
 		} else if r.URL.Path == "/fula/manifest/batch_storage" {
-			fmt.Printf("Stored manifest %s", string(body))
+			fmt.Printf("Stored manifest: %s", string(body))
 		}
 
 		// Create a new io.Reader from the read body as the original body is now drained
@@ -153,7 +153,7 @@ func startMockServer(addr string) *http.Server {
 							"work":   "Storage",
 						},
 					},
-					"replication_available": 6,
+					"replication_available": 2,
 				},
 				{
 					"pool_id": 1,
@@ -164,7 +164,7 @@ func startMockServer(addr string) *http.Server {
 							"work":   "Storage",
 						},
 					},
-					"replication_available": 4,
+					"replication_available": 1,
 				},
 			},
 		}
@@ -771,6 +771,40 @@ func Example_storeManifest() {
 	defer n3.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
 
+	// Instantiate the third node in the pool
+	pid4, _, err := crypto.GenerateECDSAKeyPair(rng)
+	if err != nil {
+		panic(err)
+	}
+	h4, err := libp2p.New(libp2p.Identity(pid4))
+	if err != nil {
+		panic(err)
+	}
+	n4, err := blox.New(
+		blox.WithPoolName(poolName),
+		blox.WithTopicName(poolName),
+		blox.WithHost(h4),
+		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithPingCount(5),
+		blox.WithExchangeOpts(
+			exchange.WithDhtProviderOptions(
+				dht.ProtocolExtension(protocol.ID("/"+poolName)),
+				dht.ProtocolPrefix("/fula"),
+				dht.Resiliency(1),
+				dht.Mode(dht.ModeAutoServer),
+			),
+		),
+	)
+	if err != nil {
+		panic(err)
+	}
+	if err := n4.Start(ctx); err != nil {
+		panic(err)
+	}
+	defer n4.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h4.ID().String())
+
 	// Connect n1 to n2.
 	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
 	if err = h1.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
@@ -782,6 +816,10 @@ func Example_storeManifest() {
 	}
 	h3.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
 	if err = h3.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()}); err != nil {
+		panic(err)
+	}
+	h4.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
+	if err = h4.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()}); err != nil {
 		panic(err)
 	}
 
@@ -935,13 +973,15 @@ func Example_storeManifest() {
 		fmt.Printf("Found %s on %s\n", n2leafLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
 	}
 
-	//n3.StoreManifest(ctx, []datamodel.Link{n2leafLink, n1leafLink})
 	n3.FetchAvailableManifestsAndStore(ctx, 2)
+	time.Sleep(1 * time.Second)
+	n4.FetchAvailableManifestsAndStore(ctx, 2)
 
 	// Output:
 	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	// Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
 	// Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// Instantiated node in pool 1 with ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
 	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
 	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
 	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
@@ -967,7 +1007,8 @@ func Example_storeManifest() {
 	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	//     content: {"that":false}
 	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Stored manifest {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
+	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
+	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
 }
 
 type Config struct {

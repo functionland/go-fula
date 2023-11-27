@@ -121,19 +121,38 @@ func (e *FxExchange) GetAuth(ctx context.Context) (peer.ID, error) {
 	return e.authorizer, nil
 }
 
-// The below method is exposed for unit testing only
 func (e *FxExchange) ProvideDht(l ipld.Link) error {
 	return e.dht.Provide(l)
 }
 
-// The below method is exposed for unit testing only
 func (e *FxExchange) PingDht(p peer.ID) error {
 	return e.dht.PingDht(p)
 }
 
-// The below method is exposed for unit testing only
 func (e *FxExchange) FindProvidersDht(l ipld.Link) ([]peer.AddrInfo, error) {
 	return e.dht.FindProviders(l)
+}
+
+func (e *FxExchange) PutValueDht(ctx context.Context, key string, val string) error {
+	return e.dht.dh.PutValue(ctx, key, []byte(val))
+}
+
+func (e *FxExchange) SearchValueDht(ctx context.Context, key string) (string, error) {
+	valueStream, err := e.dht.dh.SearchValue(ctx, key)
+	if err != nil {
+		return "", fmt.Errorf("error searching value in DHT: %w", err)
+	}
+
+	var mostAccurateValue []byte
+	for val := range valueStream {
+		mostAccurateValue = val // The last value received before the channel closes is the most accurate
+	}
+
+	if mostAccurateValue == nil {
+		return "", errors.New("no value found for the key")
+	}
+
+	return string(mostAccurateValue), nil
 }
 
 func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) {

@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -37,6 +38,11 @@ const (
 	actionPartition        = "partition"
 	actionDeleteFulaConfig = "delete-fula-config"
 )
+
+type LinkWithLimit struct {
+	Link  ipld.Link
+	Limit int
+}
 
 type SeededRequest struct {
 	Seed string `json:"seed"`

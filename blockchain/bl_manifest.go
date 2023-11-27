@@ -112,7 +112,7 @@ func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDStri
 	return manifestBatchStoreResponse.Cid, nil
 
 }
-func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDString string, limit int) ([]ipld.Link, error) {
+func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDString string, limit int) ([]LinkWithLimit, error) {
 
 	poolID, err := strconv.Atoi(poolIDString)
 	if err != nil {
@@ -134,29 +134,26 @@ func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDStri
 		return nil, fmt.Errorf("failed to unmarshal manifestAvailable response: %w", err)
 	}
 
-	var selectedLinks []ipld.Link
+	var linksWithLimits []LinkWithLimit
 
 	// Group links by uploader
 	for _, manifest := range manifestAvailableResponse.Manifests {
-		if manifest.ManifestMetadata.Job.Uri == "" {
-			// Skip this manifest or handle it as needed
-			log.Warn("Skipping manifest due to missing data")
-			continue
-		}
 		c, err := cid.Decode(manifest.ManifestMetadata.Job.Uri)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode CID: %w", err)
 		}
-		link := cidlink.Link{Cid: c}
 
-		if len(selectedLinks) < limit {
-			selectedLinks = append(selectedLinks, link)
+		if len(linksWithLimits) < limit {
+			linksWithLimits = append(linksWithLimits, LinkWithLimit{
+				Link:  cidlink.Link{Cid: c},
+				Limit: manifest.ReplicationAvailable, // Assuming you have the replication limit in the manifest
+			})
 		} else {
 			break
 		}
 	}
 
-	return selectedLinks, nil
+	return linksWithLimits, nil
 }
 
 func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r ManifestAvailableRequest) ([]byte, error) {

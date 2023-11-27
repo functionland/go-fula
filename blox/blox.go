@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/functionland/go-fula/announcements"
@@ -107,7 +108,7 @@ func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Mess
 	return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
 }
 
-func (p *Blox) StoreCid(ctx context.Context, l ipld.Link) error {
+func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	providers, err := p.ex.FindProvidersDht(l)
 	if err != nil {
 		log.Errorw("And Error happened in StoreCid", "err", err)
@@ -122,30 +123,49 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link) error {
 			//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
 			//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
 			log.Debugw("Found a storer", "id", provider.ID)
-			err := p.ex.Pull(ctx, provider.ID, l)
+			replicasStr := ""
+			replicasStr, err = p.ex.SearchValueDht(ctx, l.String())
 			if err != nil {
-				log.Errorw("Error happened in pulling from provider", "err", err)
-				continue
+				log.Warnw("SearchValue returned an error", "err", err)
 			}
-			return nil
+			log.Debugw("SearchValue returned value", "val", replicasStr, "for", l.String())
+			replicas := 0
+			replicas, err = strconv.Atoi(replicasStr)
+			if err != nil {
+				log.Warn(err)
+				replicas = 0
+			}
+			log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
+			if replicas < limit {
+				newReplicas := replicas + 1
+				p.ex.PutValueDht(ctx, l.String(), strconv.Itoa(newReplicas))
+				err = p.ex.Pull(ctx, provider.ID, l)
+				if err != nil {
+					log.Errorw("Error happened in pulling from provider", "err", err)
+					continue
+				}
+				return nil
+			} else {
+				return errors.New(fmt.Sprintf("Limit of %d is reached for %s", limit, l.String()))
+			}
 		}
 	}
 	return errors.New("no provider found")
 }
 
-func (p *Blox) StoreManifest(ctx context.Context, links []ipld.Link) error {
+func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLimit) error {
 	log.Debugw("StoreManifest", "links", links)
 	var storedLinks []ipld.Link // Initialize an empty slice for successful storage
 
 	for _, l := range links {
-		err := p.StoreCid(ctx, l) // Assuming StoreCid is a function that stores the link and returns an error if it fails
+		err := p.StoreCid(ctx, l.Link, l.Limit) // Assuming StoreCid is a function that stores the link and returns an error if it fails
 		if err != nil {
 			// If there's an error, log it and continue with the next link
 			log.Errorw("Error storing CID", "link", l, "err", err)
 			continue // Skip appending this link to the storedLinks slice
 		}
 		// Append to storedLinks only if StoreCid is successful
-		storedLinks = append(storedLinks, l)
+		storedLinks = append(storedLinks, l.Link)
 	}
 	log.Debugw("StoreManifest", "storedLinks", storedLinks)
 	// Handle the successfully stored links with the blockchain
