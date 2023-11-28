@@ -167,12 +167,22 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	return errors.New("no provider found")
 }
 
-func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLimit) error {
+func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLimit, maxCids int) error {
 	log.Debugw("StoreManifest", "links", links)
 	var storedLinks []ipld.Link // Initialize an empty slice for successful storage
 
 	for _, l := range links {
-		err := p.StoreCid(ctx, l.Link, l.Limit) // Assuming StoreCid is a function that stores the link and returns an error if it fails
+		if len(storedLinks) >= maxCids {
+			break
+		}
+		exists, err := p.Has(ctx, l.Link)
+		if err != nil {
+			continue
+		}
+		if exists {
+			continue
+		}
+		err = p.StoreCid(ctx, l.Link, l.Limit) // Assuming StoreCid is a function that stores the link and returns an error if it fails
 		if err != nil {
 			// If there's an error, log it and continue with the next link
 			log.Errorw("Error storing CID", "link", l, "err", err)
@@ -212,13 +222,8 @@ func (p *Blox) FetchAvailableManifestsAndStore(ctx context.Context, maxCids int)
 		return errors.New("no available manifests to store")
 	}
 
-	// If there are more available links than the max limit, truncate the slice
-	if len(availableLinks) > maxCids {
-		availableLinks = availableLinks[:maxCids]
-	}
-
 	// Attempt to store the fetched manifests
-	err = p.StoreManifest(ctx, availableLinks)
+	err = p.StoreManifest(ctx, availableLinks, maxCids)
 	if err != nil {
 		return fmt.Errorf("failed to store manifests: %w", err)
 	}
