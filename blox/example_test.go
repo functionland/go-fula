@@ -1022,7 +1022,7 @@ func Example_storeManifest() {
 	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
 	//     content: {"that":false}
 	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Stored manifest: {"cid":["bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
+	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
 	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
 }
 
