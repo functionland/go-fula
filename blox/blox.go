@@ -146,7 +146,7 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 				}
 				return nil
 			} else {
-				return fmt.Errorf("Limit of %d is reached for %s", limit, l.String())
+				return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
 			}
 		}
 	}
