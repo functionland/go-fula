@@ -110,6 +110,14 @@ func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Mess
 }
 
 func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
+	exists, err := p.Has(ctx, l)
+	if err != nil {
+		log.Errorw("And Error happened in checking Has", "err", err)
+	}
+	if exists {
+		log.Warnw("link already exists in datastore", "l", l.String())
+		return fmt.Errorf("link already exists in datastore %s", l.String())
+	}
 	providers, err := p.ex.FindProvidersDht(l)
 	if err != nil {
 		log.Errorw("And Error happened in StoreCid", "err", err)
@@ -117,38 +125,43 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	}
 	// Iterate over the providers and ping
 	for _, provider := range providers {
-		log.Debugw("Pinging storer", "peerID", provider.ID)
-		err := p.ex.PingDht(provider.ID)
-		if err == nil {
-			//Found a storer, now pull the cid
-			//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
-			//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
-			log.Debugw("Found a storer", "id", provider.ID)
-			replicasStr := ""
-			replicasStr, err = p.ex.SearchValueDht(ctx, l.String())
-			if err != nil {
-				log.Warnw("SearchValue returned an error", "err", err)
-			}
-			log.Debugw("SearchValue returned value", "val", replicasStr, "for", l.String())
-			replicas := 0
-			replicas, err = strconv.Atoi(replicasStr)
-			if err != nil {
-				log.Warn(err)
-				replicas = 0
-			}
-			log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
-			if replicas < limit {
-				newReplicas := replicas + 1
-				p.ex.PutValueDht(ctx, l.String(), strconv.Itoa(newReplicas))
-				err = p.ex.Pull(ctx, provider.ID, l)
+		if provider.ID != p.h.ID() {
+			log.Debugw("Pinging storer", "peerID", provider.ID)
+			err := p.ex.PingDht(provider.ID)
+			if err == nil {
+				//Found a storer, now pull the cid
+				//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
+				//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
+				log.Debugw("Found a storer", "id", provider.ID)
+				replicasStr := ""
+				replicasStr, err = p.ex.SearchValueDht(ctx, l.String())
 				if err != nil {
-					log.Errorw("Error happened in pulling from provider", "err", err)
-					continue
+					log.Warnw("SearchValue returned an error", "err", err)
 				}
-				return nil
-			} else {
-				return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
+				log.Debugw("SearchValue returned value", "val", replicasStr, "for", l.String())
+				replicas := 0
+				replicas, err = strconv.Atoi(replicasStr)
+				if err != nil {
+					log.Warn(err)
+					replicas = 0
+				}
+				log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
+				if replicas < limit {
+					newReplicas := replicas + 1
+					p.ex.PutValueDht(ctx, l.String(), strconv.Itoa(newReplicas))
+					err = p.ex.Pull(ctx, provider.ID, l)
+					if err != nil {
+						log.Errorw("Error happened in pulling from provider", "err", err)
+						continue
+					}
+					return nil
+				} else {
+					return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
+				}
 			}
+		} else {
+			log.Warnw("provider is the same as requestor", "l", l.String())
+			return fmt.Errorf("provider is the same as requestor for link %s", l.String())
 		}
 	}
 	return errors.New("no provider found")
@@ -274,7 +287,7 @@ func (p *Blox) Start(ctx context.Context) error {
 			select {
 			case <-ticker.C:
 				// This block will execute every 5 minutes
-				if err := p.FetchAvailableManifestsAndStore(ctx, p.pingCount); err != nil {
+				if err := p.FetchAvailableManifestsAndStore(ctx, 10); err != nil {
 					log.Errorw("Error in FetchAvailableManifestsAndStore", "err", err)
 					// Handle the error or continue based on your requirement
 				}
