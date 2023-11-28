@@ -823,6 +823,21 @@ func Example_storeManifest() {
 		panic(err)
 	}
 
+	for {
+		if len(h1.Peerstore().Peers()) >= 3 &&
+			len(h2.Peerstore().Peers()) >= 3 &&
+			len(h3.Peerstore().Peers()) >= 3 &&
+			len(h4.Peerstore().Peers()) >= 3 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			panic(ctx.Err())
+		default:
+			time.Sleep(time.Second)
+		}
+	}
+
 	// Authorize exchange between the two nodes
 	if err := n1.SetAuth(ctx, h1.ID(), h2.ID(), true); err != nil {
 		panic(err)
