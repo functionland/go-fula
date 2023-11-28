@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/functionland/go-fula/announcements"
 	"github.com/functionland/go-fula/blockchain"
@@ -260,6 +261,34 @@ func (p *Blox) Start(ctx context.Context) error {
 		log.Errorw("Announcement stopped erroneously", "err", anErr)
 	}
 	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	// Starting a new goroutine for periodic task
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		defer log.Debug("Start blox FetchAvailableManifestsAndStore go routine is ending")
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// This block will execute every 5 minutes
+				if err := p.FetchAvailableManifestsAndStore(ctx, p.pingCount); err != nil {
+					log.Errorw("Error in FetchAvailableManifestsAndStore", "err", err)
+					// Handle the error or continue based on your requirement
+				}
+			case <-ctx.Done():
+				// This will handle the case where the parent context is canceled
+				log.Info("Stopping periodic FetchAvailableManifestsAndStore due to context cancellation")
+				return
+			case <-p.ctx.Done():
+				// This will handle the case where the parent context is canceled
+				log.Info("Stopping periodic FetchAvailableManifestsAndStore due to context cancellation")
+				return
+			}
+		}
+	}()
 
 	return nil
 }
