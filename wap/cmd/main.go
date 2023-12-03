@@ -197,6 +197,11 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 			log.Info("Wi-Fi is connected")
 			configExists := checkConfigExists()
 			if configExists {
+				req := wifi.DeleteWifiRequest{
+					ConnectionName: "FxBlox",
+				}
+				_ = wifi.DisconnectNamedWifi(ctx, req)
+
 				stopServer <- struct{}{} // stop the HTTP server
 			} else {
 				log.Info("No config file found, activating the hotspot mode.")
