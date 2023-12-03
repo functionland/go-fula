@@ -2,8 +2,12 @@ package blox
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/functionland/go-fula/announcements"
 	"github.com/functionland/go-fula/blockchain"
@@ -105,6 +109,128 @@ func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Mess
 	return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
 }
 
+func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
+	exists, err := p.Has(ctx, l)
+	if err != nil {
+		log.Errorw("And Error happened in checking Has", "err", err)
+	}
+	if exists {
+		log.Warnw("link already exists in datastore", "l", l.String())
+		return fmt.Errorf("link already exists in datastore %s", l.String())
+	}
+	providers, err := p.ex.FindProvidersDht(l)
+	if err != nil {
+		log.Errorw("And Error happened in StoreCid", "err", err)
+		return err
+	}
+	// Iterate over the providers and ping
+	for _, provider := range providers {
+		if provider.ID != p.h.ID() {
+			log.Debugw("Pinging storer", "peerID", provider.ID)
+			err := p.ex.PingDht(provider.ID)
+			if err == nil {
+				//Found a storer, now pull the cid
+				//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
+				//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
+				log.Debugw("Found a storer", "id", provider.ID)
+				replicasStr := ""
+				replicasStr, err = p.ex.SearchValueDht(ctx, l.String())
+				if err != nil {
+					log.Warnw("SearchValue returned an error", "err", err)
+				}
+				log.Debugw("SearchValue returned value", "val", replicasStr, "for", l.String())
+				replicas := 0
+				replicas, err = strconv.Atoi(replicasStr)
+				if err != nil {
+					log.Warn(err)
+					replicas = 0
+				}
+				log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
+				if replicas < limit {
+					newReplicas := replicas + 1
+					p.ex.PutValueDht(ctx, l.String(), strconv.Itoa(newReplicas))
+					err = p.ex.Pull(ctx, provider.ID, l)
+					if err != nil {
+						log.Errorw("Error happened in pulling from provider", "err", err)
+						continue
+					}
+					return nil
+				} else {
+					return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
+				}
+			}
+		} else {
+			log.Warnw("provider is the same as requestor", "l", l.String())
+			return fmt.Errorf("provider is the same as requestor for link %s", l.String())
+		}
+	}
+	return errors.New("no provider found")
+}
+
+func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLimit, maxCids int) error {
+	log.Debugw("StoreManifest", "links", links)
+	var storedLinks []ipld.Link // Initialize an empty slice for successful storage
+
+	for _, l := range links {
+		if len(storedLinks) >= maxCids {
+			break
+		}
+		exists, err := p.Has(ctx, l.Link)
+		if err != nil {
+			continue
+		}
+		if exists {
+			continue
+		}
+		err = p.StoreCid(ctx, l.Link, l.Limit) // Assuming StoreCid is a function that stores the link and returns an error if it fails
+		if err != nil {
+			// If there's an error, log it and continue with the next link
+			log.Errorw("Error storing CID", "link", l, "err", err)
+			continue // Skip appending this link to the storedLinks slice
+		}
+		// Append to storedLinks only if StoreCid is successful
+		storedLinks = append(storedLinks, l.Link)
+	}
+	log.Debugw("StoreManifest", "storedLinks", storedLinks)
+	// Handle the successfully stored links with the blockchain
+	if len(storedLinks) > 0 {
+		_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, storedLinks)
+		if err != nil {
+			log.Errorw("Error happened in storing manifest", "err", err)
+			return err
+		}
+	}
+
+	// If all links failed to store, return an error
+	if len(storedLinks) == 0 {
+		return errors.New("all links failed to store")
+	}
+
+	return nil
+}
+
+// FetchAvailableManifestsAndStore fetches available manifests and stores them.
+func (p *Blox) FetchAvailableManifestsAndStore(ctx context.Context, maxCids int) error {
+	// Fetch the available manifests for a specific pool_id
+	availableLinks, err := p.bl.HandleManifestsAvailable(ctx, p.topicName, maxCids)
+	if err != nil {
+		return fmt.Errorf("failed to fetch available manifests: %w", err)
+	}
+	log.Debugw("FetchAvailableManifestsAndStore", "availableLinks", availableLinks)
+	// Check if there are enough manifests available
+	if len(availableLinks) == 0 {
+		return errors.New("no available manifests to store")
+	}
+
+	// Attempt to store the fetched manifests
+	err = p.StoreManifest(ctx, availableLinks, maxCids)
+	if err != nil {
+		return fmt.Errorf("failed to store manifests: %w", err)
+	}
+
+	return nil
+}
+
 func (p *Blox) Start(ctx context.Context) error {
 	// implemented topic validators with chain integration.
 	validator := p.PubsubValidator
@@ -154,6 +280,34 @@ func (p *Blox) Start(ctx context.Context) error {
 	}
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 
+	// Starting a new goroutine for periodic task
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		defer log.Debug("Start blox FetchAvailableManifestsAndStore go routine is ending")
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// This block will execute every 5 minutes
+				if err := p.FetchAvailableManifestsAndStore(ctx, 10); err != nil {
+					log.Errorw("Error in FetchAvailableManifestsAndStore", "err", err)
+					// Handle the error or continue based on your requirement
+				}
+			case <-ctx.Done():
+				// This will handle the case where the parent context is canceled
+				log.Info("Stopping periodic FetchAvailableManifestsAndStore due to context cancellation")
+				return
+			case <-p.ctx.Done():
+				// This will handle the case where the parent context is canceled
+				log.Info("Stopping periodic FetchAvailableManifestsAndStore due to context cancellation")
+				return
+			}
+		}
+	}()
+
 	return nil
 }
 
@@ -173,6 +327,11 @@ func (p *Blox) StartPingServer(ctx context.Context) error {
 func (p *Blox) Ping(ctx context.Context, to peer.ID) (int, int, error) {
 	//This is for unit testing and no need to call directly
 	return p.pn.Ping(ctx, to)
+}
+
+func (p *Blox) PingDht(to peer.ID) error {
+	//This is for unit testing and no need to call directly
+	return p.ex.PingDht(to)
 }
 
 func (p *Blox) GetBlMembers() map[peer.ID]common.MemberStatus {

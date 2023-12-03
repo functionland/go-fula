@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
+	"github.com/ipld/go-ipld-prime"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -24,6 +25,7 @@ const (
 	actionPoolLeave            = "fula-pool-leave"
 	actionManifestUpload       = "fula-manifest-upload"
 	actionManifestStore        = "fula-manifest-storage"
+	actionManifestBatchStore   = "fula-manifest-batch_storage"
 	actionManifestAvailable    = "fula-manifest-available"
 	actionManifestRemove       = "fula-manifest-remove"
 	actionManifestRemoveStorer = "fula-manifest-remove_storer"
@@ -36,6 +38,11 @@ const (
 	actionPartition        = "partition"
 	actionDeleteFulaConfig = "delete-fula-config"
 )
+
+type LinkWithLimit struct {
+	Link  ipld.Link
+	Limit int
+}
 
 type SeededRequest struct {
 	Seed string `json:"seed"`
@@ -210,6 +217,17 @@ type ManifestStoreResponse struct {
 	Cid      string `json:"cid"`
 }
 
+type ManifestBatchStoreRequest struct {
+	Cid    []string `json:"cid"`
+	PoolID int      `json:"pool_id"`
+}
+
+type ManifestBatchStoreResponse struct {
+	PoolID int      `json:"pool_id"`
+	Storer string   `json:"storer"`
+	Cid    []string `json:"cid"`
+}
+
 type ManifestAvailableRequest struct {
 	PoolID int `json:"pool_id"`
 }
@@ -220,9 +238,9 @@ type ManifestData struct {
 }
 
 type Manifest struct {
-	PoolID               int          `json:"pool_id"`
-	ReplicationAvailable int          `json:"replication_available"`
-	ManifestData         ManifestData `json:"manifest_data"`
+	PoolID               int              `json:"pool_id"`
+	ReplicationAvailable int              `json:"replication_available"`
+	ManifestMetadata     ManifestMetadata `json:"manifest_metadata"`
 }
 
 type ManifestAvailableResponse struct {
@@ -311,6 +329,7 @@ var requestTypes = map[string]reflect.Type{
 	actionPoolLeave:            reflect.TypeOf(PoolLeaveRequest{}),
 	actionManifestUpload:       reflect.TypeOf(ManifestUploadRequest{}),
 	actionManifestStore:        reflect.TypeOf(ManifestStoreRequest{}),
+	actionManifestBatchStore:   reflect.TypeOf(ManifestBatchStoreRequest{}),
 	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableRequest{}),
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
@@ -339,6 +358,7 @@ var responseTypes = map[string]reflect.Type{
 	actionPoolLeave:            reflect.TypeOf(PoolLeaveResponse{}),
 	actionManifestUpload:       reflect.TypeOf(ManifestUploadResponse{}),
 	actionManifestStore:        reflect.TypeOf(ManifestStoreResponse{}),
+	actionManifestBatchStore:   reflect.TypeOf(ManifestBatchStoreResponse{}),
 	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableResponse{}),
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),

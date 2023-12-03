@@ -1,4 +1,4 @@
-package exchange_test
+package ping_test
 
 import (
 	"bytes"
@@ -8,23 +8,17 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"testing"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
-	"github.com/functionland/go-fula/exchange"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/ipld/go-ipld-prime/fluent"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
-var log = logging.Logger("fula/dhttest")
+var log = logging.Logger("fula/mockserver")
 
 // requestLoggerMiddleware logs the details of each request
 func requestLoggerMiddleware(next http.Handler) http.Handler {
@@ -165,13 +159,11 @@ func startMockServer(addr string) *http.Server {
 
 	return server
 }
-
 func updatePoolName(newPoolName string) error {
 	return nil
 }
-
-func TestDHTFunctionality(t *testing.T) {
-	server := startMockServer("127.0.0.1:4001")
+func Example_ping() {
+	server := startMockServer("127.0.0.1:4002")
 	defer func() {
 		// Shutdown the server after test
 		if err := server.Shutdown(context.Background()); err != nil {
@@ -206,16 +198,8 @@ func TestDHTFunctionality(t *testing.T) {
 		blox.WithTopicName(poolName),
 		blox.WithHost(h1),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
+		blox.WithBlockchainEndPoint("127.0.0.1:4002"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -240,16 +224,8 @@ func TestDHTFunctionality(t *testing.T) {
 		blox.WithTopicName(poolName),
 		blox.WithHost(h2),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
+		blox.WithBlockchainEndPoint("127.0.0.1:4002"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -274,16 +250,8 @@ func TestDHTFunctionality(t *testing.T) {
 		blox.WithTopicName(poolName),
 		blox.WithHost(h3),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
+		blox.WithBlockchainEndPoint("127.0.0.1:4002"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -308,16 +276,8 @@ func TestDHTFunctionality(t *testing.T) {
 		blox.WithTopicName("0"),
 		blox.WithHost(h4),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
+		blox.WithBlockchainEndPoint("127.0.0.1:4002"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -393,8 +353,6 @@ func TestDHTFunctionality(t *testing.T) {
 	for {
 		if len(h4.Peerstore().Peers()) >= 4 {
 			break
-		} else {
-			fmt.Printf("%s peerstore contains %d nodes:\n", h4.ID(), len(h4.Peerstore().Peers()))
 		}
 		select {
 		case <-ctx.Done():
@@ -404,57 +362,39 @@ func TestDHTFunctionality(t *testing.T) {
 		}
 	}
 
-	//Store a link in h1 and find providers from h2
+	if err = n4.StartPingServer(ctx); err != nil {
+		panic(err)
+	} else {
+		fmt.Print("Node 4 ping server started\n")
+	}
 
-	// Generate a sample DAG and store it on node 1 (n1) in the pool, which we will pull from n1
-	n1leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
-		na.AssembleEntry("this").AssignBool(true)
-	})
-	n1leafLink, err := n1.Store(ctx, n1leaf)
+	average, rate, err := n1.Ping(ctx, h4.ID())
 	if err != nil {
+		fmt.Println("Error occured in Ping", "err", err)
 		panic(err)
 	}
-	n1Root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
-		na.AssembleEntry("that").AssignInt(42)
-		na.AssembleEntry("oneLeafLink").AssignLink(n1leafLink)
-	})
-	n1RootLink, err := n1.Store(ctx, n1Root)
-	if err != nil {
-		panic(err)
+	fmt.Printf("%s ping results success_count: %d:\n", h1.ID(), rate)
+	if average < 0 {
+		panic("average is 0 for first ping")
 	}
-	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n1RootLink, n1leafLink)
 
-	// Generate a sample DAG and store it on node 2 (n1) in the pool, which we will push to n1
-	n2leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
-		na.AssembleEntry("that").AssignBool(false)
-	})
-	n2leafLink, err := n2.Store(ctx, n2leaf)
+	average, rate, err = n2.Ping(ctx, h4.ID())
 	if err != nil {
 		panic(err)
 	}
-	n2Root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
-		na.AssembleEntry("this").AssignInt(24)
-		na.AssembleEntry("anotherLeafLink").AssignLink(n2leafLink)
-	})
-	n2RootLink, err := n2.Store(ctx, n2Root)
-	if err != nil {
-		panic(err)
+	fmt.Printf("%s ping results success_count: %d:\n", h2.ID(), rate)
+	if average < 0 {
+		panic("average is 0 for second ping")
 	}
-	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n2RootLink, n2leafLink)
 
-	//n1.UpdateDhtPeers(h2.Peerstore().Peers())
-	//n2.UpdateDhtPeers(h1.Peerstore().Peers())
-
-	err = n1.ProvideLinkByDht(n1RootLink)
-	if err != nil {
-		fmt.Print("Error happened here")
-		panic(err)
-	}
-	peerlist1, err := n2.FindLinkProvidersByDht(n1RootLink)
+	average, rate, err = n3.Ping(ctx, h4.ID())
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(peerlist1)
+	fmt.Printf("%s ping results success_count: %d:", h3.ID(), rate)
+	if average < 0 {
+		panic("average is 0 for third ping")
+	}
 
 	// Unordered output:
 	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
@@ -476,5 +416,8 @@ func TestDHTFunctionality(t *testing.T) {
 	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
 	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
 	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// [{QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT: [/ip4/127.0.0.1/udp/62495/quic-v1/webtransport/certhash/uEiA8nNwsF3xgNvpbRn7TBQgFKFmTFHka5os9D8yXYaeK2Q/certhash/uEiCDw6zn5RGqUe6FHv_bz45QnLPkCoZDwNdx6wETFMx4pA /ip4/192.168.2.14/tcp/42433 /ip4/192.168.2.14/udp/62494/quic-v1 /ip6/::1/udp/62497/quic-v1/webtransport/certhash/uEiA8nNwsF3xgNvpbRn7TBQgFKFmTFHka5os9D8yXYaeK2Q/certhash/uEiCDw6zn5RGqUe6FHv_bz45QnLPkCoZDwNdx6wETFMx4pA /ip4/127.0.0.1/tcp/42433 /ip4/127.0.0.1/udp/62494/quic-v1 /ip4/192.168.2.14/udp/62495/quic-v1/webtransport/certhash/uEiA8nNwsF3xgNvpbRn7TBQgFKFmTFHka5os9D8yXYaeK2Q/certhash/uEiCDw6zn5RGqUe6FHv_bz45QnLPkCoZDwNdx6wETFMx4pA /ip6/::1/tcp/42434 /ip6/::1/udp/62496/quic /ip6/::1/udp/62496/quic-v1 /dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit /ip4/127.0.0.1/udp/62494/quic /ip4/192.168.2.14/udp/62494/quic]}]
+	// Node 4 ping server started
+	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT ping results success_count: 5:
+	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF ping results success_count: 5:
+	// QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA ping results success_count: 5:
 }

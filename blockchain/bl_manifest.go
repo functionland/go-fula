@@ -7,7 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
+	"github.com/ipfs/go-cid"
+	"github.com/ipld/go-ipld-prime"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -78,6 +82,78 @@ func (bl *FxBlockchain) ManifestStore(ctx context.Context, to peer.ID, r Manifes
 	default:
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDString string, links []ipld.Link) ([]string, error) {
+	var linksString []string
+	for _, link := range links {
+		linksString = append(linksString, link.String())
+	}
+	poolID, err := strconv.Atoi(poolIDString)
+	if err != nil {
+		// Handle the error if the conversion fails
+		return nil, fmt.Errorf("invalid topic, not an integer: %s", err)
+	}
+	manifestBatchStoreRequest := ManifestBatchStoreRequest{
+		PoolID: poolID,
+		Cid:    linksString,
+	}
+
+	// Call manifestBatchStore method
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionManifestBatchStore, manifestBatchStoreRequest)
+	if err != nil {
+		return nil, err
+	}
+	// Interpret the response
+	var manifestBatchStoreResponse ManifestBatchStoreResponse
+	if err := json.Unmarshal(responseBody, &manifestBatchStoreResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal manifestBatchStore response: %w", err)
+	}
+	return manifestBatchStoreResponse.Cid, nil
+
+}
+func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDString string, limit int) ([]LinkWithLimit, error) {
+
+	poolID, err := strconv.Atoi(poolIDString)
+	if err != nil {
+		// Handle the error if the conversion fails
+		return nil, fmt.Errorf("invalid topic, not an integer: %s", err)
+	}
+	manifestAvailableRequest := ManifestAvailableRequest{
+		PoolID: poolID,
+	}
+
+	// Call manifestBatchStore method
+	responseBody, err := bl.callBlockchain(ctx, "POST", actionManifestAvailable, manifestAvailableRequest)
+	if err != nil {
+		return nil, err
+	}
+	// Interpret the response
+	var manifestAvailableResponse ManifestAvailableResponse
+	if err := json.Unmarshal(responseBody, &manifestAvailableResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal manifestAvailable response: %w", err)
+	}
+
+	var linksWithLimits []LinkWithLimit
+
+	// Group links by uploader
+	for _, manifest := range manifestAvailableResponse.Manifests {
+		c, err := cid.Decode(manifest.ManifestMetadata.Job.Uri)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode CID: %w", err)
+		}
+
+		if len(linksWithLimits) < limit {
+			linksWithLimits = append(linksWithLimits, LinkWithLimit{
+				Link:  cidlink.Link{Cid: c},
+				Limit: manifest.ReplicationAvailable, // Assuming you have the replication limit in the manifest
+			})
+		} else {
+			break
+		}
+	}
+
+	return linksWithLimits, nil
 }
 
 func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r ManifestAvailableRequest) ([]byte, error) {

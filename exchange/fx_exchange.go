@@ -121,14 +121,38 @@ func (e *FxExchange) GetAuth(ctx context.Context) (peer.ID, error) {
 	return e.authorizer, nil
 }
 
-// The below method is exposed for unit testing only
 func (e *FxExchange) ProvideDht(l ipld.Link) error {
 	return e.dht.Provide(l)
 }
 
-// The below method is exposed for unit testing only
+func (e *FxExchange) PingDht(p peer.ID) error {
+	return e.dht.PingDht(p)
+}
+
 func (e *FxExchange) FindProvidersDht(l ipld.Link) ([]peer.AddrInfo, error) {
 	return e.dht.FindProviders(l)
+}
+
+func (e *FxExchange) PutValueDht(ctx context.Context, key string, val string) error {
+	return e.dht.dh.PutValue(ctx, key, []byte(val))
+}
+
+func (e *FxExchange) SearchValueDht(ctx context.Context, key string) (string, error) {
+	valueStream, err := e.dht.dh.SearchValue(ctx, key)
+	if err != nil {
+		return "", fmt.Errorf("error searching value in DHT: %w", err)
+	}
+
+	var mostAccurateValue []byte
+	for val := range valueStream {
+		mostAccurateValue = val // The last value received before the channel closes is the most accurate
+	}
+
+	if mostAccurateValue == nil {
+		return "", errors.New("no value found for the key")
+	}
+
+	return string(mostAccurateValue), nil
 }
 
 func (e *FxExchange) GetAuthorizedPeers(ctx context.Context) ([]peer.ID, error) {
@@ -187,6 +211,13 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
+	// Call Provide for the last block link of each response
+	if err := e.dht.Provide(l); err != nil {
+		log.Warnw("Failed to provide link via DHT", "link", l, "err", err)
+		// Decide how to handle the error, e.g., continue, return, etc.
+	} else {
+		log.Debug("Success provide link via DHT")
+	}
 	resps, errs := e.gx.Request(ctx, from, l, selectorparse.CommonSelector_ExploreAllRecursively)
 	for {
 		select {
@@ -197,6 +228,13 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 				return nil
 			}
 			log.Infow("synced node", "node", resp.Node)
+			// Call Provide for the last block link of each response
+			if err := e.dht.Provide(resp.LastBlock.Link); err != nil {
+				log.Warnw("Failed to provide link via DHT", "link", resp.LastBlock.Link, "err", err)
+				// Decide how to handle the error, e.g., continue, return, etc.
+			} else {
+				log.Debug("Success provide link via DHT")
+			}
 		case err, ok := <-errs:
 			if !ok {
 				return nil
