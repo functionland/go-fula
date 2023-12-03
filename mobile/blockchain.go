@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/functionland/go-fula/blockchain"
+	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 )
 
 // AccountExists requests blox at Config.BloxAddr to check if the account exists or not.
@@ -100,6 +101,26 @@ func (c *Client) WifiRemoveall() ([]byte, error) {
 func (c *Client) Reboot() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.Reboot(ctx, c.bloxPid)
+}
+
+// Reboot requests the blox to reboot
+func (c *Client) DeleteWifi(name string) ([]byte, error) {
+	ctx := context.TODO()
+	// Create the DeleteWifiRequest
+	req := wifi.DeleteWifiRequest{
+		ConnectionName: name,
+	}
+	return c.bl.DeleteWifi(ctx, c.bloxPid, req)
+}
+
+// Reboot requests the blox to reboot
+func (c *Client) DisconnectWifi(name string) ([]byte, error) {
+	ctx := context.TODO()
+	// Create the DeleteWifiRequest
+	req := wifi.DeleteWifiRequest{
+		ConnectionName: name,
+	}
+	return c.bl.DisconnectWifi(ctx, c.bloxPid, req)
 }
 
 // Partition requests the blox to partition ssd and nvme

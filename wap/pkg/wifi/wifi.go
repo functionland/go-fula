@@ -21,6 +21,14 @@ type WifiRemoveallResponse struct {
 	Status bool   `json:"status"`
 }
 
+type DeleteWifiRequest struct {
+	ConnectionName string `json:"name"`
+}
+type DeleteWifiResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type DeleteFulaConfigRequest struct {
 }
 type DeleteFulaConfigResponse struct {
@@ -192,6 +200,56 @@ func DeleteFulaConfig(ctx context.Context) DeleteFulaConfigResponse {
 		status = false
 	}
 	return DeleteFulaConfigResponse{
+		Msg:    msg,
+		Status: status,
+	}
+}
+
+func DeleteWifi(ctx context.Context, req DeleteWifiRequest) DeleteWifiResponse {
+	errorString := ""
+	command := fmt.Sprintf("nmcli con delete '%s'", strings.TrimSpace(req.ConnectionName))
+	_, _, err := runCommand(ctx, command)
+	if err != nil {
+		log.Warnf("failed to delete connection %s: %v", req.ConnectionName, err)
+		errorString = fmt.Sprintf("Failed to delete connection %s: %v", req.ConnectionName, err)
+	}
+
+	if errorString != "" {
+		return DeleteWifiResponse{
+			Msg:    errorString,
+			Status: false,
+		}
+	}
+
+	msg := "wifi connection removed successfully. "
+	status := true
+
+	return DeleteWifiResponse{
+		Msg:    msg,
+		Status: status,
+	}
+}
+
+func DisconnectNamedWifi(ctx context.Context, req DeleteWifiRequest) DeleteWifiResponse {
+	errorString := ""
+	command := fmt.Sprintf("nmcli con down '%s'", strings.TrimSpace(req.ConnectionName))
+	_, _, err := runCommand(ctx, command)
+	if err != nil {
+		log.Warnf("failed to disconnect connection %s: %v", req.ConnectionName, err)
+		errorString = fmt.Sprintf("Failed to disconnect connection %s: %v", req.ConnectionName, err)
+	}
+
+	if errorString != "" {
+		return DeleteWifiResponse{
+			Msg:    errorString,
+			Status: false,
+		}
+	}
+
+	msg := "wifi connection disconnected successfully. "
+	status := true
+
+	return DeleteWifiResponse{
 		Msg:    msg,
 		Status: status,
 	}
