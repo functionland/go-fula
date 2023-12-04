@@ -77,6 +77,8 @@ type (
 		fetchCheckStop   chan struct{}
 
 		stopFetchUsersAfterJoinChan chan struct{}
+		cachedAccount               string
+		isAccountCached             bool
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -320,6 +322,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		},
 		actionAccountExists: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionAccountExists, from, w, r)
+		},
+		actionAssetsBalance: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(http.MethodPost, actionAssetsBalance, from, w, r)
 		},
 		actionPoolCreate: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			//TODO: We should check if from owns the blox

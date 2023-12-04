@@ -27,6 +27,13 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 	return c.bl.AccountBalance(ctx, c.bloxPid, blockchain.AccountBalanceRequest{Account: account})
 }
 
+// AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) AssetsBalance(assetId string, classId string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: "", AssetId: assetId, ClassId: classId})
+}
+
 // PoolJoin requests blox at Config.BloxAddr to join a pool with the id.
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox

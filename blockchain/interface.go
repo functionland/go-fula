@@ -15,6 +15,7 @@ const (
 	actionAccountCreate        = "account-create"
 	actionAccountFund          = "account-fund"
 	actionAccountBalance       = "account-balance"
+	actionAssetsBalance        = "assets-balance"
 	actionPoolCreate           = "fula-pool-create"
 	actionPoolJoin             = "fula-pool-join"
 	actionPoolCancelJoin       = "fula-pool-cancel_join"
@@ -85,6 +86,15 @@ type AccountBalanceRequest struct {
 	Account string `json:"account"`
 }
 type AccountBalanceResponse struct {
+	Amount BigInt `json:"amount"`
+}
+
+type AssetsBalanceRequest struct {
+	Account string `json:"account"`
+	ClassId string `json:"class_id"`
+	AssetId string `json:"asset_id"`
+}
+type AssetsBalanceResponse struct {
 	Amount BigInt `json:"amount"`
 }
 
@@ -292,6 +302,7 @@ type Blockchain interface {
 	AccountCreate(context.Context, peer.ID) ([]byte, error)
 	AccountFund(context.Context, peer.ID, AccountFundRequest) ([]byte, error)
 	AccountBalance(context.Context, peer.ID, AccountBalanceRequest) ([]byte, error)
+	AssetsBalance(context.Context, peer.ID, AssetsBalanceRequest) ([]byte, error)
 	PoolCreate(context.Context, peer.ID, PoolCreateRequest) ([]byte, error)
 	PoolJoin(context.Context, peer.ID, PoolJoinRequest) ([]byte, error)
 	PoolCancelJoin(context.Context, peer.ID, PoolCancelJoinRequest) ([]byte, error)
@@ -338,6 +349,7 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
+	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceRequest{}),
 
 	//Hardware
 	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
@@ -369,6 +381,7 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
+	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceResponse{}),
 
 	//Hardware
 	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
