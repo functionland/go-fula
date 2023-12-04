@@ -379,6 +379,12 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionDeleteFulaConfig: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleDeleteFulaConfig(r.Context(), from, w, r)
 		},
+		actionDeleteWifi: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleDeleteWifi(r.Context(), from, w, r)
+		},
+		actionDisconnectWifi: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleDisconnectWifi(r.Context(), from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -526,6 +532,51 @@ func (bl *FxBlockchain) handleDeleteFulaConfig(ctx context.Context, from peer.ID
 
 }
 
+func (bl *FxBlockchain) handleDeleteWifi(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionDeleteWifi, "from", from)
+
+	// Parse the JSON body of the request into the DeleteWifiRequest struct
+	var req wifi.DeleteWifiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error("failed to decode request: %v", err)
+		http.Error(w, "failed to decode request", http.StatusBadRequest)
+		return
+	}
+	log.Debugw("handleDeleteWifi received", "req", req)
+
+	out := wifi.DeleteWifi(ctx, req)
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+}
+func (bl *FxBlockchain) handleDisconnectWifi(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionDisconnectWifi, "from", from)
+
+	// Parse the JSON body of the request into the DeleteWifiRequest struct
+	var req wifi.DeleteWifiRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error("failed to decode request: %v", err)
+		http.Error(w, "failed to decode request", http.StatusBadRequest)
+		return
+	}
+	log.Debugw("handleDisconnectWifi received", "req", req)
+
+	out := wifi.DisconnectNamedWifi(ctx, req)
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+}
+
 func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
 	// Check if auth is for local host; if so, handle it locally.
 	if on == bl.h.ID() {
@@ -572,7 +623,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteFulaConfig, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

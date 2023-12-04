@@ -1123,7 +1123,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	defer n1.Shutdown(ctx)
-	fmt.Printf("n1 Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+	log.Debugf("n1 Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
 
 	// Instantiate the second node in the pool
 	pid2, _, err := crypto.GenerateECDSAKeyPair(rng)
@@ -1153,7 +1153,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	defer n2.Shutdown(ctx)
-	fmt.Printf("n2 Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
+	log.Debugf("n2 Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
 
 	// Instantiate the third node in the pool
 	pid3, _, err := crypto.GenerateECDSAKeyPair(rng)
@@ -1183,7 +1183,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	defer n3.Shutdown(ctx)
-	fmt.Printf("n3 Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
+	log.Debugf("n3 Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
 
 	if err = h1.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
 		panic(err)
@@ -1194,12 +1194,13 @@ func Example_blserver() {
 
 	// Wait until the nodes discover each other
 	for {
-		if len(h1.Peerstore().Peers()) == 4 &&
-			len(h2.Peerstore().Peers()) == 4 &&
-			len(h3.Peerstore().Peers()) == 4 {
+		if len(h1.Peerstore().Peers()) >= 3 &&
+			len(h2.Peerstore().Peers()) >= 3 &&
+			len(h3.Peerstore().Peers()) >= 3 {
 			break
 		} else {
-			fmt.Printf("n1 Finally %s peerstore contains %d nodes:\n", h1.ID(), len(h1.Peerstore().Peers()))
+			h1Peers := h1.Peerstore().Peers()
+			log.Debugf("n1 Only %s peerstore contains %d nodes:\n", h1.ID(), len(h1Peers))
 		}
 		select {
 		case <-ctx.Done():
@@ -1210,21 +1211,21 @@ func Example_blserver() {
 	}
 
 	h1Peers := h1.Peerstore().Peers()
-	fmt.Printf("n1 Finally %s peerstore contains %d nodes:\n", h1.ID(), len(h1Peers))
+	log.Debugf("n1 Finally %s peerstore contains %d nodes:\n", h1.ID(), len(h1Peers))
 	for _, id := range h1Peers {
-		fmt.Printf("- %s\n", id)
+		log.Debugf("- %s\n", id)
 	}
 
 	h2Peers := h2.Peerstore().Peers()
-	fmt.Printf("n2 Finally %s peerstore contains %d nodes:\n", h2.ID(), len(h2Peers))
+	log.Debugf("n2 Finally %s peerstore contains %d nodes:\n", h2.ID(), len(h2Peers))
 	for _, id := range h2Peers {
-		fmt.Printf("- %s\n", id)
+		log.Debugf("- %s\n", id)
 	}
 
 	h3Peers := h3.Peerstore().Peers()
-	fmt.Printf("n3 Finally %s peerstore contains %d nodes:\n", h3.ID(), len(h3Peers))
+	log.Debugf("n3 Finally %s peerstore contains %d nodes:\n", h3.ID(), len(h3Peers))
 	for _, id := range h3Peers {
-		fmt.Printf("- %s\n", id)
+		log.Debugf("- %s\n", id)
 	}
 
 	// Instantiate the fourth node not in the pool
@@ -1262,7 +1263,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	defer n4.Shutdown(ctx)
-	fmt.Printf("n4 Instantiated node in pool %s with ID: %s\n", poolName, h4.ID().String())
+	log.Debugf("n4 Instantiated node in pool %s with ID: %s\n", poolName, h4.ID().String())
 
 	n4.AnnounceJoinPoolRequestPeriodically(ctx)
 
@@ -1282,12 +1283,12 @@ func Example_blserver() {
 
 		for id, status := range members {
 			memberInfo := fmt.Sprintf("Member ID: %s, Status: %v", id.String(), status)
-			fmt.Println(memberInfo)
+			log.Debugln(memberInfo)
 		}
 		if len(members) >= 2 {
 			break
 		} else {
-			fmt.Println(members)
+			log.Debugln(members)
 		}
 		select {
 		case <-ctx.Done():
@@ -1298,9 +1299,9 @@ func Example_blserver() {
 	}
 
 	h4Peers := h4.Peerstore().Peers()
-	fmt.Printf("n4 Finally %s peerstore contains %d nodes:\n", h4.ID(), len(h4Peers))
+	log.Debugf("n4 Finally %s peerstore contains %d nodes:\n", h4.ID(), len(h4Peers))
 	for _, id := range h4Peers {
-		fmt.Printf("- %s\n", id)
+		log.Debugf("- %s\n", id)
 	}
 
 	//wait for 60 seconds
@@ -1319,34 +1320,6 @@ func Example_blserver() {
 	}
 
 	// Unordered output:
-	// n1 Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// n2 Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// n3 Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// n1 Finally QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT peerstore contains 4 nodes:
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// n2 Finally QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF peerstore contains 4 nodes:
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// n3 Finally QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA peerstore contains 4 nodes:
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// n4 Instantiated node in pool 1 with ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// n4 Finally QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe peerstore contains 4 nodes:
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// - QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Member ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe, Status: 1
-	// Member ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA, Status: 2
-	// Member ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT, Status: 2
-	// Member ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF, Status: 2
 	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
 	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
 	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}

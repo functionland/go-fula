@@ -37,6 +37,8 @@ const (
 	actionReboot           = "reboot"
 	actionPartition        = "partition"
 	actionDeleteFulaConfig = "delete-fula-config"
+	actionDeleteWifi       = "delete-wifi"
+	actionDisconnectWifi   = "disconnect-wifi"
 )
 
 type LinkWithLimit struct {
@@ -310,6 +312,8 @@ type Blockchain interface {
 	BloxFreeSpace(context.Context, peer.ID) ([]byte, error)
 	WifiRemoveall(context.Context, peer.ID) ([]byte, error)
 	Reboot(context.Context, peer.ID) ([]byte, error)
+	DeleteWifi(context.Context, peer.ID, wifi.DeleteWifiRequest) ([]byte, error)
+	DisconnectWifi(context.Context, peer.ID, wifi.DeleteWifiRequest) ([]byte, error)
 	Partition(context.Context, peer.ID) ([]byte, error)
 	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
 }
@@ -341,6 +345,8 @@ var requestTypes = map[string]reflect.Type{
 	actionReboot:           reflect.TypeOf(wifi.RebootRequest{}),
 	actionPartition:        reflect.TypeOf(wifi.PartitionRequest{}),
 	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
+	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -370,4 +376,6 @@ var responseTypes = map[string]reflect.Type{
 	actionReboot:           reflect.TypeOf(wifi.RebootResponse{}),
 	actionPartition:        reflect.TypeOf(wifi.PartitionResponse{}),
 	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
+	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiResponse{}),
 }
