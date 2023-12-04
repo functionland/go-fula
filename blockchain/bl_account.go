@@ -185,15 +185,17 @@ func isValidAccountFormat(account string) bool {
 	return re.MatchString(account)
 }
 
-func (bl *FxBlockchain) GetAccount(ctx context.Context) (string, error) {
+func (bl *FxBlockchain) HandleGetAccount(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
 	if bl.isAccountCached && bl.cachedAccount != "" {
-		return bl.cachedAccount, nil
+		json.NewEncoder(w).Encode(map[string]string{"account": bl.cachedAccount})
+		return
 	}
 
 	// Read the seed from file
 	seedBytes, err := os.ReadFile("/internal/.secrets/secret_seed.txt")
 	if err != nil {
-		return "", fmt.Errorf("error reading seed file: %w", err)
+		http.Error(w, fmt.Sprintf("error reading seed file: %v", err), http.StatusInternalServerError)
+		return
 	}
 	seed := string(seedBytes)
 
@@ -201,29 +203,24 @@ func (bl *FxBlockchain) GetAccount(ctx context.Context) (string, error) {
 	seededReq := SeededRequest{Seed: seed}
 	account, err := bl.HandleSeeded(ctx, seededReq)
 	if err != nil {
-		return "", fmt.Errorf("error getting account from seed: %w", err)
+		http.Error(w, fmt.Sprintf("error getting account from seed: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	if !isValidAccountFormat(account) {
-		return "", fmt.Errorf("invalid account format: %s", account)
+		http.Error(w, fmt.Sprintf("invalid account format: %s", account), http.StatusBadRequest)
+		return
 	}
 
 	// Cache the account for future use
 	bl.cachedAccount = account
 	bl.isAccountCached = true
 
-	return account, nil
+	// Send the account as JSON response
+	json.NewEncoder(w).Encode(map[string]string{"account": account})
 }
 
 func (bl *FxBlockchain) AssetsBalance(ctx context.Context, to peer.ID, r AssetsBalanceRequest) ([]byte, error) {
-	// Get the account, either from cache or via API call
-	account, err := bl.GetAccount(ctx)
-	if err != nil {
-		return nil, err
-	}
-	r.Account = account
-
-	// The rest of method...
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")
 	}

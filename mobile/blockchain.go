@@ -29,9 +29,9 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 
 // AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
-func (c *Client) AssetsBalance(assetId string, classId string) ([]byte, error) {
+func (c *Client) AssetsBalance(account string, assetId string, classId string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: "", AssetId: assetId, ClassId: classId})
+	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: assetId, ClassId: classId})
 }
 
 // PoolJoin requests blox at Config.BloxAddr to join a pool with the id.
@@ -140,4 +140,11 @@ func (c *Client) Partition() ([]byte, error) {
 func (c *Client) DeleteFulaConfig() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.DeleteFulaConfig(ctx, c.bloxPid)
+}
+
+// AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) GetAccount() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetAccount(ctx, c.bloxPid)
 }

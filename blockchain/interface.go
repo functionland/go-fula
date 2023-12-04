@@ -40,6 +40,7 @@ const (
 	actionDeleteFulaConfig = "delete-fula-config"
 	actionDeleteWifi       = "delete-wifi"
 	actionDisconnectWifi   = "disconnect-wifi"
+	actionGetAccount       = "get-account"
 )
 
 type LinkWithLimit struct {
@@ -54,6 +55,12 @@ type SeededRequest struct {
 type SeededResponse struct {
 	Seed    string `json:"seed"`
 	Account string `json:"account"`
+}
+
+type GetAccountResponse struct {
+	Account string `json:"account"`
+}
+type GetAccountRequest struct {
 }
 
 type AccountExistsRequest struct {
@@ -327,6 +334,7 @@ type Blockchain interface {
 	DisconnectWifi(context.Context, peer.ID, wifi.DeleteWifiRequest) ([]byte, error)
 	Partition(context.Context, peer.ID) ([]byte, error)
 	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
+	GetAccount(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -359,6 +367,7 @@ var requestTypes = map[string]reflect.Type{
 	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
 	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiRequest{}),
 	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionGetAccount:       reflect.TypeOf(GetAccountRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -391,4 +400,5 @@ var responseTypes = map[string]reflect.Type{
 	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
 	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiResponse{}),
 	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionGetAccount:       reflect.TypeOf(GetAccountResponse{}),
 }
