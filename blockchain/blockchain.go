@@ -77,6 +77,8 @@ type (
 		fetchCheckStop   chan struct{}
 
 		stopFetchUsersAfterJoinChan chan struct{}
+		cachedAccount               string
+		isAccountCached             bool
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -321,6 +323,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionAccountExists: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionAccountExists, from, w, r)
 		},
+		actionAssetsBalance: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(http.MethodPost, actionAssetsBalance, from, w, r)
+		},
 		actionPoolCreate: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			//TODO: We should check if from owns the blox
 			bl.handleAction(http.MethodPost, actionPoolCreate, from, w, r)
@@ -384,6 +389,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		},
 		actionDisconnectWifi: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleDisconnectWifi(r.Context(), from, w, r)
+		},
+		actionGetAccount: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.HandleGetAccount(r.Context(), from, w, r)
 		},
 	}
 
@@ -623,7 +631,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

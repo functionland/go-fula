@@ -15,6 +15,7 @@ const (
 	actionAccountCreate        = "account-create"
 	actionAccountFund          = "account-fund"
 	actionAccountBalance       = "account-balance"
+	actionAssetsBalance        = "assets-balance"
 	actionPoolCreate           = "fula-pool-create"
 	actionPoolJoin             = "fula-pool-join"
 	actionPoolCancelJoin       = "fula-pool-cancel_join"
@@ -39,6 +40,7 @@ const (
 	actionDeleteFulaConfig = "delete-fula-config"
 	actionDeleteWifi       = "delete-wifi"
 	actionDisconnectWifi   = "disconnect-wifi"
+	actionGetAccount       = "get-account"
 )
 
 type LinkWithLimit struct {
@@ -53,6 +55,12 @@ type SeededRequest struct {
 type SeededResponse struct {
 	Seed    string `json:"seed"`
 	Account string `json:"account"`
+}
+
+type GetAccountResponse struct {
+	Account string `json:"account"`
+}
+type GetAccountRequest struct {
 }
 
 type AccountExistsRequest struct {
@@ -85,6 +93,15 @@ type AccountBalanceRequest struct {
 	Account string `json:"account"`
 }
 type AccountBalanceResponse struct {
+	Amount BigInt `json:"amount"`
+}
+
+type AssetsBalanceRequest struct {
+	Account string `json:"account"`
+	ClassId string `json:"class_id"`
+	AssetId string `json:"asset_id"`
+}
+type AssetsBalanceResponse struct {
 	Amount BigInt `json:"amount"`
 }
 
@@ -292,6 +309,7 @@ type Blockchain interface {
 	AccountCreate(context.Context, peer.ID) ([]byte, error)
 	AccountFund(context.Context, peer.ID, AccountFundRequest) ([]byte, error)
 	AccountBalance(context.Context, peer.ID, AccountBalanceRequest) ([]byte, error)
+	AssetsBalance(context.Context, peer.ID, AssetsBalanceRequest) ([]byte, error)
 	PoolCreate(context.Context, peer.ID, PoolCreateRequest) ([]byte, error)
 	PoolJoin(context.Context, peer.ID, PoolJoinRequest) ([]byte, error)
 	PoolCancelJoin(context.Context, peer.ID, PoolCancelJoinRequest) ([]byte, error)
@@ -316,6 +334,7 @@ type Blockchain interface {
 	DisconnectWifi(context.Context, peer.ID, wifi.DeleteWifiRequest) ([]byte, error)
 	Partition(context.Context, peer.ID) ([]byte, error)
 	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
+	GetAccount(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -338,6 +357,7 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
+	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceRequest{}),
 
 	//Hardware
 	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
@@ -347,6 +367,7 @@ var requestTypes = map[string]reflect.Type{
 	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
 	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiRequest{}),
 	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionGetAccount:       reflect.TypeOf(GetAccountRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -369,6 +390,7 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
+	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceResponse{}),
 
 	//Hardware
 	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
@@ -378,4 +400,5 @@ var responseTypes = map[string]reflect.Type{
 	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
 	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiResponse{}),
 	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionGetAccount:       reflect.TypeOf(GetAccountResponse{}),
 }
