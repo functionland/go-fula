@@ -93,7 +93,7 @@ type AccountBalanceRequest struct {
 	Account string `json:"account"`
 }
 type AccountBalanceResponse struct {
-	Amount BigInt `json:"amount"`
+	Amount string `json:"amount"`
 }
 
 type AssetsBalanceRequest struct {
@@ -102,7 +102,7 @@ type AssetsBalanceRequest struct {
 	AssetId string `json:"asset_id"`
 }
 type AssetsBalanceResponse struct {
-	Amount BigInt `json:"amount"`
+	Amount string `json:"amount"`
 }
 
 type PoolCreateRequest struct {
