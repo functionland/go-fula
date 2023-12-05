@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -19,8 +22,12 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
 	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
+	"github.com/ipfs/kubo/plugin/loader"
+	"github.com/ipfs/kubo/repo"
+	"github.com/ipfs/kubo/repo/fsrepo"
 	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -37,6 +44,26 @@ import (
 	"github.com/urfave/cli/v2/altsrc"
 	"gopkg.in/yaml.v3"
 )
+
+type DatastoreConfigSpec struct {
+	Mounts []Mount `json:"mounts"`
+	Type   string  `json:"type"`
+}
+
+type Mount struct {
+	Child      Child  `json:"child"`
+	Mountpoint string `json:"mountpoint"`
+	Prefix     string `json:"prefix"`
+	Type       string `json:"type"`
+}
+
+type Child struct {
+	Path        string `json:"path"`
+	ShardFunc   string `json:"shardFunc,omitempty"`
+	Sync        bool   `json:"sync,omitempty"`
+	Type        string `json:"type"`
+	Compression string `json:"compression,omitempty"`
+}
 
 var (
 	logger = logging.Logger("fula/cmd/blox")
@@ -69,6 +96,161 @@ var (
 		}
 	}
 )
+
+func DefaultDatastoreConfig(options *badger.Options, dsPath string, storageMax string) config.Datastore {
+	spec := IPFSSpec(dsPath)
+
+	// Marshal the DatastoreConfigSpec to JSON
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		panic(err) // Handle the error appropriately
+	}
+
+	// Unmarshal JSON into a map[string]interface{}
+	var specMap map[string]interface{}
+	if err := json.Unmarshal(specJSON, &specMap); err != nil {
+		panic(err) // Handle the error appropriately
+	}
+
+	return config.Datastore{
+		StorageMax:         storageMax,
+		StorageGCWatermark: 90, // 90%
+		GCPeriod:           "1h",
+		BloomFilterSize:    0,
+		Spec:               BadgerSpec(options, dsPath),
+	}
+}
+func BadgerSpec(options *badger.Options, dsPath string) map[string]interface{} {
+	return map[string]interface{}{
+		"type":   "measure",
+		"prefix": "badger.datastore",
+		"child": map[string]interface{}{
+			"type":           "badgerds",
+			"path":           dsPath,
+			"syncWrites":     options.SyncWrites,
+			"truncate":       options.Truncate,
+			"gcDiscardRatio": options.GcDiscardRatio,
+			"gcSleep":        options.GcSleep.String(),
+			"gcInterval":     options.GcInterval.String(),
+		},
+	}
+}
+func IPFSSpec(dsPath string) DatastoreConfigSpec {
+	return DatastoreConfigSpec{
+		Mounts: []Mount{
+			{
+				Child: Child{
+					Path: filepath.Join(dsPath, "blocks"),
+					Sync: true,
+					Type: "badgerds",
+				},
+				Mountpoint: "/blocks",
+				Prefix:     "badger.blocks",
+				Type:       "measure",
+			},
+			{
+				Child: Child{
+					Path: filepath.Join(dsPath, "keystore"),
+					Sync: true,
+					Type: "badgerds",
+				},
+				Mountpoint: "/keystore",
+				Prefix:     "badgerds.keystore",
+				Type:       "measure",
+			},
+			{
+				Child: Child{
+					Path:        dsPath,
+					Type:        "badgerds",
+					Compression: "none",
+				},
+				Mountpoint: "/",
+				Prefix:     "badgerds.datastore",
+				Type:       "measure",
+			},
+		},
+		Type: "mount",
+	}
+}
+func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options *badger.Options, dsPath string, storageMax string) (repo.Repo, error) {
+	// Path to the repository
+	repoPath := basePath
+
+	if !fsrepo.IsInitialized(repoPath) {
+		// Create the repository if it doesn't exist
+
+		versionFilePath := filepath.Join(repoPath, "version")
+		versionContent := strconv.Itoa(15)
+		if err := os.WriteFile(versionFilePath, []byte(versionContent), 0644); err != nil {
+			return nil, err
+		}
+		dataStoreFilePath := filepath.Join(repoPath, "datastore_spec")
+		datastoreContent := map[string]interface{}{
+			"type": "badgerds",
+			"path": dsPath,
+		}
+		datastoreContentBytes, err := json.Marshal(datastoreContent)
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(dataStoreFilePath, []byte(datastoreContentBytes), 0644); err != nil {
+			return nil, err
+		}
+		// Extract private key and peer ID from the libp2p host
+		privKey := h.Peerstore().PrivKey(h.ID())
+		if privKey == nil {
+			return nil, fmt.Errorf("private key for host not found")
+		}
+		privKeyBytes, err := crypto.MarshalPrivateKey(privKey)
+		if err != nil {
+			return nil, err
+		}
+
+		peerID := h.ID().String()
+		conf := config.Config{
+			Identity: config.Identity{
+				PeerID:  peerID,
+				PrivKey: base64.StdEncoding.EncodeToString(privKeyBytes),
+			},
+		}
+
+		// Set the custom configuration
+		conf.Bootstrap = append(conf.Bootstrap, app.config.StaticRelays...)
+
+		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
+
+		conf.Experimental.GraphsyncEnabled = true
+		conf.Addresses.Swarm = app.config.ListenAddrs
+		conf.Identity.PeerID = h.ID().String()
+		conf.Identity.PrivKey = app.config.Identity
+		conf.Swarm.RelayService.Enabled = 1
+
+		// Initialize the repo with the configuration
+		if err := fsrepo.Init(repoPath, &conf); err != nil {
+			return nil, err
+		}
+	}
+	plugins, err := loader.NewPluginLoader(repoPath)
+	if err != nil {
+		panic(fmt.Errorf("error loading plugins: %s", err))
+	}
+
+	if err := plugins.Initialize(); err != nil {
+		panic(fmt.Errorf("error initializing plugins: %s", err))
+	}
+
+	if err := plugins.Inject(); err != nil {
+		panic(fmt.Errorf("error initializing plugins: %s", err))
+	}
+
+	// Open the repo
+	repo, err := fsrepo.Open(repoPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return repo, nil
+}
 
 func init() {
 	app.App = cli.App{
@@ -490,8 +672,15 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	ds, err := badger.NewDatastore(app.config.StoreDir, &badger.DefaultOptions)
+	/*ds, err := badger.NewDatastore(app.config.StoreDir, &badger.DefaultOptions)
 	if err != nil {
+		return err
+	}*/
+
+	dirPath := filepath.Dir(app.configPath)
+	repo, err := CreateCustomRepo(ctx.Context, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
+	if err != nil {
+		logger.Fatal(err)
 		return err
 	}
 
@@ -500,7 +689,7 @@ func action(ctx *cli.Context) error {
 		Permanent: true,
 		Host:      CustomHostOption(h),
 		Routing:   kubolibp2p.DHTOption,
-		//Repo:      ds,
+		Repo:      repo,
 	}
 	ipfsNode, err := core.NewNode(context.Background(), ipfsConfig)
 	if err != nil {
@@ -510,6 +699,7 @@ func action(ctx *cli.Context) error {
 	ipfsHostId := ipfsNode.PeerHost.ID()
 	ipfsId := ipfsNode.Identity.String()
 	logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
+	ds := ipfsNode.Repo.Datastore()
 	bb, err := blox.New(
 		blox.WithHost(h),
 		blox.WithDatastore(ds),
