@@ -1074,7 +1074,66 @@ func Example_blserver() {
 	rng := rand.New(rand.NewSource(42))
 	cfg := NewConfig()
 
+	// ListenAddr configure
+	ListenAddrsConfig1 := []string{"/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic"}
+	listenAddrs1 := make([]multiaddr.Multiaddr, 0, len(ListenAddrsConfig1)+1)
+	// Convert string addresses to multiaddr and append to listenAddrs
+	for _, addrString := range ListenAddrsConfig1 {
+		addr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			panic(fmt.Errorf("invalid multiaddress: %w", err))
+		}
+		listenAddrs1 = append(listenAddrs1, addr)
+	}
+	// Add the relay multiaddress
+	relayAddr2, err := multiaddr.NewMultiaddr("/p2p-circuit")
+	if err != nil {
+		panic(fmt.Errorf("error creating relay multiaddress: %w", err))
+	}
+	listenAddrs1 = append(listenAddrs1, relayAddr2)
+	///
+	ListenAddrsConfig2 := []string{"/ip4/0.0.0.0/tcp/40002", "/ip4/0.0.0.0/udp/40002/quic"}
+	listenAddrs2 := make([]multiaddr.Multiaddr, 0, len(ListenAddrsConfig2)+1)
+	// Convert string addresses to multiaddr and append to listenAddrs
+	for _, addrString := range ListenAddrsConfig2 {
+		addr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			panic(fmt.Errorf("invalid multiaddress: %w", err))
+		}
+		listenAddrs2 = append(listenAddrs2, addr)
+	}
+	// Add the relay multiaddress
+	listenAddrs2 = append(listenAddrs2, relayAddr2)
+	///
+	ListenAddrsConfig3 := []string{"/ip4/0.0.0.0/tcp/40003", "/ip4/0.0.0.0/udp/40003/quic"}
+	listenAddrs3 := make([]multiaddr.Multiaddr, 0, len(ListenAddrsConfig3)+1)
+	// Convert string addresses to multiaddr and append to listenAddrs
+	for _, addrString := range ListenAddrsConfig3 {
+		addr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			panic(fmt.Errorf("invalid multiaddress: %w", err))
+		}
+		listenAddrs3 = append(listenAddrs3, addr)
+	}
+	// Add the relay multiaddress
+	listenAddrs3 = append(listenAddrs3, relayAddr2)
+	///
+	ListenAddrsConfig4 := []string{"/ip4/0.0.0.0/tcp/40004", "/ip4/0.0.0.0/udp/40004/quic"}
+	listenAddrs4 := make([]multiaddr.Multiaddr, 0, len(ListenAddrsConfig4)+1)
+	// Convert string addresses to multiaddr and append to listenAddrs
+	for _, addrString := range ListenAddrsConfig4 {
+		addr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			panic(fmt.Errorf("invalid multiaddress: %w", err))
+		}
+		listenAddrs4 = append(listenAddrs4, addr)
+	}
+	// Add the relay multiaddress
+	listenAddrs4 = append(listenAddrs4, relayAddr2)
+
+	//End of ListenAddr configure
 	hopts := []libp2p.Option{
+		//libp2p.ListenAddrs(listenAddrs...),
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
@@ -1101,6 +1160,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	hopts1 := append(hopts, libp2p.Identity(pid1))
+	hopts1 = append(hopts1, libp2p.ListenAddrs(listenAddrs1...))
 	h1, err := libp2p.New(hopts1...)
 	if err != nil {
 		panic(err)
@@ -1131,6 +1191,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	hopts2 := append(hopts, libp2p.Identity(pid2))
+	hopts2 = append(hopts2, libp2p.ListenAddrs(listenAddrs2...))
 	h2, err := libp2p.New(hopts2...)
 	if err != nil {
 		panic(err)
@@ -1161,6 +1222,7 @@ func Example_blserver() {
 		panic(err)
 	}
 	hopts3 := append(hopts, libp2p.Identity(pid3))
+	hopts3 = append(hopts3, libp2p.ListenAddrs(listenAddrs3...))
 	h3, err := libp2p.New(hopts3...)
 	if err != nil {
 		panic(err)
@@ -1237,6 +1299,7 @@ func Example_blserver() {
 	}
 	log.Debug("Now creating host of n4")
 	hopts4 := append(hopts, libp2p.Identity(pid4))
+	hopts4 = append(hopts4, libp2p.ListenAddrs(listenAddrs4...))
 	h4, err := libp2p.New(hopts4...)
 	if err != nil {
 		log.Errorw("An error happened in creating libp2p  instance of n4", "Err", err)
