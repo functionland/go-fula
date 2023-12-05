@@ -376,7 +376,6 @@ func updatePoolName(newPoolName string) error {
 
 func CustomHostOption(h host.Host) kubolibp2p.HostOption {
 	return func(id peer.ID, ps peerstore.Peerstore, options ...libp2p.Option) (host.Host, error) {
-		// Return the existing host, ignore the parameters
 		return h, nil
 	}
 }
@@ -496,19 +495,21 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	ipfsNode, err := core.NewNode(context.Background(), &core.BuildCfg{
+	ipfsConfig := &core.BuildCfg{
 		Online:    true,
 		Permanent: true,
 		Host:      CustomHostOption(h),
 		Routing:   kubolibp2p.DHTOption,
 		//Repo:      ds,
-	})
+	}
+	ipfsNode, err := core.NewNode(context.Background(), ipfsConfig)
 	if err != nil {
 		logger.Fatal(err)
 		return err
 	}
+	ipfsHostId := ipfsNode.PeerHost.ID()
 	ipfsId := ipfsNode.Identity.String()
-	logger.Infow("ipfs successfully instantiated", "peer", ipfsId)
+	logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
 	bb, err := blox.New(
 		blox.WithHost(h),
 		blox.WithDatastore(ds),
