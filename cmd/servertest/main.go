@@ -212,8 +212,25 @@ func main() {
 	// output for the example.
 	rng := rand.New(rand.NewSource(42))
 	cfg := NewConfig()
+	ListenAddrsConfig := []string{"/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic"}
+	listenAddrs := make([]multiaddr.Multiaddr, 0, len(ListenAddrsConfig)+1)
+	// Convert string addresses to multiaddr and append to listenAddrs
+	for _, addrString := range ListenAddrsConfig {
+		addr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			panic(fmt.Errorf("invalid multiaddress: %w", err))
+		}
+		listenAddrs = append(listenAddrs, addr)
+	}
+	// Add the relay multiaddress
+	relayAddr2, err := multiaddr.NewMultiaddr("/p2p-circuit")
+	if err != nil {
+		panic(fmt.Errorf("error creating relay multiaddress: %w", err))
+	}
+	listenAddrs = append(listenAddrs, relayAddr2)
 
 	hopts := []libp2p.Option{
+		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
@@ -404,16 +421,6 @@ func main() {
 	fmt.Printf("n4 Instantiated node in pool %s with ID: %s\n", poolName, h4.ID().String())
 
 	n4.AnnounceJoinPoolRequestPeriodically(ctx)
-
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
-		panic(err)
-	}
-	if err = h2.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
-		panic(err)
-	}
-	if err = h3.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
-		panic(err)
-	}
 
 	// Wait until the fourth node discover others
 	for {

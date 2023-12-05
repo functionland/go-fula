@@ -94,7 +94,7 @@ func (cfg *Config) init(mc *Client) error {
 			}
 			sr = append(sr, *rai)
 		}
-		libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1))
+		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1)))
 	}
 
 	if cfg.ForceReachabilityPrivate {
