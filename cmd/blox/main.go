@@ -19,12 +19,15 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	core "github.com/ipfs/kubo/core"
+	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
 	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/mdp/qrterminal"
@@ -371,6 +374,13 @@ func updatePoolName(newPoolName string) error {
 	return nil
 }
 
+func CustomHostOption(h host.Host) kubolibp2p.HostOption {
+	return func(id peer.ID, ps peerstore.Peerstore, options ...libp2p.Option) (host.Host, error) {
+		// Return the existing host, ignore the parameters
+		return h, nil
+	}
+}
+
 func action(ctx *cli.Context) error {
 	if app.generateNodeKey {
 		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
@@ -485,6 +495,20 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	ipfsNode, err := core.NewNode(context.Background(), &core.BuildCfg{
+		Online:    true,
+		Permanent: true,
+		Host:      CustomHostOption(h),
+		Routing:   kubolibp2p.DHTOption,
+		//Repo:      ds,
+	})
+	if err != nil {
+		logger.Fatal(err)
+		return err
+	}
+	ipfsId := ipfsNode.Identity.String()
+	logger.Infow("ipfs successfully instantiated", "peer", ipfsId)
 	bb, err := blox.New(
 		blox.WithHost(h),
 		blox.WithDatastore(ds),

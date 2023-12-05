@@ -249,7 +249,7 @@ func (p *Blox) Start(ctx context.Context) error {
 
 	// Create an HTTP server instance
 	p.IPFShttpServer = &http.Server{
-		Addr:    "localhost:5001",
+		Addr:    "localhost:5002",
 		Handler: p.ServeIpfsRpc(),
 	}
 
@@ -259,7 +259,7 @@ func (p *Blox) Start(ctx context.Context) error {
 		log.Debug("called wg.Done in Start blox")
 		defer p.wg.Done()
 		defer log.Debug("Start blox go routine is ending")
-		log.Infow("IPFS RPC server started on address http://localhost:5001")
+		log.Infow("IPFS RPC server started on address http://localhost:5002")
 		if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Errorw("IPFS RPC server stopped erroneously", "err", err)
 		} else {
