@@ -427,8 +427,24 @@ func action(ctx *cli.Context) error {
 		return nil
 	}
 
+	listenAddrs := make([]multiaddr.Multiaddr, 0, len(app.config.ListenAddrs)+1)
+	// Convert string addresses to multiaddr and append to listenAddrs
+	for _, addrString := range app.config.ListenAddrs {
+		addr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			panic(fmt.Errorf("invalid multiaddress: %w", err))
+		}
+		listenAddrs = append(listenAddrs, addr)
+	}
+	// Add the relay multiaddress
+	relayAddr2, err := multiaddr.NewMultiaddr("/p2p-circuit")
+	if err != nil {
+		panic(fmt.Errorf("error creating relay multiaddress: %w", err))
+	}
+	listenAddrs = append(listenAddrs, relayAddr2)
+
 	hopts := []libp2p.Option{
-		libp2p.ListenAddrStrings(app.config.ListenAddrs...),
+		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
