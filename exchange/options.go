@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	iface "github.com/ipfs/boxo/coreiface"
 	"github.com/ipni/index-provider/engine"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -24,6 +25,7 @@ type (
 		dhtProviderOpts          []dht.Option
 		updateConfig             ConfigUpdater
 		wg                       *sync.WaitGroup
+		ipfsApi                  iface.CoreAPI
 	}
 )
 
@@ -119,6 +121,13 @@ func WithDhtProviderOptions(d ...dht.Option) Option {
 func WithWg(wg *sync.WaitGroup) Option {
 	return func(o *options) error {
 		o.wg = wg
+		return nil
+	}
+}
+
+func WithIPFS(ipfsApi iface.CoreAPI) Option {
+	return func(o *options) error {
+		o.ipfsApi = ipfsApi
 		return nil
 	}
 }

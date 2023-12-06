@@ -276,7 +276,7 @@ func (p *Blox) Start(ctx context.Context) error {
 	} else {
 		log.Errorw("Announcement stopped erroneously", "err", anErr)
 	}
-	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.ctx, p.cancel = context.WithCancel(ctx)
 
 	// Starting a new goroutine for periodic task
 	p.wg.Add(1)
@@ -408,16 +408,17 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	} else {
 		log.Debug("announcements shutdown done")
 	}
+
+	// Shutdown the HTTP server
+	if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
+		log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
+	}
+
 	if dsErr := p.ds.Close(); dsErr != nil {
 		log.Errorw("Error occurred in datastore shutdown", "dsErr", dsErr)
 		return dsErr
 	} else {
 		log.Debug("datastore shutdown done")
-	}
-
-	// Shutdown the HTTP server
-	if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
-		log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
 	}
 
 	// Wait for all goroutines to complete

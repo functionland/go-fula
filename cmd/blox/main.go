@@ -567,6 +567,8 @@ func CustomHostOption(h host.Host) kubolibp2p.HostOption {
 
 func action(ctx *cli.Context) error {
 	var wg sync.WaitGroup
+	ctx2, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	if app.generateNodeKey {
 		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
@@ -683,7 +685,7 @@ func action(ctx *cli.Context) error {
 	}*/
 
 	dirPath := filepath.Dir(app.configPath)
-	repo, err := CreateCustomRepo(ctx.Context, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
+	repo, err := CreateCustomRepo(ctx2, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
 	if err != nil {
 		logger.Fatal(err)
 		return err
@@ -697,7 +699,7 @@ func action(ctx *cli.Context) error {
 		Repo:      repo,
 	}
 
-	ipfsNode, err := core.NewNode(context.Background(), ipfsConfig)
+	ipfsNode, err := core.NewNode(ctx2, ipfsConfig)
 	if err != nil {
 		logger.Fatal(err)
 		return err
@@ -727,6 +729,7 @@ func action(ctx *cli.Context) error {
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithWg(&wg),
+			exchange.WithIPFS(ipfsAPI),
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
@@ -750,16 +753,29 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := bb.Start(ctx.Context); err != nil {
+
+	if err := bb.Start(ctx2); err != nil {
 		return err
 	}
+
 	logger.Info("Started blox", "addrs", h.Addrs())
 	printMultiaddrAsQR(h)
+
+	// Setup signal handling
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	logger.Info("Shutting down blox")
-	return bb.Shutdown(context.Background())
+	go func() {
+		<-sig
+		logger.Info("Signal received, initiating shutdown...")
+		if err := bb.Shutdown(ctx2); err != nil {
+			logger.Error("Error during blox shutdown:", err)
+		}
+		cancel() // Trigger context cancellation
+	}()
+
+	<-ctx2.Done()
+	wg.Wait()
+	return nil
 }
 
 func printMultiaddrAsQR(h host.Host) {
