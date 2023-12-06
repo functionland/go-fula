@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -25,6 +26,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
+	coreapi "github.com/ipfs/kubo/core/coreapi"
 	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
 	"github.com/ipfs/kubo/plugin/loader"
 	"github.com/ipfs/kubo/repo"
@@ -694,6 +696,7 @@ func action(ctx *cli.Context) error {
 		Routing:   kubolibp2p.DHTOption,
 		Repo:      repo,
 	}
+
 	ipfsNode, err := core.NewNode(context.Background(), ipfsConfig)
 	if err != nil {
 		logger.Fatal(err)
@@ -702,6 +705,14 @@ func action(ctx *cli.Context) error {
 	ipfsHostId := ipfsNode.PeerHost.ID()
 	ipfsId := ipfsNode.Identity.String()
 	logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
+	ipfsAPI, err := coreapi.NewCoreAPI(ipfsNode)
+	if err != nil {
+		panic(fmt.Errorf("failed to create IPFS API: %w", err))
+	}
+	if ipfsAPI != nil {
+		logger.Info("ipfscoreapi successfully instantiated")
+	}
+
 	ds := ipfsNode.Repo.Datastore()
 	bb, err := blox.New(
 		blox.WithHost(h),
@@ -754,13 +765,15 @@ func action(ctx *cli.Context) error {
 func printMultiaddrAsQR(h host.Host) {
 	var addr multiaddr.Multiaddr
 	addrs := h.Addrs()
+
 	switch len(addrs) {
 	case 0:
+		// No addresses to process
+		return
 	case 1:
 		addr = addrs[0]
 	default:
-		// Prefer printing public address if there is one.
-		// Otherwise, fallback on a non-loopback address.
+		// Select the best address to use
 		for _, a := range addrs {
 			if manet.IsPublicAddr(a) {
 				addr = a
@@ -771,20 +784,34 @@ func printMultiaddrAsQR(h host.Host) {
 			}
 		}
 	}
+
 	if addr == nil {
-		logger.Warn("blox has no multiaddrs")
+		fmt.Println("blox has no multiaddrs")
 		return
 	}
-	as := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
-	fmt.Printf(">>> blox multiaddr: %s\n", as)
-	qrterminal.GenerateWithConfig(as, qrterminal.Config{
-		Level:      qrterminal.L,
-		Writer:     os.Stdout,
-		HalfBlocks: false,
-		BlackChar:  "%%",
-		WhiteChar:  "  ",
-		QuietZone:  qrterminal.QUIET_ZONE,
-	})
+
+	fullAddr := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
+	fmt.Printf(">>> blox multiaddr: %s\n", fullAddr)
+
+	// Configure QR code generation based on OS
+	config := qrterminal.Config{
+		Level:     qrterminal.M,
+		Writer:    os.Stdout,
+		QuietZone: qrterminal.QUIET_ZONE,
+	}
+
+	if runtime.GOOS == "windows" {
+		// Specific characters for Windows terminal
+		config.BlackChar = qrterminal.BLACK
+		config.WhiteChar = qrterminal.WHITE
+	} else {
+		// Characters for other terminals (e.g., Unix/Linux)
+		config.BlackChar = "%%"
+		config.WhiteChar = "  "
+	}
+
+	// Generate QR code
+	qrterminal.GenerateWithConfig(fullAddr, config)
 }
 
 func main() {
