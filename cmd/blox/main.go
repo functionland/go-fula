@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -563,6 +564,8 @@ func CustomHostOption(h host.Host) kubolibp2p.HostOption {
 }
 
 func action(ctx *cli.Context) error {
+	var wg sync.WaitGroup
+
 	if app.generateNodeKey {
 		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
 		nodeKey, err := ConvertBase64PrivateKeyToHexNodeKey(app.config.Identity)
@@ -702,6 +705,7 @@ func action(ctx *cli.Context) error {
 	ds := ipfsNode.Repo.Datastore()
 	bb, err := blox.New(
 		blox.WithHost(h),
+		blox.WithWg(&wg),
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
@@ -711,6 +715,7 @@ func action(ctx *cli.Context) error {
 		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
+			exchange.WithWg(&wg),
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),

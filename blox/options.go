@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"sync"
 	"time"
 
 	"github.com/functionland/go-fula/exchange"
@@ -39,6 +40,7 @@ type (
 		minSuccessRate     int
 		blockchainEndpoint string
 		IPFShttpServer     *http.Server
+		wg                 *sync.WaitGroup
 	}
 )
 
@@ -207,6 +209,13 @@ func WithBlockchainEndPoint(b string) Option {
 			b = "127.0.0.1:4000"
 		}
 		o.blockchainEndpoint = b
+		return nil
+	}
+}
+
+func WithWg(wg *sync.WaitGroup) Option {
+	return func(o *options) error {
+		o.wg = wg
 		return nil
 	}
 }

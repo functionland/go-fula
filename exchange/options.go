@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"sync"
 	"time"
 
 	"github.com/ipni/index-provider/engine"
@@ -22,6 +23,7 @@ type (
 		ipniProviderEngineOpts   []engine.Option
 		dhtProviderOpts          []dht.Option
 		updateConfig             ConfigUpdater
+		wg                       *sync.WaitGroup
 	}
 )
 
@@ -29,6 +31,7 @@ func newOptions(o ...Option) (*options, error) {
 	opts := options{
 		ipniPublishMaxBatchSize: 16 << 10,
 		ipniPublishChanBuffer:   1,
+		wg:                      nil,
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
@@ -109,6 +112,13 @@ func WithIpniProviderEngineOptions(e ...engine.Option) Option {
 func WithDhtProviderOptions(d ...dht.Option) Option {
 	return func(o *options) error {
 		o.dhtProviderOpts = d
+		return nil
+	}
+}
+
+func WithWg(wg *sync.WaitGroup) Option {
+	return func(o *options) error {
+		o.wg = wg
 		return nil
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/functionland/go-fula/announcements"
@@ -27,7 +26,6 @@ type (
 	Blox struct {
 		ctx    context.Context
 		cancel context.CancelFunc
-		wg     sync.WaitGroup
 
 		*options
 		ls ipld.LinkSystem
@@ -63,7 +61,7 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.pn, err = ping.NewFxPing(p.h,
 		ping.WithAllowTransientConnection(true),
-		ping.WithWg(&p.wg),
+		ping.WithWg(p.wg),
 		ping.WithTimeout(3),
 		ping.WithCount(p.pingCount))
 	if err != nil {
@@ -74,7 +72,7 @@ func New(o ...Option) (*Blox, error) {
 		announcements.WithAnnounceInterval(5),
 		announcements.WithTimeout(3),
 		announcements.WithTopicName(p.topicName),
-		announcements.WithWg(&p.wg),
+		announcements.WithWg(p.wg),
 		announcements.WithRelays(p.relays),
 	)
 	if err != nil {
@@ -87,7 +85,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint(p.blockchainEndpoint),
 		blockchain.WithTimeout(30),
-		blockchain.WithWg(&p.wg),
+		blockchain.WithWg(p.wg),
 		blockchain.WithFetchFrequency(3),
 		blockchain.WithTopicName(p.topicName),
 		blockchain.WithUpdatePoolName(p.updatePoolName),

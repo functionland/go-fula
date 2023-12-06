@@ -211,13 +211,22 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
-	// Call Provide for the last block link of each response
-	if err := e.dht.Provide(l); err != nil {
-		log.Warnw("Failed to provide link via DHT", "link", l, "err", err)
-		// Decide how to handle the error, e.g., continue, return, etc.
-	} else {
-		log.Debug("Success provide link via DHT")
+
+	if e.wg != nil {
+		e.wg.Add(1)
 	}
+	go func() {
+		if e.wg != nil {
+			defer e.wg.Done()
+		}
+		// Call Provide for the last block link of each response
+		if err := e.dht.Provide(l); err != nil {
+			log.Warnw("Failed to provide link via DHT", "link", l, "err", err)
+			// Handle the error
+		} else {
+			log.Debug("Success provide link via DHT")
+		}
+	}()
 	resps, errs := e.gx.Request(ctx, from, l, selectorparse.CommonSelector_ExploreAllRecursively)
 	for {
 		select {
@@ -228,13 +237,15 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 				return nil
 			}
 			log.Infow("synced node", "node", resp.Node)
+
 			// Call Provide for the last block link of each response
 			if err := e.dht.Provide(resp.LastBlock.Link); err != nil {
-				log.Warnw("Failed to provide link via DHT", "link", resp.LastBlock.Link, "err", err)
+				log.Warnw("Failed to provide link via DHT2", "link", resp.LastBlock.Link, "err", err)
 				// Decide how to handle the error, e.g., continue, return, etc.
 			} else {
 				log.Debug("Success provide link via DHT")
 			}
+
 		case err, ok := <-errs:
 			if !ok {
 				return nil
