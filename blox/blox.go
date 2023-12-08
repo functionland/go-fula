@@ -258,11 +258,11 @@ func (p *Blox) Start(ctx context.Context) error {
 		defer p.wg.Done()
 		defer log.Debug("Start blox go routine is ending")
 		log.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
-		/*if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
+		if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Errorw("IPFS RPC server stopped erroneously", "err", err)
 		} else {
 			log.Infow("IPFS RPC server stopped")
-		}*/
+		}
 	}()
 
 	if anErr == nil {
