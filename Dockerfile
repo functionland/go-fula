@@ -1,4 +1,4 @@
-FROM golang:1.19-bullseye AS build
+FROM golang:1.21 AS builder
 
 WORKDIR /go/src/go-fula
 
