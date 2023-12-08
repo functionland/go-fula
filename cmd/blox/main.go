@@ -227,6 +227,7 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 		conf.Identity.PeerID = h.ID().String()
 		conf.Identity.PrivKey = app.config.Identity
 		conf.Swarm.RelayService.Enabled = 1
+		conf.Addresses.API = []string{"/ip4/127.0.0.1/tcp/5001"}
 
 		// Initialize the repo with the configuration
 		if err := fsrepo.Init(repoPath, &conf); err != nil {
@@ -714,6 +715,32 @@ func action(ctx *cli.Context) error {
 	if ipfsAPI != nil {
 		logger.Info("ipfscoreapi successfully instantiated")
 	}
+
+	logger.Debug("called wg.Add in blox start")
+	/*opts := []corehttp.ServeOption{
+		// Add necessary handlers, CORS, etc.
+		corehttp.GatewayOption("127.0.0.1:5001"),
+		corehttp.CheckVersionOption(),
+		corehttp.HostnameOption(),
+		corehttp.RoutingOption(),
+		corehttp.LogOption(),
+		corehttp.Libp2pGatewayOption(),
+	}
+
+	wg.Add(1)
+	go func() {
+		logger.Debug("called wg.Done in Start")
+		defer wg.Done()
+		defer logger.Debug("Start go routine is ending")
+		if ipfsNode.IsOnline {
+			logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
+			err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
+			if err != nil {
+				fmt.Println("Error setting up HTTP API server:", err)
+			}
+		}
+		select {}
+	}()*/
 
 	ds := ipfsNode.Repo.Datastore()
 	bb, err := blox.New(
