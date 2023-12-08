@@ -3,12 +3,13 @@ package ping
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
 	"net"
 	"net/http"
 	"path"
@@ -261,7 +262,14 @@ func (pn *FxPing) Ping(ctx context.Context, to peer.ID) (int, int, error) {
 		startTime := time.Now()
 
 		// Create a random-sized body within the 56 to 256 bytes range
-		bodySize := rand.Intn(200) + 56 // to get a size between 56 and 256 bytes
+		max := big.NewInt(200) // 200 is the upper limit of our range
+		randIntBig, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			log.Errorf("failed to create a random int for id: %d", id)
+			continue
+		}
+		bodySize := int(randIntBig.Int64()) + 56 // to get a size between 56 and 256 bytes
+
 		binaryData := make([]byte, bodySize)
 		_, _ = rand.Read(binaryData) // generate a random body
 		encodedData := base64.StdEncoding.EncodeToString(binaryData)
