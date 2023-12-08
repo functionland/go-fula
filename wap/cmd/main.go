@@ -198,9 +198,8 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 						ConnectionName: "FxBlox",
 					}
 					// Execute the disconnect in the background
-					if err := wifi.DisconnectNamedWifi(ctx, req); err != nil {
-						log.Errorw("Failed to disconnect named WiFi", "err", err)
-					}
+					disconnectWifiResponse := wifi.DisconnectNamedWifi(ctx, req)
+					log.Infow("Disconnect Wifi with response", "res", disconnectWifiResponse)
 				}()
 
 				stopServer <- struct{}{} // stop the HTTP server
