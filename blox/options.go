@@ -95,6 +95,9 @@ func newOptions(o ...Option) (*options, error) {
 	if opts.authorizer == "" {
 		opts.authorizer = opts.h.ID()
 	}
+	if opts.wg == nil {
+		opts.wg = new(sync.WaitGroup)
+	}
 	return &opts, nil
 }
 
