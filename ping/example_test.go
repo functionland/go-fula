@@ -1,18 +1,6 @@
 package ping_test
 
-import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"time"
-
-	logging "github.com/ipfs/go-log/v2"
-	"github.com/libp2p/go-libp2p/core/crypto"
-)
-
+/*
 var log = logging.Logger("fula/mockserver")
 
 // requestLoggerMiddleware logs the details of each request
@@ -269,7 +257,7 @@ func updatePoolName(newPoolName string) error {
 }
 
 func Example_ping() {
-	/*
+
 		server := startMockServer("127.0.0.1:4002")
 		defer func() {
 			// Shutdown the server after test
@@ -544,5 +532,6 @@ func Example_ping() {
 		// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT ping results success_count: 5:
 		// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF ping results success_count: 5:
 		// QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA ping results success_count: 5:
-	*/
+
 }
+*/
