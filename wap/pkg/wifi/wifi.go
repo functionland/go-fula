@@ -232,7 +232,7 @@ func DeleteWifi(ctx context.Context, req DeleteWifiRequest) DeleteWifiResponse {
 
 func DisconnectNamedWifi(ctx context.Context, req DeleteWifiRequest) DeleteWifiResponse {
 	errorString := ""
-	command := fmt.Sprintf("nmcli con down '%s'", strings.TrimSpace(req.ConnectionName))
+	command := fmt.Sprintf("sudo nmcli con down '%s'", strings.TrimSpace(req.ConnectionName))
 	_, _, err := runCommand(ctx, command)
 	if err != nil {
 		log.Warnf("failed to disconnect connection %s: %v", req.ConnectionName, err)
