@@ -191,16 +191,13 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 			log.Info("Wi-Fi is connected")
 			configExists := checkConfigExists()
 			if configExists {
-				go func() {
-					time.Sleep(10 * time.Second) // Wait for 10 seconds
 
-					req := wifi.DeleteWifiRequest{
-						ConnectionName: "FxBlox",
-					}
-					// Execute the disconnect in the background
-					disconnectWifiResponse := wifi.DisconnectNamedWifi(ctx, req)
-					log.Infow("Disconnect Wifi with response", "res", disconnectWifiResponse)
-				}()
+				req := wifi.DeleteWifiRequest{
+					ConnectionName: "FxBlox",
+				}
+				// Execute the disconnect in the background
+				disconnectWifiResponse := wifi.DisconnectNamedWifi(ctx, req)
+				log.Infow("Disconnect Wifi with response", "res", disconnectWifiResponse)
 
 				stopServer <- struct{}{} // stop the HTTP server
 			} else {
