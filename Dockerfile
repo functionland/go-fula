@@ -1,4 +1,4 @@
-FROM golang:1.19-bullseye AS build
+FROM golang:1.21 AS builder
 
 WORKDIR /go/src/go-fula
 
@@ -9,6 +9,6 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /go/bin/blox ./cmd/blox
 
 FROM gcr.io/distroless/static-debian11
-COPY --from=build /go/bin/blox /usr/bin/
+COPY --from=builder /go/bin/blox /usr/bin/
 
 ENTRYPOINT ["/usr/bin/blox"]

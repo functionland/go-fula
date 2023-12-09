@@ -1,8 +1,10 @@
 package exchange
 
 import (
+	"sync"
 	"time"
 
+	iface "github.com/ipfs/boxo/coreiface"
 	"github.com/ipni/index-provider/engine"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -22,6 +24,8 @@ type (
 		ipniProviderEngineOpts   []engine.Option
 		dhtProviderOpts          []dht.Option
 		updateConfig             ConfigUpdater
+		wg                       *sync.WaitGroup
+		ipfsApi                  iface.CoreAPI
 	}
 )
 
@@ -29,6 +33,7 @@ func newOptions(o ...Option) (*options, error) {
 	opts := options{
 		ipniPublishMaxBatchSize: 16 << 10,
 		ipniPublishChanBuffer:   1,
+		wg:                      nil,
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
@@ -37,6 +42,9 @@ func newOptions(o ...Option) (*options, error) {
 	}
 	if opts.ipniPublishTicker == nil {
 		opts.ipniPublishTicker = time.NewTicker(10 * time.Second)
+	}
+	if opts.wg == nil {
+		opts.wg = new(sync.WaitGroup)
 	}
 	return &opts, nil
 }
@@ -109,6 +117,20 @@ func WithIpniProviderEngineOptions(e ...engine.Option) Option {
 func WithDhtProviderOptions(d ...dht.Option) Option {
 	return func(o *options) error {
 		o.dhtProviderOpts = d
+		return nil
+	}
+}
+
+func WithWg(wg *sync.WaitGroup) Option {
+	return func(o *options) error {
+		o.wg = wg
+		return nil
+	}
+}
+
+func WithIPFS(ipfsApi iface.CoreAPI) Option {
+	return func(o *options) error {
+		o.ipfsApi = ipfsApi
 		return nil
 	}
 }

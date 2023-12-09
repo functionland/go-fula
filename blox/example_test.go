@@ -3,10 +3,10 @@ package blox_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"time"
 
@@ -35,7 +35,7 @@ func requestLoggerMiddleware(next http.Handler) http.Handler {
 		body, _ := io.ReadAll(r.Body)
 		log.Debugw("Received request", "url", r.URL.Path, "method", r.Method, "body", string(body))
 		if r.URL.Path == "/fula/pool/vote" {
-			fmt.Printf("Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe %s", string(body))
+			fmt.Printf("Voted on 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q %s", string(body))
 		} else if r.URL.Path == "/fula/manifest/batch_storage" {
 			fmt.Printf("Stored manifest: %s", string(body))
 		}
@@ -53,7 +53,7 @@ func startMockServer(addr string) *http.Server {
 	handler.HandleFunc("/fula/pool/join", func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
 			"pool_id": 1,
-			"account": "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+			"account": "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 		}
 		json.NewEncoder(w).Encode(response)
 	})
@@ -61,7 +61,7 @@ func startMockServer(addr string) *http.Server {
 	handler.HandleFunc("/fula/pool/cancel_join", func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
 			"pool_id": 1,
-			"account": "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+			"account": "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 		}
 		json.NewEncoder(w).Encode(response)
 	})
@@ -71,10 +71,10 @@ func startMockServer(addr string) *http.Server {
 			"poolrequests": []map[string]interface{}{
 				{
 					"pool_id":        1,
-					"account":        "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+					"account":        "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 					"voted":          []string{},
 					"positive_votes": 0,
-					"peer_id":        "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+					"peer_id":        "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 				},
 			},
 		}
@@ -91,9 +91,9 @@ func startMockServer(addr string) *http.Server {
 					"region":    "Ontario",
 					"parent":    nil,
 					"participants": []string{
-						"QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT",
-						"QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF",
-						"QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA",
+						"12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM",
+						"12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX",
+						"12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX",
 					},
 				},
 			},
@@ -105,28 +105,28 @@ func startMockServer(addr string) *http.Server {
 		response := map[string]interface{}{
 			"users": []map[string]interface{}{
 				{
-					"account":         "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+					"account":         "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 					"pool_id":         nil,
 					"request_pool_id": 1,
-					"peer_id":         "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+					"peer_id":         "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 				},
 				{
-					"account":         "QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT",
+					"account":         "12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM",
 					"pool_id":         1,
 					"request_pool_id": nil,
-					"peer_id":         "QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT",
+					"peer_id":         "12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM",
 				},
 				{
-					"account":         "QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF",
+					"account":         "12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX",
 					"pool_id":         1,
 					"request_pool_id": nil,
-					"peer_id":         "QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF",
+					"peer_id":         "12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX",
 				},
 				{
-					"account":         "QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA",
+					"account":         "12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX",
 					"pool_id":         1,
 					"request_pool_id": nil,
-					"peer_id":         "QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA",
+					"peer_id":         "12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX",
 				},
 			},
 		}
@@ -136,7 +136,7 @@ func startMockServer(addr string) *http.Server {
 	handler.HandleFunc("/fula/pool/vote", func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
 			"pool_id": 1,
-			"account": "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+			"account": "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 		}
 		json.NewEncoder(w).Encode(response)
 	})
@@ -176,7 +176,7 @@ func startMockServer(addr string) *http.Server {
 	handler.HandleFunc("/fula/pool/leave", func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
 			"pool_id": 1,
-			"account": "QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe",
+			"account": "12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q",
 		}
 		json.NewEncoder(w).Encode(response)
 	})
@@ -230,6 +230,56 @@ func startMockServer(addr string) *http.Server {
 	return server
 }
 
+func generateIdentity(id int) crypto.PrivKey {
+	var pid crypto.PrivKey
+	switch id {
+	case 1: //12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+		key1 := "CAESQJ5GGDgYMGs8eWNCSotGC/qnuw3pfwtG6XcAumHc4CR33IrywkIsmSlMOK7RdP78RgFmYgyrZxz7fP1xux0I88w="
+		km1, err := base64.StdEncoding.DecodeString(key1)
+		if err != nil {
+			panic(err)
+		}
+		pid, err = crypto.UnmarshalPrivateKey(km1)
+		if err != nil {
+			panic(err)
+		}
+
+	case 2: //12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+		key2 := "CAESQHSuiy3FbrTSh7MzXI6coF52bTXrtx3ZorFzIbKnZeBAbQGC6PMp90hKgAiM4yW5/TkRBQhqgPN99AwdiLOS27Q="
+		km2, err := base64.StdEncoding.DecodeString(key2)
+		if err != nil {
+			panic(err)
+		}
+		pid, err = crypto.UnmarshalPrivateKey(km2)
+		if err != nil {
+			panic(err)
+		}
+
+	case 3: //12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
+		key3 := "CAESQHAfwsoKLRHraOpYeV6DBjWeG4B9PpSWLyMym2modqej6vuMoMJ5FiA1ivOyihgJxeqKsVue/9cjKlxSNoMQCrQ="
+		km3, err := base64.StdEncoding.DecodeString(key3)
+		if err != nil {
+			panic(err)
+		}
+		pid, err = crypto.UnmarshalPrivateKey(km3)
+		if err != nil {
+			panic(err)
+		}
+
+	case 4: //12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q
+		key4 := "CAESQCKbGJG9XDbfUEMjie3vZYVk9RgXHXCLjTMeBidltp396IK4gNRCMmGbjZeG+ZN4FC+yCLDNB1Vzbg66DaeHvCU="
+		km4, err := base64.StdEncoding.DecodeString(key4)
+		if err != nil {
+			panic(err)
+		}
+		pid, err = crypto.UnmarshalPrivateKey(km4)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return pid
+}
+
 // Example_poolDiscoverPeersViaPubSub starts a pool named "1" across three nodes, connects two of the nodes to
 // the other one to facilitate a path for pubsub to propagate and shows all three nodes discover
 // each other using pubsub.
@@ -253,18 +303,13 @@ func Example_poolDiscoverPeersViaPubSub() {
 
 	// Use a deterministic random generator to generate deterministic
 	// output for the example.
-	rng := rand.New(rand.NewSource(42))
+	identity1 := libp2p.Identity(generateIdentity(1))
 
-	// Instantiate the first node in the pool
-	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
+	h1, err := libp2p.New(identity1)
 	if err != nil {
 		panic(err)
 	}
-	h1, err := libp2p.New(libp2p.Identity(pid1))
-	if err != nil {
-		panic(err)
-	}
-
+	log.Infow("h1 value generated", "h1", h1.ID()) //12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	n1, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h1))
 	if err != nil {
 		panic(err)
@@ -275,15 +320,13 @@ func Example_poolDiscoverPeersViaPubSub() {
 	defer n1.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
 
-	// Instantiate the second node in the pool
-	pid2, _, err := crypto.GenerateECDSAKeyPair(rng)
+	identity2 := libp2p.Identity(generateIdentity(2))
+
+	h2, err := libp2p.New(identity2)
 	if err != nil {
 		panic(err)
 	}
-	h2, err := libp2p.New(libp2p.Identity(pid2))
-	if err != nil {
-		panic(err)
-	}
+	log.Infow("h2 value generated", "h2", h2.ID()) //12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
 	n2, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h2))
 	if err != nil {
 		panic(err)
@@ -294,12 +337,13 @@ func Example_poolDiscoverPeersViaPubSub() {
 	defer n2.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
 
-	// Instantiate the third node in the pool
-	pid3, _, err := crypto.GenerateECDSAKeyPair(rng)
+	identity3 := libp2p.Identity(generateIdentity(3))
+
+	h3, err := libp2p.New(identity3)
 	if err != nil {
 		panic(err)
 	}
-	h3, err := libp2p.New(libp2p.Identity(pid3))
+	log.Infow("h3 value generated", "h3", h3.ID()) //12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
 	if err != nil {
 		panic(err)
 	}
@@ -359,21 +403,21 @@ func Example_poolDiscoverPeersViaPubSub() {
 	}
 
 	// Unordered output:
-	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT peerstore contains 3 nodes:
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF peerstore contains 3 nodes:
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA peerstore contains 3 nodes:
-	// - QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// - QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// - QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
+	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// Instantiated node in pool 1 with ID: 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+	// Instantiated node in pool 1 with ID: 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
+	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM peerstore contains 3 nodes:
+	// - 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+	// - 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
+	// - 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX peerstore contains 3 nodes:
+	// - 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+	// - 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// - 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
+	// 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX peerstore contains 3 nodes:
+	// - 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+	// - 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// - 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
 }
 
 func updatePoolName(newPoolName string) error {
@@ -667,14 +711,7 @@ func Example_storeManifest() {
 
 	// Use a deterministic random generator to generate deterministic
 	// output for the example.
-	rng := rand.New(rand.NewSource(42))
-
-	// Instantiate the first node in the pool
-	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	h1, err := libp2p.New(libp2p.Identity(pid1))
+	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
 	if err != nil {
 		panic(err)
 	}
@@ -703,12 +740,7 @@ func Example_storeManifest() {
 	defer n1.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
 
-	// Instantiate the second node in the pool
-	pid2, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	h2, err := libp2p.New(libp2p.Identity(pid2))
+	h2, err := libp2p.New(libp2p.Identity(generateIdentity(2)))
 	if err != nil {
 		panic(err)
 	}
@@ -738,11 +770,7 @@ func Example_storeManifest() {
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
 
 	// Instantiate the third node in the pool
-	pid3, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	h3, err := libp2p.New(libp2p.Identity(pid3))
+	h3, err := libp2p.New(libp2p.Identity(generateIdentity(3)))
 	if err != nil {
 		panic(err)
 	}
@@ -772,11 +800,7 @@ func Example_storeManifest() {
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
 
 	// Instantiate the third node in the pool
-	pid4, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	h4, err := libp2p.New(libp2p.Identity(pid4))
+	h4, err := libp2p.New(libp2p.Identity(generateIdentity(4)))
 	if err != nil {
 		panic(err)
 	}
@@ -993,35 +1017,35 @@ func Example_storeManifest() {
 	n4.FetchAvailableManifestsAndStore(ctx, 2)
 
 	// Output:
-	// Instantiated node in pool 1 with ID: QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
-	// Instantiated node in pool 1 with ID: QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF
-	// Instantiated node in pool 1 with ID: QmYMEnv3GUKPNr34gePX2qQmBH4YEQcuGhQHafuKuujvMA
-	// Instantiated node in pool 1 with ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe
-	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
+	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// Instantiated node in pool 1 with ID: 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+	// Instantiated node in pool 1 with ID: 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
+	// Instantiated node in pool 1 with ID: 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q
+	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM stored IPLD data with links:
 	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
 	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	// QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT stored IPLD data with links:
+	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM stored IPLD data with links:
 	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
 	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
 	// exchanging by Pull...
-	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully fetched:
+	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully fetched:
 	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	//     content: {"oneLeafLink":{"/":"bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"},"that":42}
-	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully fetched:
+	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully fetched:
 	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	//     content: {"this":true}
 	// exchanging by Push...
-	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully pushed:
+	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully pushed:
 	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	//     content: {"anotherLeafLink":{"/":"bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4"},"this":24}
-	// QmPNZMi2LAhczsN2FoXXQng6YFYbSHApuP6RpKuHbBH9eF successfully pushed:
+	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully pushed:
 	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	//     from QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	//     content: {"that":false}
-	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on QmaUMRTBMoANXqpUbfARnXkw9esfz9LP2AjXRRr7YknDAT
+	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
 	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
 }
@@ -1071,7 +1095,6 @@ func Example_blserver() {
 
 	// Use a deterministic random generator to generate deterministic
 	// output for the example.
-	rng := rand.New(rand.NewSource(42))
 	cfg := NewConfig()
 
 	// ListenAddr configure
@@ -1155,11 +1178,7 @@ func Example_blserver() {
 	hopts = append(hopts, libp2p.ForceReachabilityPrivate())
 
 	// Instantiate the first node in the pool
-	pid1, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	hopts1 := append(hopts, libp2p.Identity(pid1))
+	hopts1 := append(hopts, libp2p.Identity(generateIdentity(1)))
 	hopts1 = append(hopts1, libp2p.ListenAddrs(listenAddrs1...))
 	h1, err := libp2p.New(hopts1...)
 	if err != nil {
@@ -1186,11 +1205,7 @@ func Example_blserver() {
 	log.Debugf("n1 Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
 
 	// Instantiate the second node in the pool
-	pid2, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	hopts2 := append(hopts, libp2p.Identity(pid2))
+	hopts2 := append(hopts, libp2p.Identity(generateIdentity(2)))
 	hopts2 = append(hopts2, libp2p.ListenAddrs(listenAddrs2...))
 	h2, err := libp2p.New(hopts2...)
 	if err != nil {
@@ -1217,11 +1232,7 @@ func Example_blserver() {
 	log.Debugf("n2 Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
 
 	// Instantiate the third node in the pool
-	pid3, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		panic(err)
-	}
-	hopts3 := append(hopts, libp2p.Identity(pid3))
+	hopts3 := append(hopts, libp2p.Identity(generateIdentity(3)))
 	hopts3 = append(hopts3, libp2p.ListenAddrs(listenAddrs3...))
 	h3, err := libp2p.New(hopts3...)
 	if err != nil {
@@ -1292,13 +1303,8 @@ func Example_blserver() {
 
 	// Instantiate the fourth node not in the pool
 	log.Debug("Now creating pid of n4")
-	pid4, _, err := crypto.GenerateECDSAKeyPair(rng)
-	if err != nil {
-		log.Errorw("An error happened in creating keypair of n4", "Err", err)
-		panic(err)
-	}
 	log.Debug("Now creating host of n4")
-	hopts4 := append(hopts, libp2p.Identity(pid4))
+	hopts4 := append(hopts, libp2p.Identity(generateIdentity(4)))
 	hopts4 = append(hopts4, libp2p.ListenAddrs(listenAddrs4...))
 	h4, err := libp2p.New(hopts4...)
 	if err != nil {
@@ -1383,7 +1389,7 @@ func Example_blserver() {
 	}
 
 	// Unordered output:
-	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
-	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
-	// Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe {"pool_id":1,"account":"QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe","vote_value":true}
+	// Voted on 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q {"pool_id":1,"account":"12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q","vote_value":true}
+	// Voted on 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q {"pool_id":1,"account":"12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q","vote_value":true}
+	// Voted on 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q {"pool_id":1,"account":"12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q","vote_value":true}
 }

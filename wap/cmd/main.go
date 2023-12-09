@@ -186,21 +186,21 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 	}
 
 	if currentState != newState {
-		if *mdnsServer != nil {
-			// Shutdown existing mDNS server before state change
-			(*mdnsServer).Shutdown()
-			*mdnsServer = nil
-		}
-		log.Info("starting mDNS server.")
-		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
+
 		if isConnected {
 			log.Info("Wi-Fi is connected")
 			configExists := checkConfigExists()
 			if configExists {
-				req := wifi.DeleteWifiRequest{
-					ConnectionName: "FxBlox",
-				}
-				_ = wifi.DisconnectNamedWifi(ctx, req)
+				go func() {
+					time.Sleep(10 * time.Second) // Wait for 10 seconds
+
+					req := wifi.DeleteWifiRequest{
+						ConnectionName: "FxBlox",
+					}
+					// Execute the disconnect in the background
+					disconnectWifiResponse := wifi.DisconnectNamedWifi(ctx, req)
+					log.Infow("Disconnect Wifi with response", "res", disconnectWifiResponse)
+				}()
 
 				stopServer <- struct{}{} // stop the HTTP server
 			} else {
@@ -246,6 +246,13 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 				log.Info("Access point already enabled on startup")
 			}
 		}
+		if *mdnsServer != nil {
+			// Shutdown existing mDNS server before state change
+			(*mdnsServer).Shutdown()
+			*mdnsServer = nil
+		}
+		log.Info("starting mDNS server.")
+		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
 		atomic.StoreInt32(&currentIsConnected, int32(newState))
 	} else {
 		log.Info("handleAppState is called but no action is needed")

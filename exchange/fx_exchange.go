@@ -211,13 +211,38 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
-	// Call Provide for the last block link of each response
-	if err := e.dht.Provide(l); err != nil {
-		log.Warnw("Failed to provide link via DHT", "link", l, "err", err)
-		// Decide how to handle the error, e.g., continue, return, etc.
-	} else {
-		log.Debug("Success provide link via DHT")
+
+	if e.wg != nil {
+		e.wg.Add(1)
 	}
+	var cidLink cidlink.Link
+	var ok bool
+	go func() {
+		if e.wg != nil {
+			defer e.wg.Done()
+		}
+
+		if e.ipfsApi != nil && l != nil {
+			log.Info("ipfsAPI: Starting Pinning")
+
+			if cidLink, ok = l.(cidlink.Link); !ok {
+				// Handle error: couldn't fetch the node from IPFS
+				log.Warnw("ipfsAPI: Failed to create cidLink", "link", l)
+			}
+			log.Debugw("cidLink created in ipfsApi", "cidLink", cidLink)
+
+			log.Info("ipfsAPI: Pinned")
+		}
+		// Call Provide for the last block link of each response
+		if l != nil {
+			if err := e.dht.Provide(l); err != nil {
+				log.Warnw("Failed to provide link via DHT", "link", l, "err", err)
+				// Handle the error
+			} else {
+				log.Debug("Success provide link via DHT")
+			}
+		}
+	}()
 	resps, errs := e.gx.Request(ctx, from, l, selectorparse.CommonSelector_ExploreAllRecursively)
 	for {
 		select {
@@ -228,13 +253,42 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 				return nil
 			}
 			log.Infow("synced node", "node", resp.Node)
-			// Call Provide for the last block link of each response
-			if err := e.dht.Provide(resp.LastBlock.Link); err != nil {
-				log.Warnw("Failed to provide link via DHT", "link", resp.LastBlock.Link, "err", err)
-				// Decide how to handle the error, e.g., continue, return, etc.
-			} else {
-				log.Debug("Success provide link via DHT")
+			if e.wg != nil {
+				e.wg.Add(1)
 			}
+			go func() {
+				if e.wg != nil {
+					defer e.wg.Done()
+				}
+				/*if e.ipfsApi != nil && resp.LastBlock.Link != nil {
+					log.Info("ipfsAPI: Starting Pinning")
+					if cidLink, ok = resp.LastBlock.Link.(cidlink.Link); !ok {
+						// Handle error: couldn't fetch the node from IPFS
+						log.Warnw("ipfsAPI: Failed to create cidLikn", "link", resp.LastBlock.Link)
+					}
+					node, err := e.ipfsApi.Dag().Get(ctx, cidLink.Cid)
+					if err != nil {
+						// Handle error: couldn't fetch the node from IPFS
+						log.Warnw("ipfsAPI: Failed to create node", "link", resp.LastBlock.Link, "err", err)
+					}
+					err = e.ipfsApi.Dag().Pinning().Add(ctx, node)
+					if err != nil {
+						// Handle error: couldn't fetch the node from IPFS
+						log.Warnw("ipfsAPI: Failed to pin add in ipfs", "link", resp.LastBlock.Link, "err", err)
+					}
+					log.Info("ipfsAPI: Pinned")
+				}*/
+				// Call Provide for the last block link of each response
+				if resp.LastBlock.Link != nil {
+					if err := e.dht.Provide(resp.LastBlock.Link); err != nil {
+						log.Warnw("Failed to provide link via DHT2", "link", resp.LastBlock.Link, "err", err)
+						// Decide how to handle the error, e.g., continue, return, etc.
+					} else {
+						log.Debug("Success provide link via DHT")
+					}
+				}
+			}()
+
 		case err, ok := <-errs:
 			if !ok {
 				return nil
@@ -445,6 +499,8 @@ func (e *FxExchange) Shutdown(ctx context.Context) error {
 	if err := e.pub.shutdown(); err != nil {
 		log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
 	}
+	e.dht.dh.Close()
+	e.dht.Shutdown()
 	//}
 	e.c.CloseIdleConnections()
 	return e.s.Shutdown(ctx)

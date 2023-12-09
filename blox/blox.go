@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/functionland/go-fula/announcements"
@@ -27,7 +26,6 @@ type (
 	Blox struct {
 		ctx    context.Context
 		cancel context.CancelFunc
-		wg     sync.WaitGroup
 
 		*options
 		ls ipld.LinkSystem
@@ -63,7 +61,7 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.pn, err = ping.NewFxPing(p.h,
 		ping.WithAllowTransientConnection(true),
-		ping.WithWg(&p.wg),
+		ping.WithWg(p.wg),
 		ping.WithTimeout(3),
 		ping.WithCount(p.pingCount))
 	if err != nil {
@@ -74,7 +72,7 @@ func New(o ...Option) (*Blox, error) {
 		announcements.WithAnnounceInterval(5),
 		announcements.WithTimeout(3),
 		announcements.WithTopicName(p.topicName),
-		announcements.WithWg(&p.wg),
+		announcements.WithWg(p.wg),
 		announcements.WithRelays(p.relays),
 	)
 	if err != nil {
@@ -87,7 +85,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint(p.blockchainEndpoint),
 		blockchain.WithTimeout(30),
-		blockchain.WithWg(&p.wg),
+		blockchain.WithWg(p.wg),
 		blockchain.WithFetchFrequency(3),
 		blockchain.WithTopicName(p.topicName),
 		blockchain.WithUpdatePoolName(p.updatePoolName),
@@ -249,7 +247,7 @@ func (p *Blox) Start(ctx context.Context) error {
 
 	// Create an HTTP server instance
 	p.IPFShttpServer = &http.Server{
-		Addr:    "localhost:5001",
+		Addr:    "127.0.0.1:5001",
 		Handler: p.ServeIpfsRpc(),
 	}
 
@@ -259,7 +257,7 @@ func (p *Blox) Start(ctx context.Context) error {
 		log.Debug("called wg.Done in Start blox")
 		defer p.wg.Done()
 		defer log.Debug("Start blox go routine is ending")
-		log.Infow("IPFS RPC server started on address http://localhost:5001")
+		log.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
 		if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
 			log.Errorw("IPFS RPC server stopped erroneously", "err", err)
 		} else {
@@ -278,7 +276,7 @@ func (p *Blox) Start(ctx context.Context) error {
 	} else {
 		log.Errorw("Announcement stopped erroneously", "err", anErr)
 	}
-	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.ctx, p.cancel = context.WithCancel(ctx)
 
 	// Starting a new goroutine for periodic task
 	p.wg.Add(1)
@@ -410,16 +408,17 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	} else {
 		log.Debug("announcements shutdown done")
 	}
+
+	// Shutdown the HTTP server
+	if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
+		log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
+	}
+
 	if dsErr := p.ds.Close(); dsErr != nil {
 		log.Errorw("Error occurred in datastore shutdown", "dsErr", dsErr)
 		return dsErr
 	} else {
 		log.Debug("datastore shutdown done")
-	}
-
-	// Shutdown the HTTP server
-	if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
-		log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
 	}
 
 	// Wait for all goroutines to complete

@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,12 +24,20 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	config "github.com/ipfs/kubo/config"
+	core "github.com/ipfs/kubo/core"
+	coreapi "github.com/ipfs/kubo/core/coreapi"
+	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
+	"github.com/ipfs/kubo/plugin/loader"
+	"github.com/ipfs/kubo/repo"
+	"github.com/ipfs/kubo/repo/fsrepo"
 	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/mdp/qrterminal"
@@ -34,6 +47,26 @@ import (
 	"github.com/urfave/cli/v2/altsrc"
 	"gopkg.in/yaml.v3"
 )
+
+type DatastoreConfigSpec struct {
+	Mounts []Mount `json:"mounts"`
+	Type   string  `json:"type"`
+}
+
+type Mount struct {
+	Child      Child  `json:"child"`
+	Mountpoint string `json:"mountpoint"`
+	Prefix     string `json:"prefix"`
+	Type       string `json:"type"`
+}
+
+type Child struct {
+	Path        string `json:"path"`
+	ShardFunc   string `json:"shardFunc,omitempty"`
+	Sync        bool   `json:"sync,omitempty"`
+	Type        string `json:"type"`
+	Compression string `json:"compression,omitempty"`
+}
 
 var (
 	logger = logging.Logger("fula/cmd/blox")
@@ -66,6 +99,162 @@ var (
 		}
 	}
 )
+
+func DefaultDatastoreConfig(options *badger.Options, dsPath string, storageMax string) config.Datastore {
+	spec := IPFSSpec(dsPath)
+
+	// Marshal the DatastoreConfigSpec to JSON
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		panic(err) // Handle the error appropriately
+	}
+
+	// Unmarshal JSON into a map[string]interface{}
+	var specMap map[string]interface{}
+	if err := json.Unmarshal(specJSON, &specMap); err != nil {
+		panic(err) // Handle the error appropriately
+	}
+
+	return config.Datastore{
+		StorageMax:         storageMax,
+		StorageGCWatermark: 90, // 90%
+		GCPeriod:           "1h",
+		BloomFilterSize:    0,
+		Spec:               BadgerSpec(options, dsPath),
+	}
+}
+func BadgerSpec(options *badger.Options, dsPath string) map[string]interface{} {
+	return map[string]interface{}{
+		"type":   "measure",
+		"prefix": "badger.datastore",
+		"child": map[string]interface{}{
+			"type":           "badgerds",
+			"path":           dsPath,
+			"syncWrites":     options.SyncWrites,
+			"truncate":       options.Truncate,
+			"gcDiscardRatio": options.GcDiscardRatio,
+			"gcSleep":        options.GcSleep.String(),
+			"gcInterval":     options.GcInterval.String(),
+		},
+	}
+}
+func IPFSSpec(dsPath string) DatastoreConfigSpec {
+	return DatastoreConfigSpec{
+		Mounts: []Mount{
+			{
+				Child: Child{
+					Path: filepath.Join(dsPath, "blocks"),
+					Sync: true,
+					Type: "badgerds",
+				},
+				Mountpoint: "/blocks",
+				Prefix:     "badger.blocks",
+				Type:       "measure",
+			},
+			{
+				Child: Child{
+					Path: filepath.Join(dsPath, "keystore"),
+					Sync: true,
+					Type: "badgerds",
+				},
+				Mountpoint: "/keystore",
+				Prefix:     "badgerds.keystore",
+				Type:       "measure",
+			},
+			{
+				Child: Child{
+					Path:        dsPath,
+					Type:        "badgerds",
+					Compression: "none",
+				},
+				Mountpoint: "/",
+				Prefix:     "badgerds.datastore",
+				Type:       "measure",
+			},
+		},
+		Type: "mount",
+	}
+}
+func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options *badger.Options, dsPath string, storageMax string) (repo.Repo, error) {
+	// Path to the repository
+	repoPath := basePath
+
+	if !fsrepo.IsInitialized(repoPath) {
+		// Create the repository if it doesn't exist
+
+		versionFilePath := filepath.Join(repoPath, "version")
+		versionContent := strconv.Itoa(15)
+		if err := os.WriteFile(versionFilePath, []byte(versionContent), 0644); err != nil {
+			return nil, err
+		}
+		dataStoreFilePath := filepath.Join(repoPath, "datastore_spec")
+		datastoreContent := map[string]interface{}{
+			"type": "badgerds",
+			"path": dsPath,
+		}
+		datastoreContentBytes, err := json.Marshal(datastoreContent)
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(dataStoreFilePath, []byte(datastoreContentBytes), 0644); err != nil {
+			return nil, err
+		}
+		// Extract private key and peer ID from the libp2p host
+		privKey := h.Peerstore().PrivKey(h.ID())
+		if privKey == nil {
+			return nil, fmt.Errorf("private key for host not found")
+		}
+		privKeyBytes, err := crypto.MarshalPrivateKey(privKey)
+		if err != nil {
+			return nil, err
+		}
+
+		peerID := h.ID().String()
+		conf := config.Config{
+			Identity: config.Identity{
+				PeerID:  peerID,
+				PrivKey: base64.StdEncoding.EncodeToString(privKeyBytes),
+			},
+		}
+
+		// Set the custom configuration
+		conf.Bootstrap = append(conf.Bootstrap, app.config.StaticRelays...)
+
+		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
+
+		conf.Experimental.GraphsyncEnabled = true
+		conf.Addresses.Swarm = app.config.ListenAddrs
+		conf.Identity.PeerID = h.ID().String()
+		conf.Identity.PrivKey = app.config.Identity
+		conf.Swarm.RelayService.Enabled = 1
+		conf.Addresses.API = []string{"/ip4/127.0.0.1/tcp/5001"}
+
+		// Initialize the repo with the configuration
+		if err := fsrepo.Init(repoPath, &conf); err != nil {
+			return nil, err
+		}
+	}
+	plugins, err := loader.NewPluginLoader(repoPath)
+	if err != nil {
+		panic(fmt.Errorf("error loading plugins: %s", err))
+	}
+
+	if err := plugins.Initialize(); err != nil {
+		panic(fmt.Errorf("error initializing plugins: %s", err))
+	}
+
+	if err := plugins.Inject(); err != nil {
+		panic(fmt.Errorf("error initializing plugins: %s", err))
+	}
+
+	// Open the repo
+	repo, err := fsrepo.Open(repoPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return repo, nil
+}
 
 func init() {
 	app.App = cli.App{
@@ -371,7 +560,17 @@ func updatePoolName(newPoolName string) error {
 	return nil
 }
 
+func CustomHostOption(h host.Host) kubolibp2p.HostOption {
+	return func(id peer.ID, ps peerstore.Peerstore, options ...libp2p.Option) (host.Host, error) {
+		return h, nil
+	}
+}
+
 func action(ctx *cli.Context) error {
+	var wg sync.WaitGroup
+	ctx2, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	if app.generateNodeKey {
 		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
 		nodeKey, err := ConvertBase64PrivateKeyToHexNodeKey(app.config.Identity)
@@ -481,12 +680,72 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	ds, err := badger.NewDatastore(app.config.StoreDir, &badger.DefaultOptions)
+	/*ds, err := badger.NewDatastore(app.config.StoreDir, &badger.DefaultOptions)
 	if err != nil {
 		return err
+	}*/
+
+	dirPath := filepath.Dir(app.configPath)
+	repo, err := CreateCustomRepo(ctx2, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
+	if err != nil {
+		logger.Fatal(err)
+		return err
 	}
+
+	ipfsConfig := &core.BuildCfg{
+		Online:    true,
+		Permanent: true,
+		Host:      CustomHostOption(h),
+		Routing:   kubolibp2p.DHTOption,
+		Repo:      repo,
+	}
+
+	ipfsNode, err := core.NewNode(ctx2, ipfsConfig)
+	if err != nil {
+		logger.Fatal(err)
+		return err
+	}
+	ipfsHostId := ipfsNode.PeerHost.ID()
+	ipfsId := ipfsNode.Identity.String()
+	logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
+	ipfsAPI, err := coreapi.NewCoreAPI(ipfsNode)
+	if err != nil {
+		panic(fmt.Errorf("failed to create IPFS API: %w", err))
+	}
+	if ipfsAPI != nil {
+		logger.Info("ipfscoreapi successfully instantiated")
+	}
+
+	logger.Debug("called wg.Add in blox start")
+	/*opts := []corehttp.ServeOption{
+		// Add necessary handlers, CORS, etc.
+		corehttp.GatewayOption("127.0.0.1:5001"),
+		corehttp.CheckVersionOption(),
+		corehttp.HostnameOption(),
+		corehttp.RoutingOption(),
+		corehttp.LogOption(),
+		corehttp.Libp2pGatewayOption(),
+	}
+
+	wg.Add(1)
+	go func() {
+		logger.Debug("called wg.Done in Start")
+		defer wg.Done()
+		defer logger.Debug("Start go routine is ending")
+		if ipfsNode.IsOnline {
+			logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
+			err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
+			if err != nil {
+				fmt.Println("Error setting up HTTP API server:", err)
+			}
+		}
+		select {}
+	}()*/
+
+	ds := ipfsNode.Repo.Datastore()
 	bb, err := blox.New(
 		blox.WithHost(h),
+		blox.WithWg(&wg),
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
@@ -496,6 +755,8 @@ func action(ctx *cli.Context) error {
 		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
+			exchange.WithWg(&wg),
+			exchange.WithIPFS(ipfsAPI),
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
@@ -519,28 +780,43 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := bb.Start(ctx.Context); err != nil {
+
+	if err := bb.Start(ctx2); err != nil {
 		return err
 	}
+
 	logger.Info("Started blox", "addrs", h.Addrs())
 	printMultiaddrAsQR(h)
+
+	// Setup signal handling
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-	logger.Info("Shutting down blox")
-	return bb.Shutdown(context.Background())
+	go func() {
+		<-sig
+		logger.Info("Signal received, initiating shutdown...")
+		if err := bb.Shutdown(ctx2); err != nil {
+			logger.Error("Error during blox shutdown:", err)
+		}
+		cancel() // Trigger context cancellation
+	}()
+
+	<-ctx2.Done()
+	wg.Wait()
+	return nil
 }
 
 func printMultiaddrAsQR(h host.Host) {
 	var addr multiaddr.Multiaddr
 	addrs := h.Addrs()
+
 	switch len(addrs) {
 	case 0:
+		// No addresses to process
+		return
 	case 1:
 		addr = addrs[0]
 	default:
-		// Prefer printing public address if there is one.
-		// Otherwise, fallback on a non-loopback address.
+		// Select the best address to use
 		for _, a := range addrs {
 			if manet.IsPublicAddr(a) {
 				addr = a
@@ -551,20 +827,34 @@ func printMultiaddrAsQR(h host.Host) {
 			}
 		}
 	}
+
 	if addr == nil {
-		logger.Warn("blox has no multiaddrs")
+		fmt.Println("blox has no multiaddrs")
 		return
 	}
-	as := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
-	fmt.Printf(">>> blox multiaddr: %s\n", as)
-	qrterminal.GenerateWithConfig(as, qrterminal.Config{
-		Level:      qrterminal.L,
-		Writer:     os.Stdout,
-		HalfBlocks: false,
-		BlackChar:  "%%",
-		WhiteChar:  "  ",
-		QuietZone:  qrterminal.QUIET_ZONE,
-	})
+
+	fullAddr := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
+	fmt.Printf(">>> blox multiaddr: %s\n", fullAddr)
+
+	// Configure QR code generation based on OS
+	config := qrterminal.Config{
+		Level:     qrterminal.M,
+		Writer:    os.Stdout,
+		QuietZone: qrterminal.QUIET_ZONE,
+	}
+
+	if runtime.GOOS == "windows" {
+		// Specific characters for Windows terminal
+		config.BlackChar = qrterminal.BLACK
+		config.WhiteChar = qrterminal.WHITE
+	} else {
+		// Characters for other terminals (e.g., Unix/Linux)
+		config.BlackChar = "%%"
+		config.WhiteChar = "  "
+	}
+
+	// Generate QR code
+	qrterminal.GenerateWithConfig(fullAddr, config)
 }
 
 func main() {
