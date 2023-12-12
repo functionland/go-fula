@@ -56,7 +56,7 @@ type (
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
-		pub                 *ipniPublisher
+		pub                 *hubPublisher
 		dht                 *fulaDht
 	}
 	pushRequest struct {
@@ -97,7 +97,7 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 		}
 	}
 	//if !e.ipniPublishDisabled {
-	e.pub, err = newIpniPublisher(h, opts)
+	e.pub, err = newHubPublisher(h, opts)
 	if err != nil {
 		return nil, err
 	}
