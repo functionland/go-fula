@@ -592,6 +592,16 @@ func Example_provideAfterPull() {
 	if err := n2.Push(ctx, h1.ID(), n2leafLink); err != nil {
 		panic(err)
 	}
+	err = n1.ProvideLinkByDht(n2leafLink)
+	if err != nil {
+		fmt.Print("Error happened in ProvideLinkByDht n1")
+		panic(err)
+	}
+	err = n2.ProvideLinkByDht(n2leafLink)
+	if err != nil {
+		fmt.Print("Error happened in ProvideLinkByDht n2")
+		panic(err)
+	}
 
 	peerlist3, err := n3.FindLinkProvidersByDht(n2leafLink)
 	if err != nil {
@@ -601,7 +611,7 @@ func Example_provideAfterPull() {
 
 	// Iterate over the slice and print the peer ID of each AddrInfo
 	for _, addrInfo := range peerlist3 {
-		fmt.Printf("Found %s on %s", n2leafLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
+		fmt.Printf("Found %s on %s\n", n2leafLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
 	}
 
 	// Unordered output:
@@ -630,6 +640,7 @@ func Example_provideAfterPull() {
 	//     content: {"this":true}
 	// exchanging by Push...
 	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
 }
 
 // Example_poolExchangeDagBetweenPoolNodes starts up a pool with 2 nodes, stores a sample DAG in

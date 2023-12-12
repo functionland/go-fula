@@ -14,11 +14,13 @@ import (
 	"github.com/multiformats/go-varint"
 )
 
+//lint:ignore U1000 will be used in future
 var (
 	ipniContextID = []byte("fx.land")
 	ipniMetadata  = varint.ToUvarint(0xfe001)
 )
 
+//lint:ignore U1000 will be used in future
 type ipniPublisher struct {
 	*options
 	h      host.Host
@@ -28,6 +30,16 @@ type ipniPublisher struct {
 	cancel context.CancelFunc
 }
 
+type MultihashResult struct {
+	Multihash       string           `json:"Multihash"`
+	ProviderResults []ProviderResult `json:"ProviderResults"`
+}
+
+type ProviderResult struct {
+	ContextID string `json:"ContextID"`
+}
+
+//lint:ignore U1000 will be used in future
 func newIpniPublisher(h host.Host, opts *options) (*ipniPublisher, error) {
 	p := &ipniPublisher{
 		h:       h,
@@ -43,6 +55,7 @@ func newIpniPublisher(h host.Host, opts *options) (*ipniPublisher, error) {
 	return p, nil
 }
 
+//lint:ignore U1000 will be used in future
 func (p *ipniPublisher) Start(ctx context.Context) error {
 	if err := p.e.Start(ctx); err != nil {
 		return err
@@ -94,6 +107,7 @@ func (p *ipniPublisher) Start(ctx context.Context) error {
 	return nil
 }
 
+//lint:ignore U1000 will be used in future
 func (p *ipniPublisher) notifyReceivedLink(l ipld.Link) {
 	if l == nil {
 		return
@@ -106,6 +120,7 @@ func (p *ipniPublisher) notifyReceivedLink(l ipld.Link) {
 	}
 }
 
+//lint:ignore U1000 will be used in future
 func (p *ipniPublisher) publish(mhs []multihash.Multihash) error {
 	chunk, err := schema.EntryChunk{
 		Entries: mhs,
@@ -146,6 +161,7 @@ func (p *ipniPublisher) publish(mhs []multihash.Multihash) error {
 	return nil
 }
 
+//lint:ignore U1000 will be used in future
 func (p *ipniPublisher) shutdown() error {
 	p.cancel()
 	p.ipniPublishTicker.Stop()

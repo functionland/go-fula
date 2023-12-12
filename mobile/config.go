@@ -81,6 +81,7 @@ func (cfg *Config) init(mc *Client) error {
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
 	}
+	mc.relays = cfg.StaticRelays
 	if len(cfg.StaticRelays) != 0 {
 		sr := make([]peer.AddrInfo, 0, len(cfg.StaticRelays))
 		for _, relay := range cfg.StaticRelays {
@@ -187,6 +188,8 @@ func (cfg *Config) init(mc *Client) error {
 			blockchain.WithAuthorizer(mc.h.ID()),
 			blockchain.WithAllowTransientConnection(cfg.AllowTransientConnection),
 			blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
+			blockchain.WithRelays(cfg.StaticRelays),
+			blockchain.WithTopicName(cfg.PoolName),
 			blockchain.WithTimeout(30))
 		if err != nil {
 			return err

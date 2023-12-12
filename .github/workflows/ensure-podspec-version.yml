@@ -35,7 +35,7 @@ jobs:
         git push origin update-version-${{ github.event.release.tag_name }}
     
     - name: Create Pull Request
-      uses: gh-actions-contrib/create-pull-request@v3
+      uses: peter-evans/create-pull-request@v3
       with:
         title: 'Update version to ${{ env.VERSION }}'
         body: 'Automatically update version number.'

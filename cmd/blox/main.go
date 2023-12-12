@@ -762,6 +762,7 @@ func action(ctx *cli.Context) error {
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
+			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
 			exchange.WithIpniProviderEngineOptions(
 				engine.WithHost(ipnih),
 				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
