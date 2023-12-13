@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	iface "github.com/ipfs/boxo/coreiface"
+	iface "github.com/ipfs/kubo/core/coreiface"
 	"github.com/ipni/index-provider/engine"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"

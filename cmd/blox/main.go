@@ -222,7 +222,6 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 
 		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
 
-		conf.Experimental.GraphsyncEnabled = true
 		conf.Addresses.Swarm = app.config.ListenAddrs
 		conf.Identity.PeerID = h.ID().String()
 		conf.Identity.PrivKey = app.config.Identity
