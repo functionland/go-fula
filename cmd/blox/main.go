@@ -335,7 +335,7 @@ func init() {
 				Name:        "ipniPublishDirectAnnounce",
 				Usage:       "The list of IPNI URLs to which make direct announcements.",
 				Destination: &app.config.directAnnounce,
-				Value:       cli.NewStringSlice("https://announce.relay2.functionyard.fula.network/ingest/announce"),
+				Value:       cli.NewStringSlice("https://cid.contact/ingest/announce"),
 			}),
 			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:        "ipniPublisherIdentity",
