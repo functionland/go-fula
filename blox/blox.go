@@ -320,6 +320,11 @@ func (p *Blox) GetBlMembers() map[peer.ID]common.MemberStatus {
 	return p.bl.GetMembers()
 }
 
+func (p *Blox) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
+	//This is for unit testing and no need to call directly
+	return p.bl.BloxFreeSpace(ctx, to)
+}
+
 func (p *Blox) StartAnnouncementServer(ctx context.Context) error {
 	//This is for unit testing and no need to call directly
 	p.wg.Add(1)

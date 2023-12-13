@@ -23,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/multiformats/go-multiaddr"
 )
 
 var log = logging.Logger("fula/mockserver")
@@ -474,6 +475,34 @@ func Example_main() {
 	}
 	defer n2.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", app.config.PoolName, h2.ID().String())
+
+	//Connect test
+	// Your relayed libp2p address
+	h1Addr := "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit/p2p/" + h1.ID().String()
+
+	// Parse the multiaddress
+	ma, err := multiaddr.NewMultiaddr(h1Addr)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create peer.AddrInfo
+	ai := peer.AddrInfo{
+		ID:    h1.ID(),
+		Addrs: []multiaddr.Multiaddr{ma},
+	}
+	if err := h2.Connect(ctx, ai); err != nil {
+		panic(err)
+	}
+	fmt.Println("Connected to peer:", h1.ID())
+
+	//Blockchain test
+	res, err := n1.BloxFreeSpace(ctx, h2.ID())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Got free space of node: %s\n", string(res))
+	//Careting DAG
 
 	n1leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
 		na.AssembleEntry("this").AssignBool(true)
