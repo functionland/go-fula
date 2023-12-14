@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/functionland/go-fula/announcements"
@@ -116,7 +115,7 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 		log.Warnw("link already exists in datastore", "l", l.String())
 		return fmt.Errorf("link already exists in datastore %s", l.String())
 	}
-	providers, err := p.ex.FindProvidersDht(l)
+	providers, err := p.ex.FindProvidersIpni(l, p.relays)
 	if err != nil {
 		log.Errorw("And Error happened in StoreCid", "err", err)
 		return err
@@ -124,38 +123,22 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	// Iterate over the providers and ping
 	for _, provider := range providers {
 		if provider.ID != p.h.ID() {
-			log.Debugw("Pinging storer", "peerID", provider.ID)
-			err := p.ex.PingDht(provider.ID)
-			if err == nil {
-				//Found a storer, now pull the cid
-				//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
-				//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
-				log.Debugw("Found a storer", "id", provider.ID)
-				replicasStr := ""
-				replicasStr, err = p.ex.SearchValueDht(ctx, l.String())
+			//Found a storer, now pull the cid
+			//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
+			//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
+			log.Debugw("Found a storer", "id", provider.ID)
+
+			replicas := len(providers)
+			log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
+			if replicas < limit {
+				err = p.ex.Pull(ctx, provider.ID, l)
 				if err != nil {
-					log.Warnw("SearchValue returned an error", "err", err)
+					log.Errorw("Error happened in pulling from provider", "err", err)
+					continue
 				}
-				log.Debugw("SearchValue returned value", "val", replicasStr, "for", l.String())
-				replicas := 0
-				replicas, err = strconv.Atoi(replicasStr)
-				if err != nil {
-					log.Warn(err)
-					replicas = 0
-				}
-				log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
-				if replicas < limit {
-					newReplicas := replicas + 1
-					p.ex.PutValueDht(ctx, l.String(), strconv.Itoa(newReplicas))
-					err = p.ex.Pull(ctx, provider.ID, l)
-					if err != nil {
-						log.Errorw("Error happened in pulling from provider", "err", err)
-						continue
-					}
-					return nil
-				} else {
-					return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
-				}
+				return nil
+			} else {
+				return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
 			}
 		} else {
 			log.Warnw("provider is the same as requestor", "l", l.String())
@@ -335,6 +318,11 @@ func (p *Blox) PingDht(to peer.ID) error {
 func (p *Blox) GetBlMembers() map[peer.ID]common.MemberStatus {
 	//This is for unit testing and no need to call directly
 	return p.bl.GetMembers()
+}
+
+func (p *Blox) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
+	//This is for unit testing and no need to call directly
+	return p.bl.BloxFreeSpace(ctx, to)
 }
 
 func (p *Blox) StartAnnouncementServer(ctx context.Context) error {

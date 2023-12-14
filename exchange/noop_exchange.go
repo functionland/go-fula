@@ -39,3 +39,8 @@ func (n NoopExchange) Shutdown(context.Context) error {
 func (n NoopExchange) IpniNotifyLink(l ipld.Link) {
 	log.Debugw("IpniNotifyLink noop exchange.", "link", l)
 }
+
+func (n NoopExchange) FindProvidersIpni(l ipld.Link, relays []string) ([]peer.AddrInfo, error) {
+	log.Debugw("FindProvidersIpni noop exchange.", "link", l)
+	return []peer.AddrInfo{}, nil
+}

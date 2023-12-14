@@ -1,4 +1,4 @@
-package exchange_test
+package cmd_test
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
@@ -16,15 +17,33 @@ import (
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/fluent"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
+	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/multiformats/go-multiaddr"
 )
 
-var log = logging.Logger("fula/dhttest")
+var log = logging.Logger("fula/mockserver")
+
+type AppConfig struct {
+	PoolName                  string
+	StaticRelays              []string
+	AllowTransientConnection  bool
+	IpniPublishDisabled       bool
+	IpniPublishInterval       time.Duration
+	IpniPublishDirectAnnounce []string
+	Authorizer                string
+	AuthorizedPeers           []string
+}
+
+// App holds the main application settings
+type App struct {
+	config             AppConfig
+	blockchainEndpoint string
+}
 
 // requestLoggerMiddleware logs the details of each request
 func requestLoggerMiddleware(next http.Handler) http.Handler {
@@ -33,7 +52,9 @@ func requestLoggerMiddleware(next http.Handler) http.Handler {
 		body, _ := io.ReadAll(r.Body)
 		log.Debugw("Received request", "url", r.URL.Path, "method", r.Method, "body", string(body))
 		if r.URL.Path == "/fula/pool/vote" {
-			fmt.Printf("Voted on QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe %s", string(body))
+			fmt.Printf("Voted on 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q %s", string(body))
+		} else if r.URL.Path == "/fula/manifest/batch_storage" {
+			fmt.Printf("Stored manifest: %s", string(body))
 		}
 
 		// Create a new io.Reader from the read body as the original body is now drained
@@ -205,6 +226,46 @@ func startMockServer(addr string) *http.Server {
 		}
 	})
 
+	handler.HandleFunc("/cid/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract the CID from the URL path
+		cid := strings.TrimPrefix(r.URL.Path, "/cid/")
+
+		// Prepare the ContextID based on the CID
+		var contextID string
+		switch cid {
+		case "bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy":
+			contextID = base64.StdEncoding.EncodeToString([]byte("12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX"))
+		case "bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34":
+			contextID = base64.StdEncoding.EncodeToString([]byte("12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM"))
+		default:
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+
+		// Create the response
+		response := map[string]interface{}{
+			"MultihashResults": []map[string]interface{}{
+				{
+					"Multihash": "HiCJpK9N9aiHbWJ40eq3r0Lns3qhnLSUviVYdcBJD4jWjQ==",
+					"ProviderResults": []map[string]interface{}{
+						{
+							"ContextID": contextID,
+							"Metadata":  "gcA/",
+							"Provider": map[string]interface{}{
+								"ID":    "12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R",
+								"Addrs": []string{"/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Set Content-Type header and send the response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})
+
 	// Wrap the handlers with the logging middleware
 	loggedHandler := requestLoggerMiddleware(handler)
 
@@ -275,47 +336,88 @@ func generateIdentity(id int) crypto.PrivKey {
 	}
 	return pid
 }
-
 func updatePoolName(newPoolName string) error {
 	return nil
 }
+func updateConfig(p []peer.ID) error {
+	return nil
+}
 
-func Example_provideAfterPull() {
-	server := startMockServer("127.0.0.1:4001")
+// Example_poolDiscoverPeersViaPubSub starts a pool named "1" across three nodes, connects two of the nodes to
+// the other one to facilitate a path for pubsub to propagate and shows all three nodes discover
+// each other using pubsub.
+func Example_main() {
+	if err := logging.SetLogLevel("*", "info"); err != nil {
+		panic(err)
+	}
+	log.Info("start")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	log.Info("creating app")
+	app := App{
+		config: AppConfig{
+			PoolName:                  "1",
+			StaticRelays:              []string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"},
+			AllowTransientConnection:  true,
+			IpniPublishDisabled:       false,
+			IpniPublishInterval:       10 * time.Second,
+			IpniPublishDirectAnnounce: []string{"https://cid.contact/ingest/announce"},
+			AuthorizedPeers:           []string{"12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM", "12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX"},
+			Authorizer:                "12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM",
+		},
+		blockchainEndpoint: "127.0.0.1:4003",
+	}
+	log.Info("starting server")
+	server := startMockServer("127.0.0.1:4003")
 	defer func() {
 		// Shutdown the server after test
 		if err := server.Shutdown(context.Background()); err != nil {
 			panic(err) // Handle the error as you see fit
 		}
 	}()
-
-	const poolName = "1"
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "info"); err != nil {
-		panic(err)
+	log.Info("creating authorizedPeers")
+	authorizedPeers := make([]peer.ID, len(app.config.AuthorizedPeers))
+	for i, authorizedPeer := range app.config.AuthorizedPeers {
+		id, err := peer.Decode(authorizedPeer)
+		if err != nil {
+			panic(fmt.Errorf("unable to decode authorized peer: %w", err))
+		}
+		authorizedPeers[i] = id
 	}
-
-	// Use a deterministic random generator to generate deterministic
-	// output for the example.
-
-	// Instantiate the first node in the pool
-	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
+	log.Info("creating authorizer")
+	authorizer, err := peer.Decode(app.config.Authorizer)
 	if err != nil {
 		panic(err)
 	}
+	log.Info("creating identity1")
+	identity1 := libp2p.Identity(generateIdentity(1))
+	log.Info("creating h1")
+	h1, err := libp2p.New(identity1)
+	if err != nil {
+		panic(err)
+	}
+	log.Infow("h1 value generated", "h1", h1.ID()) //12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	n1, err := blox.New(
-		blox.WithPoolName(poolName),
-		blox.WithTopicName(poolName),
 		blox.WithHost(h1),
+		blox.WithPoolName(app.config.PoolName),
+		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
+		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
+			exchange.WithUpdateConfig(updateConfig),
+			exchange.WithAuthorizer(authorizer),
+			exchange.WithAuthorizedPeers(authorizedPeers),
+			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
+			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
+			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
+			exchange.WithIpniGetEndPoint("http://127.0.0.1:4003/cid/"),
+			exchange.WithIpniProviderEngineOptions(
+				engine.WithPublisherKind(engine.DataTransferPublisher),
+				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
+			),
 			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
+				dht.ProtocolExtension(protocol.ID("/"+app.config.PoolName)),
 				dht.ProtocolPrefix("/fula"),
 				dht.Resiliency(1),
 				dht.Mode(dht.ModeAutoServer),
@@ -329,23 +431,36 @@ func Example_provideAfterPull() {
 		panic(err)
 	}
 	defer n1.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", app.config.PoolName, h1.ID().String())
 
-	// Instantiate the second node in the pool
-	h2, err := libp2p.New(libp2p.Identity(generateIdentity(2)))
+	identity2 := libp2p.Identity(generateIdentity(2))
+
+	h2, err := libp2p.New(identity2)
 	if err != nil {
 		panic(err)
 	}
+	log.Infow("h2 value generated", "h2", h2.ID()) //12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
 	n2, err := blox.New(
-		blox.WithPoolName(poolName),
-		blox.WithTopicName(poolName),
 		blox.WithHost(h2),
+		blox.WithPoolName(app.config.PoolName),
+		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
+		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
+		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
+			exchange.WithUpdateConfig(updateConfig),
+			exchange.WithAuthorizer(authorizer),
+			exchange.WithAuthorizedPeers(authorizedPeers),
+			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
+			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
+			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
+			exchange.WithIpniGetEndPoint("http://127.0.0.1:4003/cid/"),
+			exchange.WithIpniProviderEngineOptions(
+				engine.WithPublisherKind(engine.DataTransferPublisher),
+				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
+			),
 			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
+				dht.ProtocolExtension(protocol.ID("/"+app.config.PoolName)),
 				dht.ProtocolPrefix("/fula"),
 				dht.Resiliency(1),
 				dht.Mode(dht.ModeAutoServer),
@@ -359,133 +474,36 @@ func Example_provideAfterPull() {
 		panic(err)
 	}
 	defer n2.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", app.config.PoolName, h2.ID().String())
+	time.Sleep(15 * time.Second)
+	//Connect test
+	// Your relayed libp2p address
+	h1Addr := "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit/p2p/" + h1.ID().String()
 
-	// Instantiate the third node in the pool
-	h3, err := libp2p.New(libp2p.Identity(generateIdentity(3)))
+	// Parse the multiaddress
+	ma, err := multiaddr.NewMultiaddr(h1Addr)
 	if err != nil {
 		panic(err)
 	}
-	n3, err := blox.New(
-		blox.WithPoolName(poolName),
-		blox.WithTopicName(poolName),
-		blox.WithHost(h3),
-		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
-	)
+
+	// Create peer.AddrInfo
+	ai := peer.AddrInfo{
+		ID:    h1.ID(),
+		Addrs: []multiaddr.Multiaddr{ma},
+	}
+	if err := h2.Connect(ctx, ai); err != nil {
+		panic(err)
+	}
+	fmt.Println("Connected to peer:", h1.ID())
+
+	//Blockchain test
+	res, err := n1.BloxFreeSpace(ctx, h2.ID())
 	if err != nil {
 		panic(err)
 	}
-	if err := n3.Start(ctx); err != nil {
-		panic(err)
-	}
-	defer n3.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h3.ID().String())
+	fmt.Printf("Got free space of node: %s\n", string(res))
 
-	// Instantiate the fourth node not in the pool
-	h4, err := libp2p.New(libp2p.Identity(generateIdentity(4)))
-	if err != nil {
-		panic(err)
-	}
-	n4, err := blox.New(
-		blox.WithPoolName("0"),
-		blox.WithTopicName("0"),
-		blox.WithHost(h4),
-		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
-		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
-	)
-	if err != nil {
-		panic(err)
-	}
-	if err := n4.Start(ctx); err != nil {
-		panic(err)
-	}
-	defer n4.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", "0", h4.ID().String())
-
-	// Connect n1 to n2 and n3 so that there is a path for gossip propagation.
-	// Note that we are not connecting n2 to n3 as they should discover
-	// each other via pool's iexist announcements.
-	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
-		panic(err)
-	}
-	h1.Peerstore().AddAddrs(h3.ID(), h3.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h3.ID(), Addrs: h3.Addrs()}); err != nil {
-		panic(err)
-	}
-
-	// Wait until the nodes discover each other
-	for {
-		if len(h1.Peerstore().Peers()) >= 3 &&
-			len(h2.Peerstore().Peers()) >= 3 &&
-			len(h3.Peerstore().Peers()) >= 3 {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			panic(ctx.Err())
-		default:
-			time.Sleep(time.Second)
-		}
-	}
-
-	fmt.Printf("Finally %s peerstore contains >=3 nodes:\n", h1.ID())
-
-	fmt.Printf("Finally %s peerstore contains >=3 nodes:\n", h2.ID())
-
-	fmt.Printf("Finally %s peerstore contains >=3 nodes:\n", h3.ID())
-
-	//Manually adding h4 as it is not in the same pool
-	h1.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
-		panic(err)
-	}
-	//Manually adding h4 as it is not in the same pool
-	h2.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h2.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
-		panic(err)
-	}
-	//Manually adding h4 as it is not in the same pool
-	h3.Peerstore().AddAddrs(h4.ID(), h4.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h3.Connect(ctx, peer.AddrInfo{ID: h4.ID(), Addrs: h4.Addrs()}); err != nil {
-		panic(err)
-	}
-
-	// Wait until the fourth node discover others
-	for {
-		if len(h4.Peerstore().Peers()) >= 4 {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			panic(ctx.Err())
-		default:
-			time.Sleep(time.Second)
-		}
-	}
-
-	//Store a link in h1 and find providers from h2
-
-	// Generate a sample DAG and store it on node 1 (n1) in the pool, which we will pull from n1
+	//Careting DAG
 	n1leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
 		na.AssembleEntry("this").AssignBool(true)
 	})
@@ -519,31 +537,7 @@ func Example_provideAfterPull() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n2RootLink, n2leafLink)
-
-	//n1.UpdateDhtPeers(h2.Peerstore().Peers())
-	//n2.UpdateDhtPeers(h1.Peerstore().Peers())
-
-	err = n1.ProvideLinkByDht(n1RootLink)
-	if err != nil {
-		fmt.Print("Error happened in ProvideLinkByDht")
-		panic(err)
-	}
-	peerlist1, err := n2.FindLinkProvidersByDht(n1RootLink)
-	if err != nil {
-		fmt.Print("Error happened in FindLinkProvidersByDht")
-		panic(err)
-	}
-	// Iterate over the slice and print the peer ID of each AddrInfo
-	for _, addrInfo := range peerlist1 {
-		fmt.Printf("Found %s on %s\n", n1RootLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
-	}
-
-	err = n1.PingDht(h3.ID())
-	if err != nil {
-		fmt.Print("Error happened in PingDht")
-		panic(err)
-	}
+	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h2.ID(), n2RootLink, n2leafLink)
 
 	fmt.Println("exchanging by Pull...")
 	// Pull the sample DAG stored on node 1 from node 2 by only asking for the root link.
@@ -590,211 +584,6 @@ func Example_provideAfterPull() {
 	// Push the sample DAG stored on node 2 to node 1 by only pushing the root link.
 	// Because Push implementation is recursive, it should push the leaf link too.
 	if err := n2.Push(ctx, h1.ID(), n2leafLink); err != nil {
-		panic(err)
-	}
-	err = n1.ProvideLinkByDht(n2leafLink)
-	if err != nil {
-		fmt.Print("Error happened in ProvideLinkByDht n1")
-		panic(err)
-	}
-	err = n2.ProvideLinkByDht(n2leafLink)
-	if err != nil {
-		fmt.Print("Error happened in ProvideLinkByDht n2")
-		panic(err)
-	}
-
-	peerlist3, err := n3.FindLinkProvidersByDht(n2leafLink)
-	if err != nil {
-		fmt.Print("Error happened in FindLinkProvidersByDht3")
-		panic(err)
-	}
-
-	// Iterate over the slice and print the peer ID of each AddrInfo
-	for _, addrInfo := range peerlist3 {
-		fmt.Printf("Found %s on %s\n", n2leafLink, addrInfo.ID.String()) // ID.String() converts the peer ID to a string
-	}
-
-	// Unordered output:
-	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// Instantiated node in pool 1 with ID: 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
-	// Instantiated node in pool 1 with ID: 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX
-	// Instantiated node in pool 0 with ID: 12D3KooWRTzN7HfmjoUBHokyRZuKdyohVVSGqKBMF24ZC3tGK78Q
-	// Finally 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM peerstore contains >=3 nodes:
-	// Finally 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX peerstore contains >=3 nodes:
-	// Finally 12D3KooWRde3N9rHE8vEyzTiPMVBvs1RpjS4oaWjVkfAt17412vX peerstore contains >=3 nodes:
-	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM stored IPLD data with links:
-	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM stored IPLD data with links:
-	//     root: bafyreiekrzm6lpylw7hhrgvmzqfsek7og6ucqgpzns3ysbc5wj3imfrsge
-	//     leaf:bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4
-	// Found bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy on 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// exchanging by Pull...
-	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully fetched:
-	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	//     content: {"oneLeafLink":{"/":"bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"},"that":42}
-	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully fetched:
-	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	//     content: {"this":true}
-	// exchanging by Push...
-	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
-}
-
-// Example_poolExchangeDagBetweenPoolNodes starts up a pool with 2 nodes, stores a sample DAG in
-// one node and fetches it via GraphSync from the other node.
-func Example_poolExchangeDagBetweenPoolNodes() {
-	server := startMockServer("127.0.0.1:4001")
-	defer func() {
-		// Shutdown the server after test
-		if err := server.Shutdown(context.Background()); err != nil {
-			panic(err) // Handle the error as you see fit
-		}
-	}()
-
-	const poolName = "1"
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "info"); err != nil {
-		panic(err)
-	}
-
-	// Use a deterministic random generator to generate deterministic
-	// output for the example.
-
-	// Instantiate the first node in the pool
-	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
-	if err != nil {
-		panic(err)
-	}
-	n1, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h1))
-	if err != nil {
-		panic(err)
-	}
-	if err := n1.Start(ctx); err != nil {
-		panic(err)
-	}
-	defer n1.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
-
-	// Instantiate the second node in the pool
-	h2, err := libp2p.New(libp2p.Identity(generateIdentity(2)))
-	if err != nil {
-		panic(err)
-	}
-	n2, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h2))
-	if err != nil {
-		panic(err)
-	}
-	if err := n2.Start(ctx); err != nil {
-		panic(err)
-	}
-	defer n2.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h2.ID().String())
-
-	// Connect n1 to n2.
-	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h1.Connect(ctx, peer.AddrInfo{ID: h2.ID(), Addrs: h2.Addrs()}); err != nil {
-		panic(err)
-	}
-	h2.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), peerstore.PermanentAddrTTL)
-	if err = h2.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()}); err != nil {
-		panic(err)
-	}
-
-	// Authorize exchange between the two nodes
-	if err := n1.SetAuth(ctx, h1.ID(), h2.ID(), true); err != nil {
-		panic(err)
-	}
-	if err := n2.SetAuth(ctx, h2.ID(), h1.ID(), true); err != nil {
-		panic(err)
-	}
-
-	// Generate a sample DAG and store it on node 1 (n1) in the pool, which we will pull from n1
-	n1leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
-		na.AssembleEntry("this").AssignBool(true)
-	})
-	n1leafLink, err := n1.Store(ctx, n1leaf)
-	if err != nil {
-		panic(err)
-	}
-	n1Root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
-		na.AssembleEntry("that").AssignInt(42)
-		na.AssembleEntry("oneLeafLink").AssignLink(n1leafLink)
-	})
-	n1RootLink, err := n1.Store(ctx, n1Root)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n1RootLink, n1leafLink)
-
-	// Generate a sample DAG and store it on node 2 (n1) in the pool, which we will push to n1
-	n2leaf := fluent.MustBuildMap(basicnode.Prototype.Map, 1, func(na fluent.MapAssembler) {
-		na.AssembleEntry("that").AssignBool(false)
-	})
-	n2leafLink, err := n2.Store(ctx, n2leaf)
-	if err != nil {
-		panic(err)
-	}
-	n2Root := fluent.MustBuildMap(basicnode.Prototype.Map, 2, func(na fluent.MapAssembler) {
-		na.AssembleEntry("this").AssignInt(24)
-		na.AssembleEntry("anotherLeafLink").AssignLink(n2leafLink)
-	})
-	n2RootLink, err := n2.Store(ctx, n2Root)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%s stored IPLD data with links:\n    root: %s\n    leaf:%s\n", h1.ID(), n1RootLink, n1leafLink)
-
-	fmt.Println("exchanging by Pull...")
-	// Pull the sample DAG stored on node 1 from node 2 by only asking for the root link.
-	// Because fetch implementation is recursive, it should fetch the leaf link too.
-	if err := n2.Pull(ctx, h1.ID(), n1RootLink); err != nil {
-		panic(err)
-	}
-
-	// Assert that n2 now has both root and leaf links
-	if exists, err := n2.Has(ctx, n1RootLink); err != nil {
-		panic(err)
-	} else if !exists {
-		panic("expected n2 to have fetched the entire sample DAG")
-	} else {
-		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1RootLink, h1.ID())
-		n, err := n2.Load(ctx, n1RootLink, basicnode.Prototype.Any)
-		if err != nil {
-			panic(err)
-		}
-		var buf bytes.Buffer
-		if err := dagjson.Encode(n, &buf); err != nil {
-			panic(err)
-		}
-		fmt.Printf("    content: %s\n", buf.String())
-	}
-	if exists, err := n2.Has(ctx, n1leafLink); err != nil {
-		panic(err)
-	} else if !exists {
-		panic("expected n2 to have fetched the entire sample DAG")
-	} else {
-		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1leafLink, h1.ID())
-		n, err := n2.Load(ctx, n1leafLink, basicnode.Prototype.Any)
-		if err != nil {
-			panic(err)
-		}
-		var buf bytes.Buffer
-		if err := dagjson.Encode(n, &buf); err != nil {
-			panic(err)
-		}
-		fmt.Printf("    content: %s\n", buf.String())
-	}
-
-	fmt.Println("exchanging by Push...")
-	// Push the sample DAG stored on node 2 to node 1 by only pushing the root link.
-	// Because Push implementation is recursive, it should push the leaf link too.
-	if err := n2.Push(ctx, h1.ID(), n2RootLink); err != nil {
 		panic(err)
 	}
 
@@ -873,4 +662,5 @@ func Example_poolExchangeDagBetweenPoolNodes() {
 	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
 	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	//     content: {"that":false}
+
 }

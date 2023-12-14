@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -222,7 +221,6 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 
 		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
 
-		conf.Experimental.GraphsyncEnabled = true
 		conf.Addresses.Swarm = app.config.ListenAddrs
 		conf.Identity.PeerID = h.ID().String()
 		conf.Identity.PrivKey = app.config.Identity
@@ -336,7 +334,7 @@ func init() {
 				Name:        "ipniPublishDirectAnnounce",
 				Usage:       "The list of IPNI URLs to which make direct announcements.",
 				Destination: &app.config.directAnnounce,
-				Value:       cli.NewStringSlice("https://announce.relay2.functionyard.fula.network/ingest/announce"),
+				Value:       cli.NewStringSlice("https://cid.contact/ingest/announce"),
 			}),
 			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:        "ipniPublisherIdentity",
@@ -762,6 +760,7 @@ func action(ctx *cli.Context) error {
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
+			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
 			exchange.WithIpniProviderEngineOptions(
 				engine.WithHost(ipnih),
 				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
@@ -843,15 +842,9 @@ func printMultiaddrAsQR(h host.Host) {
 		QuietZone: qrterminal.QUIET_ZONE,
 	}
 
-	if runtime.GOOS == "windows" {
-		// Specific characters for Windows terminal
-		config.BlackChar = qrterminal.BLACK
-		config.WhiteChar = qrterminal.WHITE
-	} else {
-		// Characters for other terminals (e.g., Unix/Linux)
-		config.BlackChar = "%%"
-		config.WhiteChar = "  "
-	}
+	// Characters for other terminals (e.g., Unix/Linux)
+	config.BlackChar = qrterminal.BLACK
+	config.WhiteChar = qrterminal.WHITE
 
 	// Generate QR code
 	qrterminal.GenerateWithConfig(fullAddr, config)

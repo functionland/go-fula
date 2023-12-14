@@ -43,6 +43,7 @@ type Client struct {
 	ex      exchange.Exchange
 	bl      blockchain.Blockchain
 	bloxPid peer.ID
+	relays  []string
 }
 
 func NewClient(cfg *Config) (*Client, error) {
@@ -134,7 +135,26 @@ func (c *Client) Pull(key []byte) error {
 	} else if exists {
 		return nil
 	}
-	return c.ex.Pull(context.TODO(), c.bloxPid, l)
+	err = c.ex.Pull(context.TODO(), c.bloxPid, l)
+	if err != nil {
+		providers, err := c.ex.FindProvidersIpni(l, c.relays)
+		if err != nil {
+			return err
+		}
+		for _, provider := range providers {
+			if provider.ID != c.h.ID() {
+				//Found a storer, now pull the cid
+				err = c.ex.Pull(context.TODO(), provider.ID, l)
+				if err != nil {
+					continue
+				}
+				return nil
+			} else {
+				continue
+			}
+		}
+	}
+	return err
 }
 
 // Push requests blox at Config.BloxAddr to download the given key from this node.

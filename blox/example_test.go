@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
@@ -207,6 +208,46 @@ func startMockServer(addr string) *http.Server {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	})
+
+	handler.HandleFunc("/cid/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract the CID from the URL path
+		cid := strings.TrimPrefix(r.URL.Path, "/cid/")
+
+		// Prepare the ContextID based on the CID
+		var contextID string
+		switch cid {
+		case "bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy":
+			contextID = base64.StdEncoding.EncodeToString([]byte("12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX"))
+		case "bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34":
+			contextID = base64.StdEncoding.EncodeToString([]byte("12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM"))
+		default:
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+
+		// Create the response
+		response := map[string]interface{}{
+			"MultihashResults": []map[string]interface{}{
+				{
+					"Multihash": "HiCJpK9N9aiHbWJ40eq3r0Lns3qhnLSUviVYdcBJD4jWjQ==",
+					"ProviderResults": []map[string]interface{}{
+						{
+							"ContextID": contextID,
+							"Metadata":  "gcA/",
+							"Provider": map[string]interface{}{
+								"ID":    "12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R",
+								"Addrs": []string{"/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Set Content-Type header and send the response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
 	})
 
 	// Wrap the handlers with the logging middleware
@@ -691,6 +732,66 @@ func updatePoolName(newPoolName string) error {
 	// Member ID: QmUg1bGBZ1rSNt3LZR7kKf9RDy3JtJLZZDZGKrzSP36TMe, Status: 1
 }*/
 
+func Example_testMockserver() {
+	server := startMockServer("127.0.0.1:4000")
+	defer func() {
+		// Shutdown the server after test
+		if err := server.Shutdown(context.Background()); err != nil {
+			panic(err) // Handle the error as you see fit
+		}
+	}()
+	// Define the URL
+	url := "http://127.0.0.1:4000/cid/bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"
+
+	// Send a GET request to the server
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatal("Error making GET request:", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal("Error reading response body:", err)
+	}
+
+	// Convert the body to a string and log it
+	fmt.Println("Response:", string(body))
+
+	// Unordered output:
+	// Response: {"MultihashResults":[{"Multihash":"HiCJpK9N9aiHbWJ40eq3r0Lns3qhnLSUviVYdcBJD4jWjQ==","ProviderResults":[{"ContextID":"MTJEM0tvb1dIOXN3amVDeXVSNnV0ektVMVVzcGlXNVJER3pBRnZORHdxa1Q1YlVId3V4WA==","Metadata":"gcA/","Provider":{"Addrs":["/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R"],"ID":"12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R"}}]}]}
+}
+
+func Example_encode64Test() {
+	originalString := "12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX"
+
+	// Encode to Base64
+	encodedString := base64.StdEncoding.EncodeToString([]byte(originalString))
+	fmt.Println("Encoded:", encodedString)
+
+	// Decode from Base64
+	decodedBytes, err := base64.StdEncoding.DecodeString(encodedString)
+	if err != nil {
+		fmt.Println("Decode error:", err)
+		return
+	}
+	decodedString := string(decodedBytes)
+	fmt.Println("Decoded:", decodedString)
+
+	// Check if original and decoded are the same
+	if originalString == decodedString {
+		fmt.Println("Success: Original and decoded strings are the same.")
+	} else {
+		fmt.Println("Error: Original and decoded strings are different.")
+	}
+
+	// Unordered output:
+	// Encoded: MTJEM0tvb1dIOXN3amVDeXVSNnV0ektVMVVzcGlXNVJER3pBRnZORHdxa1Q1YlVId3V4WA==
+	// Decoded: 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
+	// Success: Original and decoded strings are the same.
+}
+
 func Example_storeManifest() {
 	server := startMockServer("127.0.0.1:4000")
 	defer func() {
@@ -788,6 +889,7 @@ func Example_storeManifest() {
 				dht.Resiliency(1),
 				dht.Mode(dht.ModeAutoServer),
 			),
+			exchange.WithIpniGetEndPoint("http://127.0.0.1:4000/cid/"),
 		),
 	)
 	if err != nil {
@@ -818,6 +920,7 @@ func Example_storeManifest() {
 				dht.Resiliency(1),
 				dht.Mode(dht.ModeAutoServer),
 			),
+			exchange.WithIpniGetEndPoint("http://127.0.0.1:4000/cid/"),
 		),
 	)
 	if err != nil {
@@ -1001,6 +1104,11 @@ func Example_storeManifest() {
 		}
 		fmt.Printf("    content: %s\n", buf.String())
 	}
+	err = n1.ProvideLinkByDht(n2leafLink)
+	if err != nil {
+		fmt.Print("Error happened in ProvideLinkByDht")
+		panic(err)
+	}
 	peerlist3, err := n3.FindLinkProvidersByDht(n2leafLink)
 	if err != nil {
 		fmt.Print("Error happened in FindLinkProvidersByDht3")
@@ -1046,8 +1154,8 @@ func Example_storeManifest() {
 	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	//     content: {"that":false}
 	// Found bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4 on 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
-	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34","bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"],"pool_id":1}
+	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"],"pool_id":1}
+	// Stored manifest: {"cid":["bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"],"pool_id":1}
 }
 
 type Config struct {

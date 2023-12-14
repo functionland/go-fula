@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	iface "github.com/ipfs/boxo/coreiface"
+	iface "github.com/ipfs/kubo/core/coreiface"
 	"github.com/ipni/index-provider/engine"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -21,6 +21,7 @@ type (
 		ipniPublishTicker        *time.Ticker
 		ipniPublishChanBuffer    int
 		ipniPublishMaxBatchSize  int
+		ipniGetEndpoint          string
 		ipniProviderEngineOpts   []engine.Option
 		dhtProviderOpts          []dht.Option
 		updateConfig             ConfigUpdater
@@ -42,6 +43,9 @@ func newOptions(o ...Option) (*options, error) {
 	}
 	if opts.ipniPublishTicker == nil {
 		opts.ipniPublishTicker = time.NewTicker(10 * time.Second)
+	}
+	if opts.ipniGetEndpoint == "" {
+		opts.ipniGetEndpoint = "https://cid.contact/cid/"
 	}
 	if opts.wg == nil {
 		opts.wg = new(sync.WaitGroup)
@@ -89,6 +93,13 @@ func WithIpniPublishDisabled(d bool) Option {
 func WithIpniPublishInterval(t time.Duration) Option {
 	return func(o *options) error {
 		o.ipniPublishTicker = time.NewTicker(t)
+		return nil
+	}
+}
+
+func WithIpniGetEndPoint(l string) Option {
+	return func(o *options) error {
+		o.ipniGetEndpoint = l
 		return nil
 	}
 }

@@ -3,6 +3,7 @@ package exchange
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 )
 
 const (
@@ -132,6 +134,70 @@ func (e *FxExchange) PingDht(p peer.ID) error {
 func (e *FxExchange) FindProvidersDht(l ipld.Link) ([]peer.AddrInfo, error) {
 	return e.dht.FindProviders(l)
 }
+func (e *FxExchange) FindProvidersIpni(l ipld.Link, relays []string) ([]peer.AddrInfo, error) {
+	cidStr := l.String() // Convert IPLD Link to string
+	url := fmt.Sprintf("%s%s", e.ipniGetEndpoint, cidStr)
+
+	// Make HTTP GET request
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse JSON response
+	var result struct {
+		MultihashResults []MultihashResult `json:"MultihashResults"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	var addrInfos []peer.AddrInfo
+	for _, mhResult := range result.MultihashResults {
+		for _, provider := range mhResult.ProviderResults {
+			// Decode ContextID from Base64
+			decodedBytes, err := base64.StdEncoding.DecodeString(provider.ContextID)
+			if err != nil {
+				log.Errorf("Base64 Decode Error: %v", err)
+				continue
+			}
+			decodedContextID := string(decodedBytes)
+
+			// Convert decoded bytes to peer.ID
+			pid, err := peer.Decode(decodedContextID)
+			if err != nil {
+				log.Errorf("Error converting to peer.ID: %v", err)
+				continue
+			}
+
+			// Convert relay addresses to multiaddr.Multiaddr and add to AddrInfo
+			var addrs []multiaddr.Multiaddr
+			for _, relay := range relays {
+				maddr, err := multiaddr.NewMultiaddr(relay)
+				if err != nil {
+					log.Errorf("Error parsing multiaddr: %v", err)
+					continue
+				}
+				addrs = append(addrs, maddr)
+			}
+
+			addrInfo := peer.AddrInfo{
+				ID:    pid,
+				Addrs: addrs,
+			}
+			addrInfos = append(addrInfos, addrInfo)
+		}
+	}
+
+	return addrInfos, nil
+}
 
 func (e *FxExchange) PutValueDht(ctx context.Context, key string, val string) error {
 	return e.dht.dh.PutValue(ctx, key, []byte(val))
@@ -192,9 +258,12 @@ func (e *FxExchange) Start(ctx context.Context) error {
 
 	e.gx.RegisterIncomingRequestHook(
 		func(p peer.ID, r graphsync.RequestData, ha graphsync.IncomingRequestHookActions) {
+			log.Debugw("Receiving Graphsync Request...", "p", p)
 			if e.authorized(p, actionPull) {
+				log.Debugw("Receiving Graphsync Request authorized...", "p", p)
 				ha.ValidateRequest()
 			} else {
+				log.Errorw("Receiving Graphsync Request not authorized...", "p", p)
 				ha.TerminateWithError(errUnauthorized)
 			}
 		})
@@ -212,7 +281,7 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
 
-	if e.wg != nil {
+	/*if e.wg != nil {
 		e.wg.Add(1)
 	}
 	var cidLink cidlink.Link
@@ -242,7 +311,7 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 				log.Debug("Success provide link via DHT")
 			}
 		}
-	}()
+	}()*/
 	resps, errs := e.gx.Request(ctx, from, l, selectorparse.CommonSelector_ExploreAllRecursively)
 	for {
 		select {
@@ -253,14 +322,14 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 				return nil
 			}
 			log.Infow("synced node", "node", resp.Node)
-			if e.wg != nil {
+			/*if e.wg != nil {
 				e.wg.Add(1)
 			}
 			go func() {
 				if e.wg != nil {
 					defer e.wg.Done()
 				}
-				/*if e.ipfsApi != nil && resp.LastBlock.Link != nil {
+				if e.ipfsApi != nil && resp.LastBlock.Link != nil {
 					log.Info("ipfsAPI: Starting Pinning")
 					if cidLink, ok = resp.LastBlock.Link.(cidlink.Link); !ok {
 						// Handle error: couldn't fetch the node from IPFS
@@ -277,7 +346,7 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 						log.Warnw("ipfsAPI: Failed to pin add in ipfs", "link", resp.LastBlock.Link, "err", err)
 					}
 					log.Info("ipfsAPI: Pinned")
-				}*/
+				}
 				// Call Provide for the last block link of each response
 				if resp.LastBlock.Link != nil {
 					if err := e.dht.Provide(resp.LastBlock.Link); err != nil {
@@ -287,7 +356,7 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 						log.Debug("Success provide link via DHT")
 					}
 				}
-			}()
+			}()*/
 
 		case err, ok := <-errs:
 			if !ok {
@@ -482,13 +551,16 @@ func (e *FxExchange) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionPull, actionPush:
+	case actionPush:
 		e.authorizedPeersLock.RLock()
 		_, ok := e.authorizedPeers[pid]
 		e.authorizedPeersLock.RUnlock()
 		return ok
 	case actionAuth:
 		return pid == e.authorizer
+	case actionPull:
+		//TODO: Check if requestor is part of the same pool or the owner of the cid
+		return true
 	default:
 		return false
 	}
