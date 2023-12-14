@@ -11,7 +11,7 @@ require (
 	github.com/ipfs/go-graphsync v0.16.0
 	github.com/ipfs/go-ipld-format v0.6.0
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/ipfs/kubo v0.25.0-rc1
+	github.com/ipfs/kubo v0.25.0
 	github.com/ipld/go-ipld-prime v0.21.0
 	github.com/ipni/go-libipni v0.5.7
 	github.com/ipni/index-provider v0.14.2
