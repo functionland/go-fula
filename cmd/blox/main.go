@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -843,15 +842,9 @@ func printMultiaddrAsQR(h host.Host) {
 		QuietZone: qrterminal.QUIET_ZONE,
 	}
 
-	if runtime.GOOS == "windows" {
-		// Specific characters for Windows terminal
-		config.BlackChar = qrterminal.BLACK
-		config.WhiteChar = qrterminal.WHITE
-	} else {
-		// Characters for other terminals (e.g., Unix/Linux)
-		config.BlackChar = "%%"
-		config.WhiteChar = "  "
-	}
+	// Characters for other terminals (e.g., Unix/Linux)
+	config.BlackChar = qrterminal.BLACK
+	config.WhiteChar = qrterminal.WHITE
 
 	// Generate QR code
 	qrterminal.GenerateWithConfig(fullAddr, config)
