@@ -475,7 +475,7 @@ func Example_main() {
 	}
 	defer n2.Shutdown(ctx)
 	fmt.Printf("Instantiated node in pool %s with ID: %s\n", app.config.PoolName, h2.ID().String())
-	time.Sleep(10 * time.Second)
+	time.Sleep(15 * time.Second)
 	//Connect test
 	// Your relayed libp2p address
 	h1Addr := "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit/p2p/" + h1.ID().String()

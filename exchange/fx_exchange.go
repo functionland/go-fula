@@ -258,9 +258,12 @@ func (e *FxExchange) Start(ctx context.Context) error {
 
 	e.gx.RegisterIncomingRequestHook(
 		func(p peer.ID, r graphsync.RequestData, ha graphsync.IncomingRequestHookActions) {
+			log.Debugw("Receiving Graphsync Request...", "p", p)
 			if e.authorized(p, actionPull) {
+				log.Debugw("Receiving Graphsync Request authorized...", "p", p)
 				ha.ValidateRequest()
 			} else {
+				log.Errorw("Receiving Graphsync Request not authorized...", "p", p)
 				ha.TerminateWithError(errUnauthorized)
 			}
 		})

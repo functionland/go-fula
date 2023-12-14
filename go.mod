@@ -2,8 +2,6 @@ module github.com/functionland/go-fula
 
 go 1.21
 
-replace github.com/multiformats/go-multiaddr => github.com/functionland/go-multiaddr v0.0.2
-
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/grandcat/zeroconf v1.0.0
