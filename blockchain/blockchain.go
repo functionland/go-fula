@@ -393,6 +393,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionGetAccount: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.HandleGetAccount(r.Context(), from, w, r)
 		},
+		actionEraseBlData: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleEraseBlData(r.Context(), from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -478,6 +481,19 @@ func (bl *FxBlockchain) handleBloxFreeSpace(from peer.ID, w http.ResponseWriter,
 			UsedPercentage: 0,
 		}
 	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+}
+
+func (bl *FxBlockchain) handleEraseBlData(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionEraseBlData, "from", from)
+	out := wifi.EraseBlData(ctx)
 
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(out); err != nil {
@@ -631,7 +647,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

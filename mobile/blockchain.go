@@ -98,6 +98,12 @@ func (c *Client) BloxFreeSpace() ([]byte, error) {
 	return c.bl.BloxFreeSpace(ctx, c.bloxPid)
 }
 
+// EraseBlData requests the blox to erase the data related to blockchain
+func (c *Client) EraseBlData() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.EraseBlData(ctx, c.bloxPid)
+}
+
 // WifiRemoveall requests the blox to remove all saved wifis
 func (c *Client) WifiRemoveall() ([]byte, error) {
 	ctx := context.TODO()
