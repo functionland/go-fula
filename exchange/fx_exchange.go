@@ -318,7 +318,10 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	}
 	// Recursively traverse the node and push all its leaves.
 	err = traversal.WalkAdv(node, exploreAllRecursivelySelector, func(progress traversal.Progress, node datamodel.Node, _ traversal.VisitReason) error {
-		log := log.With("t-cid", progress.LastBlock.Link.(cidlink.Link).Cid)
+		log := log
+		if progress.LastBlock.Link != nil {
+			log = log.With("t-cid", progress.LastBlock.Link.(cidlink.Link).Cid)
+		}
 		var buf bytes.Buffer
 		err := dagcbor.Encode(node, &buf)
 		if err != nil {
