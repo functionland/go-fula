@@ -1206,7 +1206,7 @@ func Example_blserver() {
 	cfg := NewConfig()
 
 	// ListenAddr configure
-	ListenAddrsConfig1 := []string{"/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic"}
+	ListenAddrsConfig1 := []string{"/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic", "/ip4/0.0.0.0/udp/40001/quic-v1", "/ip4/0.0.0.0/udp/40001/quic-v1/webtransport"}
 	listenAddrs1 := make([]multiaddr.Multiaddr, 0, len(ListenAddrsConfig1)+1)
 	// Convert string addresses to multiaddr and append to listenAddrs
 	for _, addrString := range ListenAddrsConfig1 {
