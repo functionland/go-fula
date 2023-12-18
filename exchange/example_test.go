@@ -761,7 +761,7 @@ func Example_poolExchangeDagBetweenPoolNodes() {
 	if exists, err := n2.Has(ctx, n1RootLink); err != nil {
 		panic(err)
 	} else if !exists {
-		panic("expected n2 to have fetched the entire sample DAG")
+		panic("expected n2 to have fetched the entire sample DAG, link: " + n1RootLink.String())
 	} else {
 		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1RootLink, h1.ID())
 		n, err := n2.Load(ctx, n1RootLink, basicnode.Prototype.Any)
@@ -777,7 +777,7 @@ func Example_poolExchangeDagBetweenPoolNodes() {
 	if exists, err := n2.Has(ctx, n1leafLink); err != nil {
 		panic(err)
 	} else if !exists {
-		panic("expected n2 to have fetched the entire sample DAG")
+		panic("expected n2 to have fetched the entire sample DAG, link: " + n1leafLink.String())
 	} else {
 		fmt.Printf("%s successfully fetched:\n    link: %s\n    from %s\n", h2.ID(), n1leafLink, h1.ID())
 		n, err := n2.Load(ctx, n1leafLink, basicnode.Prototype.Any)
