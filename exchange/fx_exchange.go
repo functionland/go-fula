@@ -31,6 +31,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multicodec"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -294,7 +295,7 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 		log.Errorw("Expected status accepted on pull response", "got", resp.StatusCode)
 		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
-		log.Infow("Successfully sent push request")
+		log.Debug("Successfully sent push request")
 		return nil
 	}
 }
@@ -318,16 +319,19 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 			LinkTargetNodePrototypeChooser: basicnode.Chooser,
 		},
 	}
-
+	var eg errgroup.Group
 	// Recursively traverse the node and push all its leaves.
 	err = progress.WalkAdv(node, exploreAllRecursivelySelector, func(progress traversal.Progress, node datamodel.Node, _ traversal.VisitReason) error {
-		return e.pushOneNode(ctx, node, to)
+		eg.Go(func() error {
+			return e.pushOneNode(ctx, node, to)
+		})
+		return nil
 	})
 	if err != nil {
 		log.Errorw("Failed to traverse link during push", "err", err)
 		return err
 	}
-	return nil
+	return eg.Wait()
 }
 
 func (e *FxExchange) pushOneNode(ctx context.Context, node ipld.Node, to peer.ID) error {
@@ -356,7 +360,7 @@ func (e *FxExchange) pushOneNode(ctx context.Context, node ipld.Node, to peer.ID
 		log.Errorw("Received non-OK response from push", "err", err)
 		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
-		log.Infow("Successfully pushed traversed node")
+		log.Debug("Successfully pushed traversed node")
 		return nil
 	}
 }
@@ -407,7 +411,7 @@ func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Req
 		http.Error(w, "failed to store node", http.StatusInternalServerError)
 		return
 	}
-	log.Infow("Successfully stored pushed node", "cid", l.(cidlink.Link).Cid)
+	log.Debugw("Successfully stored pushed node", "cid", l.(cidlink.Link).Cid)
 	log.Debugw("Notifying stored pushed link to IPNI publisher", "link", l)
 	e.pub.notifyReceivedLink(l)
 	log.Debugw("Successfully notified stored pushed link to IPNI publisher", "link", l)
@@ -435,8 +439,8 @@ func (e *FxExchange) handlePull(from peer.ID, w http.ResponseWriter, r *http.Req
 	}
 	log = log.With("link", p.Link)
 	w.WriteHeader(http.StatusAccepted)
-	log.Info("Accepted pull request")
-	log.Info("Instantiating background push in response to pull request")
+	log.Debug("Accepted pull request")
+	log.Debug("Instantiating background push in response to pull request")
 	ctx := context.TODO()
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
@@ -444,7 +448,7 @@ func (e *FxExchange) handlePull(from peer.ID, w http.ResponseWriter, r *http.Req
 	if err := e.Push(ctx, from, cidlink.Link{Cid: p.Link}); err != nil {
 		log.Errorw("Failed to fetch in response to push", "err", err)
 	} else {
-		log.Infow("Successfully finished background push in response to pull request")
+		log.Debug("Successfully finished background push in response to pull request")
 	}
 }
 
