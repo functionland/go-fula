@@ -2,12 +2,11 @@ package announcements
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
-
-	_ "embed"
 
 	"github.com/functionland/go-fula/common"
 	logging "github.com/ipfs/go-log/v2"

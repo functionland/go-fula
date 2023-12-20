@@ -298,7 +298,7 @@ func init() {
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "listenAddr",
 				Destination: &app.config.listenAddrs,
-				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic"),
+				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic", "/ip4/0.0.0.0/udp/40001/quic-v1", "/ip4/0.0.0.0/udp/40001/quic-v1/webtransport"),
 			}),
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "staticRelays",

@@ -16,6 +16,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -213,6 +214,7 @@ func (p *Blox) FetchAvailableManifestsAndStore(ctx context.Context, maxCids int)
 }
 
 func (p *Blox) Start(ctx context.Context) error {
+	ctx = network.WithUseTransient(ctx, "fx.exchange")
 	// implemented topic validators with chain integration.
 	validator := p.PubsubValidator
 

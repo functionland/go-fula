@@ -762,7 +762,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	//Get the list of both join requests and joined members for the pool
 	// Create a struct for the POST req
 	req := PoolUserListRequest{
-		PoolID: topic,
+		PoolID:        topic,
+		RequestPoolID: topic,
 	}
 
 	// Call the existing function to make the request

@@ -154,7 +154,8 @@ type PoolListRequest struct {
 }
 
 type PoolUserListRequest struct {
-	PoolID int `json:"pool_id"`
+	PoolID        int `json:"pool_id"`
+	RequestPoolID int `json:"request_pool_id"`
 }
 
 type User struct {

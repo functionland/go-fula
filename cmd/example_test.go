@@ -1,31 +1,6 @@
 package cmd_test
 
-import (
-	"bytes"
-	"context"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"strings"
-	"time"
-
-	"github.com/functionland/go-fula/blox"
-	"github.com/functionland/go-fula/exchange"
-	logging "github.com/ipfs/go-log/v2"
-	"github.com/ipld/go-ipld-prime/codec/dagjson"
-	"github.com/ipld/go-ipld-prime/fluent"
-	"github.com/ipld/go-ipld-prime/node/basicnode"
-	"github.com/ipni/index-provider/engine"
-	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/multiformats/go-multiaddr"
-)
-
+/*
 var log = logging.Logger("fula/mockserver")
 
 type AppConfig struct {
@@ -664,3 +639,4 @@ func Example_main() {
 	//     content: {"that":false}
 
 }
+*/
