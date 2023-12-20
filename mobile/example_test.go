@@ -373,6 +373,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	}
 
 	rawData := []byte("some raw data")
+	fmt.Printf("Original Val is: %s\n", string(rawData))
 	rawCodec := int64(0x55)
 	linkBytes, err := c1.Put(rawData, rawCodec)
 	if err != nil {
@@ -438,8 +439,8 @@ func Example_poolExchangeDagBetweenClientBlox() {
 			fmt.Println("Error decoding CID:", err)
 			return
 		}
-
 		linkBytes = ct.Bytes()
+		//
 	*/
 	val, err := c2.Get(linkBytes)
 	if err != nil {
@@ -447,15 +448,21 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		panic(err)
 	}
 	fmt.Printf("Fetched Val is: %s\n", string(val))
+	log.Infof("Fetched Val is: %v", val)
+	log.Infof("Original Val is: %v", rawData)
+	if !bytes.Equal(val, rawData) {
+		panic(fmt.Sprintf("Original data is not equal to fetched data: [original] %s != [fetch] %s", string(val), string(rawData)))
+	}
 
 	// Output:
 	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// /ip4/127.0.0.1/tcp/13787
-	// first client created with ID: 12D3KooWSd5p1VZk7MV9NxfXri97uYvutu3LFG6C5gxFa5HPhvLD
+	// /ip4/127.0.0.1/tcp/14948
+	// first client created with ID: 12D3KooWN3Hdx11LZjau4vYBDXwmwh2fbZeFXy7fLZMVfC6YMfTy
+	// Original Val is: some raw data
 	// Stored raw data link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
 	// recentCid link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
 	// Waiting for 5 seconds
 	// Now fetching the link 01551e20acb05838aae47ed8246fe8736a69d22bc2ea60340fe08ff75100d511d9b23c46
-	// second client created with ID: 12D3KooWPgxgL1rwGVmieh7Y9eU7ymWVgKjSDjgxe5oJKMYnmnzb
+	// second client created with ID: 12D3KooWHRsVzSNuhLgjNE4C5GxqT1yE5FfdZvBEyqe27eWy4yQP
 	// Fetched Val is: some raw data
 }
