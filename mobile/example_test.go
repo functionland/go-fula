@@ -13,6 +13,7 @@ import (
 	"github.com/functionland/go-fula/blox"
 	"github.com/functionland/go-fula/exchange"
 	fulamobile "github.com/functionland/go-fula/mobile"
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -375,16 +376,30 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		fmt.Printf("Error storing the raw data: %v", err)
 		return
 	}
-	fmt.Printf("Stored raw data link: %x", linkBytes)
-	log.Infof("Stored raw data link: %x", linkBytes)
+	c, err := cid.Cast(linkBytes)
+	if err != nil {
+		fmt.Printf("Error casting bytes to CID: %v", err)
+		return
+	}
+	fmt.Printf("Stored raw data link: %s", c.String())
+	log.Infof("Stored raw data link: %s", c.String())
 
 	recentCids, err := c1.ListRecentCidsAsString()
 	if err != nil {
 		log.Error("Error happened in ListRecentCidsAsString")
 		panic(err)
 	}
-	fmt.Printf("recentCids are %v", recentCids)
-	log.Infof("recentCids are %v", recentCids)
+	for recentCids.HasNext() {
+		cid, err := recentCids.Next()
+		if err != nil {
+			fmt.Printf("Error retrieving next CID: %v", err)
+			log.Errorf("Error retrieving next CID: %v", err)
+			// Decide if you want to break or continue based on your error handling strategy
+			break
+		}
+		fmt.Printf("recentCid link: %s", cid) // Print each CID
+		log.Infof("recentCid link: %s", cid)
+	}
 	time.Sleep(5 * time.Second)
 	fmt.Printf("Now fetching the link %x", linkBytes)
 	log.Infof("Now fetching the link %x", linkBytes)
