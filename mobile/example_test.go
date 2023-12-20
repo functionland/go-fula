@@ -349,6 +349,8 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	}
 	// Authorize exchange between the two nodes
 	mobilePeerIDString := c1.ID()
+	fmt.Printf("first client created with ID: %s", mobilePeerIDString)
+	log.Infof("first client created with ID: %s", mobilePeerIDString)
 	mpid, err := peer.Decode(mobilePeerIDString)
 	if err != nil {
 		log.Error("Error happened in peer.Decode")
@@ -400,16 +402,19 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		fmt.Printf("recentCid link: %s", cid) // Print each CID
 		log.Infof("recentCid link: %s", cid)
 	}
+	fmt.Print("Waiting for 5 seconds")
 	time.Sleep(5 * time.Second)
 	fmt.Printf("Now fetching the link %x", linkBytes)
 	log.Infof("Now fetching the link %x", linkBytes)
 
 	c2, err := fulamobile.NewClient(mcfg)
 	if err != nil {
-		log.Error("Error happened in fulamobile.NewClient")
+		log.Error("Error happened in fulamobile.NewClient2")
 		panic(err)
 	}
 	mobilePeerIDString2 := c2.ID()
+	fmt.Printf("second client created with ID: %s", mobilePeerIDString2)
+	log.Infof("second client created with ID: %s", mobilePeerIDString2)
 	mpid2, err := peer.Decode(mobilePeerIDString2)
 	if err != nil {
 		log.Error("Error happened in peer.Decode2")
@@ -427,7 +432,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	}
 	val, err := c2.Get(linkBytes)
 	if err != nil {
-		log.Error("Error happened in c2.Pull")
+		log.Error("Error happened in c2.Get")
 		panic(err)
 	}
 	fmt.Println(val)
