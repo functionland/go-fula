@@ -340,6 +340,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	mcfg.BloxAddr = bloxAddrString + "/p2p/" + h1.ID().String()
 	mcfg.PoolName = "1"
 	mcfg.Exchange = bloxAddrString
+	mcfg.BlockchainEndpoint = "127.0.0.1:4004"
 	log.Infow("bloxAdd string created", "addr", bloxAddrString+"/p2p/"+h1.ID().String())
 
 	c1, err := fulamobile.NewClient(mcfg)

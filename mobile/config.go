@@ -58,6 +58,7 @@ type Config struct {
 	// not possible. Defaults to enabled if unspecified.
 	AllowTransientConnection bool
 	PoolName                 string
+	BlockchainEndpoint       string
 
 	// TODO: we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
 	//       For now we manually take BloxAddr as config.
@@ -70,6 +71,7 @@ func NewConfig() *Config {
 		ForceReachabilityPrivate: true,
 		AllowTransientConnection: true,
 		PoolName:                 "0",
+		BlockchainEndpoint:       "api.node3.functionyard.fula.network",
 	}
 }
 
@@ -187,7 +189,7 @@ func (cfg *Config) init(mc *Client) error {
 			blockchain.NewSimpleKeyStorer(""),
 			blockchain.WithAuthorizer(mc.h.ID()),
 			blockchain.WithAllowTransientConnection(cfg.AllowTransientConnection),
-			blockchain.WithBlockchainEndPoint("127.0.0.1:4000"),
+			blockchain.WithBlockchainEndPoint(cfg.BlockchainEndpoint),
 			blockchain.WithRelays(cfg.StaticRelays),
 			blockchain.WithTopicName(cfg.PoolName),
 			blockchain.WithTimeout(30))
