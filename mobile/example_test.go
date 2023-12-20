@@ -302,7 +302,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	// Instantiate the first node in the pool
 	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
 	if err != nil {
-		log.Error("Error happened in libp2p.New")
+		log.Errorw("Error happened in libp2p.New", "err", err)
 		panic(err)
 	}
 	n1, err := blox.New(
@@ -316,11 +316,11 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		),
 	)
 	if err != nil {
-		log.Error("Error happened in blox.New")
+		log.Errorw("Error happened in blox.New", "err", err)
 		panic(err)
 	}
 	if err := n1.Start(ctx); err != nil {
-		log.Error("Error happened in n1.Start")
+		log.Errorw("Error happened in n1.Start", "err", err)
 		panic(err)
 	}
 	defer n1.Shutdown(ctx)
@@ -334,7 +334,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		bloxAddrString = h1.Addrs()[0].String()
 		fmt.Println(bloxAddrString)
 	} else {
-		log.Error("Error happened in h1.Addrs")
+		log.Errorw("Error happened in h1.Addrs", "err", "No addresses in slice")
 		panic("No addresses in slice")
 	}
 	mcfg.BloxAddr = bloxAddrString + "/p2p/" + h1.ID().String()
@@ -345,7 +345,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 
 	c1, err := fulamobile.NewClient(mcfg)
 	if err != nil {
-		log.Error("Error happened in fulamobile.NewClient")
+		log.Errorw("Error happened in fulamobile.NewClient", "err", err)
 		panic(err)
 	}
 	// Authorize exchange between the two nodes
@@ -354,7 +354,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	log.Infof("first client created with ID: %s", mobilePeerIDString)
 	mpid, err := peer.Decode(mobilePeerIDString)
 	if err != nil {
-		log.Error("Error happened in peer.Decode")
+		log.Errorw("Error happened in peer.Decode", "err", err)
 		panic(err)
 	}
 	if err := n1.SetAuth(ctx, h1.ID(), mpid, true); err != nil {
@@ -364,7 +364,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 
 	err = c1.ConnectToBlox()
 	if err != nil {
-		log.Error("Error happened in c1.ConnectToBlox(")
+		log.Errorw("Error happened in c1.ConnectToBlox", "err", err)
 		panic(err)
 	}
 	_, err = c1.BloxFreeSpace()
@@ -390,7 +390,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 
 	recentCids, err := c1.ListRecentCidsAsString()
 	if err != nil {
-		log.Error("Error happened in ListRecentCidsAsString")
+		log.Errorw("Error happened in ListRecentCidsAsString", "err", err)
 		panic(err)
 	}
 	for recentCids.HasNext() {
@@ -411,7 +411,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 
 	c2, err := fulamobile.NewClient(mcfg)
 	if err != nil {
-		log.Error("Error happened in fulamobile.NewClient2")
+		log.Errorw("Error happened in fulamobile.NewClient2", "err", err)
 		panic(err)
 	}
 	mobilePeerIDString2 := c2.ID()
@@ -419,17 +419,17 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	log.Infof("second client created with ID: %s", mobilePeerIDString2)
 	mpid2, err := peer.Decode(mobilePeerIDString2)
 	if err != nil {
-		log.Error("Error happened in peer.Decode2")
+		log.Errorw("Error happened in peer.Decode2", "err", err)
 		panic(err)
 	}
 	if err := n1.SetAuth(ctx, h1.ID(), mpid2, true); err != nil {
-		log.Error("Error happened in n1.SetAuth2")
+		log.Errorw("Error happened in n1.SetAuth2", "err", err)
 		panic(err)
 	}
 
 	err = c2.ConnectToBlox()
 	if err != nil {
-		log.Error("Error happened in c2.ConnectToBlox")
+		log.Errorw("Error happened in c2.ConnectToBlox", "err", err)
 		panic(err)
 	}
 	/*
@@ -444,7 +444,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	*/
 	val, err := c2.Get(linkBytes)
 	if err != nil {
-		log.Error("Error happened in c2.Get")
+		log.Errorw("Error happened in c2.Get", "err", err)
 		panic(err)
 	}
 	fmt.Printf("Fetched Val is: %s\n", string(val))
