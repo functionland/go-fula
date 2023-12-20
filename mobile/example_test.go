@@ -290,7 +290,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	defer cancel()
 
 	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "info"); err != nil {
+	if err := logging.SetLogLevel("*", "debug"); err != nil {
 		log.Error("Error happened in logging.SetLogLevel")
 		panic(err)
 	}
@@ -376,21 +376,18 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		return
 	}
 	fmt.Printf("Stored raw data link: %x", linkBytes)
+	log.Infow("Stored raw data link: %x", linkBytes)
 
 	recentCids, err := c1.ListRecentCidsAsString()
-	fmt.Println(recentCids)
-	for recentCids.HasNext() {
-		link, err := recentCids.Next()
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("Stored link: %s", link)
-		err = c1.Push(linkBytes)
-		if err != nil {
-			panic(err)
-		}
+	if err != nil {
+		log.Error("Error happened in ListRecentCidsAsString")
+		panic(err)
 	}
+	fmt.Printf("recentCids are %v", recentCids)
+	log.Infow("recentCids are %v", recentCids)
 	time.Sleep(5 * time.Second)
+	fmt.Printf("Now fetching the link %x", linkBytes)
+	log.Infow("Now fetching the link %x", linkBytes)
 
 	c2, err := fulamobile.NewClient(mcfg)
 	if err != nil {
@@ -411,11 +408,6 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	err = c2.ConnectToBlox()
 	if err != nil {
 		log.Error("Error happened in c2.ConnectToBlox")
-		panic(err)
-	}
-	err = c2.Pull(linkBytes)
-	if err != nil {
-		log.Error("Error happened in c2.Pull")
 		panic(err)
 	}
 	val, err := c2.Get(linkBytes)
