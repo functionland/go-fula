@@ -376,7 +376,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		return
 	}
 	fmt.Printf("Stored raw data link: %x", linkBytes)
-	log.Infow("Stored raw data link: %x", linkBytes)
+	log.Infof("Stored raw data link: %x", linkBytes)
 
 	recentCids, err := c1.ListRecentCidsAsString()
 	if err != nil {
@@ -384,10 +384,10 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		panic(err)
 	}
 	fmt.Printf("recentCids are %v", recentCids)
-	log.Infow("recentCids are %v", recentCids)
+	log.Infof("recentCids are %v", recentCids)
 	time.Sleep(5 * time.Second)
 	fmt.Printf("Now fetching the link %x", linkBytes)
-	log.Infow("Now fetching the link %x", linkBytes)
+	log.Infof("Now fetching the link %x", linkBytes)
 
 	c2, err := fulamobile.NewClient(mcfg)
 	if err != nil {
