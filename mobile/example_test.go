@@ -350,7 +350,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	}
 	// Authorize exchange between the two nodes
 	mobilePeerIDString := c1.ID()
-	fmt.Printf("first client created with ID: %s", mobilePeerIDString)
+	fmt.Printf("first client created with ID: %s\n", mobilePeerIDString)
 	log.Infof("first client created with ID: %s", mobilePeerIDString)
 	mpid, err := peer.Decode(mobilePeerIDString)
 	if err != nil {
@@ -384,7 +384,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		fmt.Printf("Error casting bytes to CID: %v", err)
 		return
 	}
-	fmt.Printf("Stored raw data link: %s", c.String())
+	fmt.Printf("Stored raw data link: %s\n", c.String())
 	log.Infof("Stored raw data link: %s", c.String())
 
 	recentCids, err := c1.ListRecentCidsAsString()
@@ -400,12 +400,12 @@ func Example_poolExchangeDagBetweenClientBlox() {
 			// Decide if you want to break or continue based on your error handling strategy
 			break
 		}
-		fmt.Printf("recentCid link: %s", cid) // Print each CID
+		fmt.Printf("recentCid link: %s\n", cid) // Print each CID
 		log.Infof("recentCid link: %s", cid)
 	}
-	fmt.Print("Waiting for 5 seconds")
+	fmt.Print("Waiting for 5 seconds\n")
 	time.Sleep(5 * time.Second)
-	fmt.Printf("Now fetching the link %x", linkBytes)
+	fmt.Printf("Now fetching the link %x\n", linkBytes)
 	log.Infof("Now fetching the link %x", linkBytes)
 
 	c2, err := fulamobile.NewClient(mcfg)
@@ -414,7 +414,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		panic(err)
 	}
 	mobilePeerIDString2 := c2.ID()
-	fmt.Printf("second client created with ID: %s", mobilePeerIDString2)
+	fmt.Printf("second client created with ID: %s\n", mobilePeerIDString2)
 	log.Infof("second client created with ID: %s", mobilePeerIDString2)
 	mpid2, err := peer.Decode(mobilePeerIDString2)
 	if err != nil {
@@ -431,38 +431,31 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		log.Error("Error happened in c2.ConnectToBlox")
 		panic(err)
 	}
+	/*
+		//If you uncomment this section, it just fetches the cid that blox stored and not with the key that mobile has
+		ct, err := cid.Decode("bafyreibcwjmj25zyylzw36xaglokmmcbk7c4tqtouaz7qmw6nskx5iqgqi")
+		if err != nil {
+			fmt.Println("Error decoding CID:", err)
+			return
+		}
+
+		linkBytes = ct.Bytes()
+	*/
 	val, err := c2.Get(linkBytes)
 	if err != nil {
 		log.Error("Error happened in c2.Get")
 		panic(err)
 	}
-	fmt.Println(val)
+	fmt.Printf("Fetched Val is: %s\n", string(val))
 
 	// Output:
 	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// Instantiated node in pool 1 with ID: 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX
-	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM stored IPLD data with links:
-	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	// 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM stored IPLD data with links:
-	//     root: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     leaf:bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	// exchanging by Pull...
-	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully fetched:
-	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	//     content: {"oneLeafLink":{"/":"bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34"},"that":42}
-	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully fetched:
-	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	//     content: {"this":true}
-	// exchanging by Push...
-	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully pushed:
-	//     link: bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy
-	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	//     content: {"anotherLeafLink":{"/":"bafyreibzxn3zdk6e53h7cvx2sfbbroozp5e3kuvz6t4jfo2hfu4ic2ooc4"},"this":24}
-	// 12D3KooWH9swjeCyuR6utzKU1UspiW5RDGzAFvNDwqkT5bUHwuxX successfully pushed:
-	//     link: bafyreidulpo7on77a6pkq7c6da5mlj4n2p3av2zjomrpcpeht5zqgafc34
-	//     from 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	//     content: {"that":false}
+	// /ip4/127.0.0.1/tcp/13787
+	// first client created with ID: 12D3KooWSd5p1VZk7MV9NxfXri97uYvutu3LFG6C5gxFa5HPhvLD
+	// Stored raw data link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
+	// recentCid link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
+	// Waiting for 5 seconds
+	// Now fetching the link 01551e20acb05838aae47ed8246fe8736a69d22bc2ea60340fe08ff75100d511d9b23c46
+	// second client created with ID: 12D3KooWPgxgL1rwGVmieh7Y9eU7ymWVgKjSDjgxe5oJKMYnmnzb
+	// Fetched Val is: some raw data
 }
