@@ -332,6 +332,7 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	if len(h1.Addrs()) > 0 {
 		// Convert the first multiaddr to a string
 		bloxAddrString = h1.Addrs()[0].String()
+		log.Infow("blox multiadddr is", "addr", bloxAddrString, "peerID", h1.ID().String())
 	} else {
 		log.Errorw("Error happened in h1.Addrs", "err", "No addresses in slice")
 		panic("No addresses in slice")
