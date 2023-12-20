@@ -350,7 +350,6 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	}
 	// Authorize exchange between the two nodes
 	mobilePeerIDString := c1.ID()
-	fmt.Printf("first client created with ID: %s\n", mobilePeerIDString)
 	log.Infof("first client created with ID: %s", mobilePeerIDString)
 	mpid, err := peer.Decode(mobilePeerIDString)
 	if err != nil {
@@ -415,7 +414,6 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		panic(err)
 	}
 	mobilePeerIDString2 := c2.ID()
-	fmt.Printf("second client created with ID: %s\n", mobilePeerIDString2)
 	log.Infof("second client created with ID: %s", mobilePeerIDString2)
 	mpid2, err := peer.Decode(mobilePeerIDString2)
 	if err != nil {
@@ -456,13 +454,10 @@ func Example_poolExchangeDagBetweenClientBlox() {
 
 	// Output:
 	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
-	// /ip4/127.0.0.1/tcp/14948
-	// first client created with ID: 12D3KooWN3Hdx11LZjau4vYBDXwmwh2fbZeFXy7fLZMVfC6YMfTy
 	// Original Val is: some raw data
 	// Stored raw data link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
 	// recentCid link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
 	// Waiting for 5 seconds
 	// Now fetching the link 01551e20acb05838aae47ed8246fe8736a69d22bc2ea60340fe08ff75100d511d9b23c46
-	// second client created with ID: 12D3KooWHRsVzSNuhLgjNE4C5GxqT1yE5FfdZvBEyqe27eWy4yQP
 	// Fetched Val is: some raw data
 }
