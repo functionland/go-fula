@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/grandcat/zeroconf v1.0.0
+	github.com/ipfs/boxo v0.16.0
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-badger v0.3.0
@@ -112,7 +113,6 @@ require (
 	github.com/ipfs-shipyard/nopfs v0.0.12 // indirect
 	github.com/ipfs-shipyard/nopfs/ipfs v0.13.2-0.20231027223058-cde3b5ba964c // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.16.0 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
 	github.com/ipfs/go-block-format v0.2.0 // indirect
 	github.com/ipfs/go-cidutil v0.1.0 // indirect
