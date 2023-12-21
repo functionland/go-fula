@@ -325,7 +325,7 @@ func init() {
 				Aliases:     []string{"mcidpr"},
 				Usage:       "Maximum number of CIDs pushed per second.",
 				Destination: &app.config.MaxCIDPushRate,
-				Value:       5,
+				Value:       100,
 			}),
 			altsrc.NewBoolFlag(&cli.BoolFlag{
 				Name:        "ipniPublisherDisabled",
