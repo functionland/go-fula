@@ -3,6 +3,7 @@ package fulamobile_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -460,4 +461,228 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	// Waiting for 5 seconds
 	// Now fetching the link 01551e20acb05838aae47ed8246fe8736a69d22bc2ea60340fe08ff75100d511d9b23c46
 	// Fetched Val is: some raw data
+}
+
+func Example_poolExchangeLargeDagBetweenClientBlox() {
+	server := startMockServer("127.0.0.1:4004")
+	defer func() {
+		// Shutdown the server after test
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Error("Error happened in server.Shutdown")
+			panic(err) // Handle the error as you see fit
+		}
+	}()
+
+	const poolName = "1"
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Elevate log level to show internal communications.
+	if err := logging.SetLogLevel("*", "info"); err != nil {
+		log.Error("Error happened in logging.SetLogLevel")
+		panic(err)
+	}
+
+	// Use a deterministic random generator to generate deterministic
+	// output for the example.
+
+	// Instantiate the first node in the pool
+	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
+	if err != nil {
+		log.Errorw("Error happened in libp2p.New", "err", err)
+		panic(err)
+	}
+	n1, err := blox.New(
+		blox.WithHost(h1),
+		blox.WithPoolName("1"),
+		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithBlockchainEndPoint("127.0.0.1:4004"),
+		blox.WithPingCount(5),
+		blox.WithExchangeOpts(
+			exchange.WithIpniGetEndPoint("http://127.0.0.1:4004/cid/"),
+		),
+	)
+	if err != nil {
+		log.Errorw("Error happened in blox.New", "err", err)
+		panic(err)
+	}
+	if err := n1.Start(ctx); err != nil {
+		log.Errorw("Error happened in n1.Start", "err", err)
+		panic(err)
+	}
+	defer n1.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+
+	mcfg := fulamobile.NewConfig()
+	mcfg.AllowTransientConnection = true
+	bloxAddrString := ""
+	if len(h1.Addrs()) > 0 {
+		// Convert the first multiaddr to a string
+		bloxAddrString = h1.Addrs()[0].String()
+		log.Infow("blox multiadddr is", "addr", bloxAddrString, "peerID", h1.ID().String())
+	} else {
+		log.Errorw("Error happened in h1.Addrs", "err", "No addresses in slice")
+		panic("No addresses in slice")
+	}
+	mcfg.BloxAddr = bloxAddrString + "/p2p/" + h1.ID().String()
+	mcfg.PoolName = "1"
+	mcfg.Exchange = bloxAddrString
+	mcfg.BlockchainEndpoint = "127.0.0.1:4004"
+	log.Infow("bloxAdd string created", "addr", bloxAddrString+"/p2p/"+h1.ID().String())
+
+	c1, err := fulamobile.NewClient(mcfg)
+	if err != nil {
+		log.Errorw("Error happened in fulamobile.NewClient", "err", err)
+		panic(err)
+	}
+	// Authorize exchange between the two nodes
+	mobilePeerIDString := c1.ID()
+	log.Infof("first client created with ID: %s", mobilePeerIDString)
+	mpid, err := peer.Decode(mobilePeerIDString)
+	if err != nil {
+		log.Errorw("Error happened in peer.Decode", "err", err)
+		panic(err)
+	}
+	if err := n1.SetAuth(ctx, h1.ID(), mpid, true); err != nil {
+		log.Error("Error happened in n1.SetAuth")
+		panic(err)
+	}
+
+	err = c1.ConnectToBlox()
+	if err != nil {
+		log.Errorw("Error happened in c1.ConnectToBlox", "err", err)
+		panic(err)
+	}
+	_, err = c1.BloxFreeSpace()
+	if err != nil {
+		panic(err)
+	}
+
+	rawCodec := int64(0x55)
+	const totalSize = 200 * 1024 * 1024 // 50MB
+	const chunkSize = 256 * 1024        // 256KB
+	data := make([]byte, totalSize)     // replace with actual data if needed
+
+	// Fill the data with random values (or use actual data)
+	rand.Read(data)
+
+	var links [][]byte
+	var chunkedData [][]byte
+
+	for i := 0; i < totalSize; i += chunkSize {
+		end := i + chunkSize
+		if end > totalSize {
+			end = totalSize
+		}
+
+		chunk := data[i:end]
+		log.Debugf("Storing chunk %d to %d...\n", i, end)
+
+		linkBytes, err := c1.Put(chunk, rawCodec)
+		if err != nil {
+			log.Errorf("Error storing chunk: %v\n", err)
+			return
+		}
+
+		links = append(links, linkBytes)
+		chunkedData = append(chunkedData, chunk)
+		c, err := cid.Cast(linkBytes)
+		if err != nil {
+			log.Errorf("Error casting bytes to CID: %v\n", err)
+			return
+		}
+		log.Debugf("Stored chunk link: %s\n", c.String())
+	}
+
+	fmt.Printf("Stored %d chunks\n", len(links))
+	log.Infof("Stored %d chunks\n", len(links))
+
+	recentCids, err := c1.ListRecentCidsAsString()
+	if err != nil {
+		log.Errorw("Error happened in ListRecentCidsAsString", "err", err)
+		panic(err)
+	}
+	var count = 0
+	for recentCids.HasNext() {
+		count = count + 1
+		cid, err := recentCids.Next()
+		if err != nil {
+			fmt.Printf("Error retrieving next CID: %v", err)
+			log.Errorf("Error retrieving next CID: %v", err)
+			// Decide if you want to break or continue based on your error handling strategy
+			break
+		}
+		log.Debugf("recentCid link: %s", cid)
+	}
+	log.Infof("recentCids count: %d", count)
+	fmt.Printf("recentCids count: %d\n", count) // Print each CID
+
+	if count != len(links) {
+		panic("recent cids count is not equal to put links count")
+	}
+	fmt.Print("Waiting for 5 seconds\n")
+	time.Sleep(5 * time.Second)
+	fmt.Printf("Now fetching the links\n")
+	log.Infof("Now fetching the links")
+
+	c2, err := fulamobile.NewClient(mcfg)
+	if err != nil {
+		log.Errorw("Error happened in fulamobile.NewClient2", "err", err)
+		panic(err)
+	}
+	mobilePeerIDString2 := c2.ID()
+	log.Infof("second client created with ID: %s", mobilePeerIDString2)
+	mpid2, err := peer.Decode(mobilePeerIDString2)
+	if err != nil {
+		log.Errorw("Error happened in peer.Decode2", "err", err)
+		panic(err)
+	}
+	if err := n1.SetAuth(ctx, h1.ID(), mpid2, true); err != nil {
+		log.Errorw("Error happened in n1.SetAuth2", "err", err)
+		panic(err)
+	}
+
+	err = c2.ConnectToBlox()
+	if err != nil {
+		log.Errorw("Error happened in c2.ConnectToBlox", "err", err)
+		panic(err)
+	}
+	/*
+		//If you uncomment this section, it just fetches the cid that blox stored and not with the key that mobile has
+		ct, err := cid.Decode("bafyreibcwjmj25zyylzw36xaglokmmcbk7c4tqtouaz7qmw6nskx5iqgqi")
+		if err != nil {
+			fmt.Println("Error decoding CID:", err)
+			return
+		}
+		linkBytes = ct.Bytes()
+		//
+	*/
+	count = 0
+	for _, link := range links {
+		log.Debugf("Fetching link: %s\n", link)
+		val, err := c1.Get(link)
+		if err != nil {
+			log.Fatal("Error fetching link", err)
+			panic(err)
+		}
+		log.Debugf("Fetched chunk size: %d\n", len(val))
+		if !bytes.Equal(val, chunkedData[count]) {
+			c, err := cid.Cast(link)
+			if err != nil {
+				log.Errorf("Error casting bytes to CID: %v\n", err)
+				panic(err)
+			}
+			panic(fmt.Sprintf("Original data is not equal to fetched data for count: %d for cid: %s: original data size:%d, retrieved data size:%d", count, c, len(chunkedData[count]), len(val)))
+		}
+		count = count + 1
+	}
+	fmt.Print("All chunks fetched")
+
+	// Output:
+	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// Stored 800 chunks
+	// recentCids count: 800
+	// Waiting for 5 seconds
+	// Now fetching the links
+	// All chunks fetched
 }
