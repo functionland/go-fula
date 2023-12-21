@@ -8,6 +8,7 @@ import (
 	"github.com/ipni/index-provider/engine"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"go.uber.org/ratelimit"
 )
 
 type (
@@ -27,6 +28,7 @@ type (
 		updateConfig             ConfigUpdater
 		wg                       *sync.WaitGroup
 		ipfsApi                  iface.CoreAPI
+		pushRateLimiter          ratelimit.Limiter
 	}
 )
 
@@ -35,6 +37,7 @@ func newOptions(o ...Option) (*options, error) {
 		ipniPublishMaxBatchSize: 16 << 10,
 		ipniPublishChanBuffer:   1,
 		wg:                      nil,
+		pushRateLimiter:         ratelimit.New(5), // Default of 5 per second
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
@@ -142,6 +145,15 @@ func WithWg(wg *sync.WaitGroup) Option {
 func WithIPFS(ipfsApi iface.CoreAPI) Option {
 	return func(o *options) error {
 		o.ipfsApi = ipfsApi
+		return nil
+	}
+}
+
+// WithMaxPushRate sets the maximum number of CIDs pushed per second.
+// Defaults to 5 per second.
+func WithMaxPushRate(r int) Option {
+	return func(o *options) error {
+		o.pushRateLimiter = ratelimit.New(r)
 		return nil
 	}
 }

@@ -28,6 +28,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/multiformats/go-varint v0.0.7
 	github.com/urfave/cli/v2 v2.26.0
+	go.uber.org/ratelimit v0.3.0
 	golang.org/x/crypto v0.16.0
 	golang.org/x/sync v0.5.0
 	gopkg.in/ini.v1 v1.67.0
