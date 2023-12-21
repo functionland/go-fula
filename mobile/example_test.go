@@ -660,7 +660,7 @@ func Example_poolExchangeLargeDagBetweenClientBlox() {
 	count = 0
 	for _, link := range links {
 		log.Debugf("Fetching link: %s\n", link)
-		val, err := c1.Get(link)
+		val, err := c2.Get(link)
 		if err != nil {
 			log.Fatal("Error fetching link", err)
 			panic(err)
