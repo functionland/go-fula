@@ -322,6 +322,7 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	// Recursively traverse the node and push all its leaves.
 	err = progress.WalkMatching(node, exploreAllRecursivelySelector, func(progress traversal.Progress, node datamodel.Node) error {
 		eg.Go(func() error {
+			e.pushRateLimiter.Take()
 			link, err := e.ls.ComputeLink(l.Prototype(), node)
 			if err != nil {
 				return err

@@ -87,6 +87,7 @@ var (
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
+			MaxCIDPushRate            int           `yaml:"maxCIDPushRate"`
 			IpniPublishDisabled       bool          `yaml:"ipniPublishDisabled"`
 			IpniPublishInterval       time.Duration `yaml:"ipniPublishInterval"`
 			IpniPublishDirectAnnounce []string      `yaml:"IpniPublishDirectAnnounce"`
@@ -318,6 +319,13 @@ func init() {
 				Usage:       "Weather to allow transient connection to other participants.",
 				Destination: &app.config.AllowTransientConnection,
 				Value:       true,
+			}),
+			altsrc.NewIntFlag(&cli.IntFlag{
+				Name:        "maxCIDPushRate",
+				Aliases:     []string{"mcidpr"},
+				Usage:       "Maximum number of CIDs pushed per second.",
+				Destination: &app.config.MaxCIDPushRate,
+				Value:       5,
 			}),
 			altsrc.NewBoolFlag(&cli.BoolFlag{
 				Name:        "ipniPublisherDisabled",
@@ -758,6 +766,7 @@ func action(ctx *cli.Context) error {
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
+			exchange.WithMaxPushRate(app.config.MaxCIDPushRate),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
 			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
