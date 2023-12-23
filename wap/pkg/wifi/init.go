@@ -79,17 +79,16 @@ func RunCommand(ctx context.Context, commands string) (stdout, stderr string, er
 func runCommand(ctx context.Context, commands string) (stdout, stderr string, err error) {
 	log.Infow("running", "commands", commands)
 	command := strings.Fields(commands)
-	// TODO: consider exec.CommandContext as an alternative to enable context timeout/deadline
-	cmd := exec.Command(command[0])
+	cmd := exec.CommandContext(ctx, command[0])
 	if len(command) > 0 {
-		cmd = exec.Command(command[0], command[1:]...)
+		cmd = exec.CommandContext(ctx, command[0], command[1:]...)
 	}
 	var outb, errb bytes.Buffer
 	cmd.Stdout = &outb
 	cmd.Stderr = &errb
 	err = cmd.Start()
 	if err != nil {
-		return
+		return stdout, stderr, err
 	}
 	done := make(chan error, 1)
 	go func() {
@@ -97,10 +96,14 @@ func runCommand(ctx context.Context, commands string) (stdout, stderr string, er
 	}()
 	select {
 	case <-ctx.Done():
-		err = cmd.Process.Kill()
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			log.Errorw("Failed to kill process", "error", killErr)
+			stderr = errb.String()
+			return outb.String(), stderr, killErr
+		}
 	case err = <-done:
 		stdout = outb.String()
 		stderr = errb.String()
 	}
-	return
+	return stdout, stderr, err
 }

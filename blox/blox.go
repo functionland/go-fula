@@ -128,7 +128,6 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	for _, provider := range providers {
 		if provider.ID != p.h.ID() {
 			//Found a storer, now pull the cid
-			//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
 			//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
 			log.Debugw("Found a storer", "id", provider.ID)
 
@@ -143,7 +142,7 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 				}
 				p.h.Peerstore().AddAddrs(provider.ID, []multiaddr.Multiaddr{addr}, peerstore.ConnectedAddrTTL)
 				log.Debugw("Started Pull in StoreCid", "from", provider.ID, "l", l)
-				err = p.ex.Pull(ctx, provider.ID, l)
+				err = p.ex.PullBlock(ctx, provider.ID, l)
 				if err != nil {
 					log.Errorw("Error happened in pulling from provider", "err", err)
 					continue
@@ -223,8 +222,10 @@ func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLim
 
 // FetchAvailableManifestsAndStore fetches available manifests and stores them.
 func (p *Blox) FetchAvailableManifestsAndStore(ctx context.Context, maxCids int) error {
+	childCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	defer cancel() // It's good practice to call cancel to free resources if the childCtx finishes before the timeout
 	// Fetch the available manifests for a specific pool_id
-	availableLinks, err := p.bl.HandleManifestsAvailable(ctx, p.topicName, maxCids)
+	availableLinks, err := p.bl.HandleManifestsAvailable(childCtx, p.topicName, maxCids)
 	if err != nil {
 		return fmt.Errorf("failed to fetch available manifests: %w", err)
 	}
@@ -235,11 +236,10 @@ func (p *Blox) FetchAvailableManifestsAndStore(ctx context.Context, maxCids int)
 	}
 
 	// Attempt to store the fetched manifests
-	err = p.StoreManifest(ctx, availableLinks, maxCids)
+	err = p.StoreManifest(childCtx, availableLinks, maxCids)
 	if err != nil {
 		return fmt.Errorf("failed to store manifests: %w", err)
 	}
-
 	return nil
 }
 

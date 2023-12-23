@@ -45,7 +45,6 @@ func (c *Client) PoolJoin(poolID int) ([]byte, error) {
 // PoolJoin requests blox at Config.BloxAddr to cancel a join request for a pool with the id.
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
-// TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolCancelJoin(poolID int) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.PoolCancelJoin(ctx, c.bloxPid, blockchain.PoolCancelJoinRequest{PoolID: poolID})
@@ -75,7 +74,6 @@ func (c *Client) PoolUserList(poolID int) ([]byte, error) {
 // PoolLeave requests blox at Config.BloxAddr to leave a pool with the id.
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
-// TODO: This still needs rethink as someone should not be able to put another person PeerID in request
 func (c *Client) PoolLeave(poolID int) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{PoolID: poolID})
