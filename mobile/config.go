@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -48,6 +49,9 @@ type Config struct {
 	// ForceReachabilityPrivate configures weather the libp2p should always think that it is behind
 	// NAT.
 	ForceReachabilityPrivate bool
+
+	// DisableResourceManger sets whether to disable the libp2p resource manager.
+	DisableResourceManger bool
 
 	// SyncWrites assures that writes to the local datastore are flushed to the backing store as
 	// soon as they are written. By default, writes are not synchronized to disk until either the
@@ -82,6 +86,9 @@ func (cfg *Config) init(mc *Client) error {
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
+	}
+	if cfg.DisableResourceManger {
+		hopts = append(hopts, libp2p.ResourceManager(&network.NullResourceManager{}))
 	}
 	mc.relays = cfg.StaticRelays
 	if len(cfg.StaticRelays) != 0 {
