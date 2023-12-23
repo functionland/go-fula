@@ -35,6 +35,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -87,6 +88,7 @@ var (
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
+			DisableResourceManger     bool          `yaml:"disableResourceManger"`
 			MaxCIDPushRate            int           `yaml:"maxCIDPushRate"`
 			IpniPublishDisabled       bool          `yaml:"ipniPublishDisabled"`
 			IpniPublishInterval       time.Duration `yaml:"ipniPublishInterval"`
@@ -319,6 +321,13 @@ func init() {
 				Usage:       "Weather to allow transient connection to other participants.",
 				Destination: &app.config.AllowTransientConnection,
 				Value:       true,
+			}),
+			altsrc.NewBoolFlag(&cli.BoolFlag{
+				Name:        "disableResourceManger",
+				Aliases:     []string{"drm"},
+				Usage:       "Weather to disable the libp2p resource manager.",
+				Destination: &app.config.DisableResourceManger,
+				Value:       false,
 			}),
 			altsrc.NewIntFlag(&cli.IntFlag{
 				Name:        "maxCIDPushRate",
@@ -658,6 +667,9 @@ func action(ctx *cli.Context) error {
 
 	if app.config.ForceReachabilityPrivate {
 		hopts = append(hopts, libp2p.ForceReachabilityPrivate())
+	}
+	if app.config.DisableResourceManger {
+		hopts = append(hopts, libp2p.ResourceManager(&network.NullResourceManager{}))
 	}
 
 	sr := make([]peer.AddrInfo, 0, len(app.config.StaticRelays))
