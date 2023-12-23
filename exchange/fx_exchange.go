@@ -440,7 +440,6 @@ func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
 		e.tempAuths[c] = tempAuthEntry{peerID: from, timestamp: time.Now()}
 		e.tempAuthsLock.Unlock()
 		e.handlePull(from, w, r)
-		e.handlePull(from, w, r)
 	case actionPush:
 		e.handlePush(from, w, r, c)
 	case actionAuth:
