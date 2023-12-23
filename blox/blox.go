@@ -380,6 +380,11 @@ func (p *Blox) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
 	return p.bl.BloxFreeSpace(ctx, to)
 }
 
+func (p *Blox) EraseBlData(ctx context.Context, to peer.ID) ([]byte, error) {
+	//This is for unit testing and no need to call directly
+	return p.bl.EraseBlData(ctx, to)
+}
+
 func (p *Blox) StartAnnouncementServer(ctx context.Context) error {
 	//This is for unit testing and no need to call directly
 	err := p.an.Start(ctx, p.PubsubValidator)

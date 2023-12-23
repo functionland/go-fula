@@ -47,6 +47,33 @@ func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, 
 
 }
 
+func (bl *FxBlockchain) EraseBlData(ctx context.Context, to peer.ID) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionEraseBlData, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+	default:
+		return b, nil
+	}
+
+}
+
 func (bl *FxBlockchain) WifiRemoveall(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")

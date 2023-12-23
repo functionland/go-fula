@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -34,6 +35,13 @@ type DeleteFulaConfigRequest struct {
 type DeleteFulaConfigResponse struct {
 	Msg    string `json:"msg"`
 	Status bool   `json:"status"`
+}
+
+type EraseBlDataRequest struct {
+}
+type EraseBlDataResponse struct {
+	Status bool   `json:"status"`
+	Msg    string `json:"msg"`
 }
 
 type RebootRequest struct {
@@ -175,6 +183,36 @@ func Partition(ctx context.Context) PartitionResponse {
 	return PartitionResponse{
 		Msg:    res,
 		Status: status,
+	}
+}
+
+func EraseBlData(ctx context.Context) EraseBlDataResponse {
+	folderPath := "/uniondrive/chain/chains/functionyard/db/full"
+
+	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			err := os.Remove(path)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		msg := fmt.Sprintf("Error deleting files: %v", err)
+		return EraseBlDataResponse{
+			Msg:    msg,
+			Status: false,
+		}
+	}
+
+	return EraseBlDataResponse{
+		Msg:    "All files deleted successfully",
+		Status: true,
 	}
 }
 
