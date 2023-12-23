@@ -722,8 +722,8 @@ func action(ctx *cli.Context) error {
 		logger.Info("ipfscoreapi successfully instantiated")
 	}
 
-	logger.Debug("called wg.Add in blox start")
-	/*opts := []corehttp.ServeOption{
+	/*logger.Debug("called wg.Add in blox start")
+	opts := []corehttp.ServeOption{
 		// Add necessary handlers, CORS, etc.
 		corehttp.GatewayOption("127.0.0.1:5001"),
 		corehttp.CheckVersionOption(),

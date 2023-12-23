@@ -144,7 +144,14 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 				log.Debug("called wg.Add in PoolJoin ticker2")
 				bl.wg.Add(1)
 			}
-			go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+			go func() {
+				if bl.wg != nil {
+					log.Debug("Called wg.Done in PoolJoin ticker2")
+					defer bl.wg.Done() // Decrement the counter when the goroutine completes
+				}
+				defer log.Debug("PoolJoin ticker2 go routine is ending")
+				bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+			}()
 		}
 		return b, nil
 	}

@@ -136,11 +136,6 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 
 func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 	log.Debug("Starting to handle announcements")
-	if an.wg != nil {
-		log.Debug("called wg.Done in handle announcements")
-		defer an.wg.Done()
-	}
-	defer log.Debug("HandleAnnouncements go routine is ending")
 
 	for {
 		select {
@@ -200,11 +195,6 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 }
 
 func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
-	if an.wg != nil {
-		log.Debug("called wg.Done in AnnounceIExistPeriodically")
-		defer an.wg.Done()
-	}
-	defer log.Debug("AnnounceIExistPeriodically go routine is ending")
 
 	ticker := time.NewTicker(an.announceInterval)
 	defer ticker.Stop()
@@ -243,11 +233,6 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 }
 
 func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
-	if an.wg != nil {
-		log.Debugw("called wg.Done in AnnounceJoinPoolRequestPeriodically pool join request", "peer", an.h.ID())
-		defer an.wg.Done()
-	}
-	defer log.Debug("AnnounceJoinPoolRequestPeriodically go routine is ending")
 	log.Debugw("Starting AnnounceJoinPoolRequestPeriodically pool join request", "peer", an.h.ID())
 	log.Debugw("peerlist before AnnounceJoinPoolRequestPeriodically pool join request", "on", an.h.ID(), "peerlist", an.topic.ListPeers())
 

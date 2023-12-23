@@ -18,6 +18,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 )
 
 var log = logging.Logger("fula/blox")
@@ -132,11 +134,19 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 			replicas := len(providers)
 			log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
 			if replicas < limit {
+				addrStr := "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit/p2p/" + provider.ID.String()
+				addr, err := multiaddr.NewMultiaddr(addrStr)
+				if err != nil {
+					log.Errorw("Failed to create multiaddress", "err", err)
+					continue
+				}
+				p.h.Peerstore().AddAddrs(provider.ID, []multiaddr.Multiaddr{addr}, peerstore.ConnectedAddrTTL)
 				err = p.ex.Pull(ctx, provider.ID, l)
 				if err != nil {
 					log.Errorw("Error happened in pulling from provider", "err", err)
 					continue
 				}
+				log.Debugw("link is successfully stored", "l", l, "from", provider.ID)
 				return nil
 			} else {
 				return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
@@ -253,19 +263,31 @@ func (p *Blox) Start(ctx context.Context) error {
 	if anErr == nil {
 		log.Debug("called wg.Add in AnnounceIExistPeriodically")
 		p.wg.Add(1)
-		go p.an.AnnounceIExistPeriodically(ctx)
+		go func() {
+			log.Debug("called wg.Done in AnnounceIExistPeriodically")
+			defer p.wg.Done() // Decrement the counter when the goroutine completes
+			defer log.Debug("AnnounceIExistPeriodically go routine is ending")
+			p.an.AnnounceIExistPeriodically(ctx)
+		}()
 
 		log.Debug("called wg.Add in HandleAnnouncements")
 		p.wg.Add(1)
-		go p.an.HandleAnnouncements(ctx)
+		go func() {
+			log.Debug("called wg.Done in HandleAnnouncements")
+			defer p.wg.Done() // Decrement the counter when the goroutine completes
+			defer log.Debug("HandleAnnouncements go routine is ending")
+			p.an.HandleAnnouncements(ctx)
+		}()
 	} else {
 		log.Errorw("Announcement stopped erroneously", "err", anErr)
 	}
 	p.ctx, p.cancel = context.WithCancel(ctx)
 
 	// Starting a new goroutine for periodic task
+	log.Debug("Called wg.Add in FetchAvailableManifestsAndStore")
 	p.wg.Add(1)
 	go func() {
+		log.Debug("Called wg.Done in FetchAvailableManifestsAndStore")
 		defer p.wg.Done()
 		defer log.Debug("Start blox FetchAvailableManifestsAndStore go routine is ending")
 		ticker := time.NewTicker(5 * time.Minute)
@@ -329,24 +351,39 @@ func (p *Blox) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
 
 func (p *Blox) StartAnnouncementServer(ctx context.Context) error {
 	//This is for unit testing and no need to call directly
-	p.wg.Add(1)
 	err := p.an.Start(ctx, p.PubsubValidator)
 	if err == nil {
 		log.Debug("called wg.Add in StartAnnouncementServer1")
 		p.wg.Add(1)
-		go p.an.AnnounceIExistPeriodically(ctx)
+		go func() {
+			log.Debug("called wg.Done in StartAnnouncementServer1")
+			defer p.wg.Done() // Decrement the counter when the goroutine completes
+			defer log.Debug("StartAnnouncementServer1 go routine is ending")
+			p.an.AnnounceIExistPeriodically(ctx)
+		}()
 		log.Debug("called wg.Add in StartAnnouncementServer2")
 		p.wg.Add(1)
-		go p.an.HandleAnnouncements(ctx)
+		go func() {
+			log.Debug("called wg.Done in StartAnnouncementServer2")
+			defer p.wg.Done() // Decrement the counter when the goroutine completes
+			defer log.Debug("StartAnnouncementServer2 go routine is ending")
+			p.an.HandleAnnouncements(ctx)
+		}()
 	}
 	return err
 }
 
 func (p *Blox) AnnounceJoinPoolRequestPeriodically(ctx context.Context) {
+	log.Debug("Called wg.Add in AnnounceJoinPoolRequestPeriodically")
 	p.wg.Add(1)
 	//This is for unit testing and no need to call directly
 	log.Debugf("AnnounceJoinPoolRequest ping count %d", p.pingCount)
-	go p.an.AnnounceJoinPoolRequestPeriodically(ctx)
+	go func() {
+		log.Debug("Called wg.Done in AnnounceJoinPoolRequestPeriodically")
+		defer p.wg.Done() // Decrement the counter when the goroutine completes
+		defer log.Debug("AnnounceJoinPoolRequestPeriodically go routine is ending")
+		p.an.AnnounceJoinPoolRequestPeriodically(ctx)
+	}()
 }
 
 func (p *Blox) ProvideLinkByDht(l ipld.Link) error {
