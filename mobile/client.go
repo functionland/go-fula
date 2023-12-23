@@ -213,7 +213,9 @@ func (c *Client) Put(value []byte, codec int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.markAsRecentCid(ctx, link.(cidlink.Link))
+	if err := c.markAsRecentCid(ctx, link); err != nil {
+		return nil, err
+	}
 	return link.(cidlink.Link).Cid.Bytes(), nil
 }
 
