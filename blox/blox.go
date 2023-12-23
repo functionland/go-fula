@@ -128,7 +128,6 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	for _, provider := range providers {
 		if provider.ID != p.h.ID() {
 			//Found a storer, now pull the cid
-			//TODO: Ideally this should fetch only the cid itseld or the path that is changed with root below it
 			//TODO: Ideally we should have a mechanism to reserve the pull requests and keep the pulled+requests to a max of replication factor
 			log.Debugw("Found a storer", "id", provider.ID)
 
