@@ -26,6 +26,11 @@ func (n NoopExchange) Pull(_ context.Context, from peer.ID, l ipld.Link) error {
 	return nil
 }
 
+func (n NoopExchange) PullBlock(_ context.Context, from peer.ID, l ipld.Link) error {
+	log.Debugw("Pulled block noop exchange.", "from", from, "link", l)
+	return nil
+}
+
 func (n NoopExchange) SetAuth(_ context.Context, on peer.ID, subject peer.ID, allow bool) error {
 	log.Debugw("Set auth noop exchange.", "on", on, "subject", subject, "allow", allow)
 	return nil

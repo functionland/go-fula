@@ -15,6 +15,7 @@ import (
 
 	bsfetcher "github.com/ipfs/boxo/fetcher/impl/blockservice"
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
@@ -37,7 +38,7 @@ import (
 )
 
 const (
-	FxExchangeProtocolID = "/fx.land/exchange/0.0.2"
+	FxExchangeProtocolID = "/fx.land/exchange/0.0.3"
 
 	actionPull = "pull"
 	actionPush = "push"
@@ -280,7 +281,7 @@ func (e *FxExchange) Start(ctx context.Context) error {
 			defer e.wg.Done() // Decrement the counter when the goroutine completes
 		}
 		defer log.Debug("After HandlerFunc go routine is ending")
-		if err := e.s.Serve(listen); err != http.ErrServerClosed {
+		if err := e.s.Serve(listen); !errors.Is(err, http.ErrServerClosed) {
 			log.Errorw("HTTP server stopped with error", "err", err)
 		}
 	}()
@@ -338,6 +339,45 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 		log.Errorw("Expected status accepted on pull response", "got", resp.StatusCode)
 		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
 	default:
+		log.Debug("Successfully sent push request")
+		return nil
+	}
+}
+func (e *FxExchange) PullBlock(ctx context.Context, from peer.ID, l ipld.Link) error {
+	if e.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.exchange")
+	}
+
+	cl := l.(cidlink.Link).Cid
+
+	e.tempAuthsLock.Lock()
+	e.tempAuths[cl.String()] = tempAuthEntry{peerID: from, timestamp: time.Now()}
+	e.tempAuthsLock.Unlock()
+
+	log.Debugw("Setting a temporary auth for Push in Pull", "from", from, "cid", cl.String(), "e.tempAuths", e.tempAuths)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "libp2p://"+from.String()+"/"+actionPull+"/"+cl.String(), nil)
+	if err != nil {
+		log.Errorw("Failed to instantiate pull request", "err", err)
+		return err
+	}
+	switch resp, err := e.c.Do(req); {
+	case err != nil:
+		log.Errorw("Failed to read pull response", "err", err)
+		return err
+	case resp.StatusCode != http.StatusOK:
+		defer resp.Body.Close()
+		log.Errorw("Expected status accepted on pull response", "got", resp.StatusCode)
+		if b, err := io.ReadAll(resp.Body); err != nil {
+			log.Errorw("Failed to read response in non-OK status", "got", resp.StatusCode, "err", err)
+			return fmt.Errorf("unexpected response: %d", resp.StatusCode)
+		} else {
+			return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+	default:
+		if err := e.decodeAndStoreBlock(ctx, resp.Body, l); err != nil {
+			log.Errorw("Failed to pull block", "err", err)
+			return err
+		}
 		log.Debug("Successfully sent push request")
 		return nil
 	}
@@ -445,7 +485,7 @@ func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch action {
 	case actionPull:
-		e.handlePull(from, w, r)
+		e.handlePull(from, w, r, c)
 	case actionPush:
 		e.handlePush(from, w, r, c)
 	case actionAuth:
@@ -468,43 +508,70 @@ func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Req
 		http.Error(w, "invalid cid", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	if err := e.decodeAndStoreBlock(r.Context(), r.Body, cidlink.Link{Cid: cidInPath}); err != nil {
+		http.Error(w, "invalid cid", http.StatusBadRequest)
+	}
+}
 
-	codec := cidInPath.Prefix().Codec
+func (e *FxExchange) decodeAndStoreBlock(ctx context.Context, r io.ReadCloser, link ipld.Link) error {
+	defer r.Close()
+	codec := link.(cidlink.Link).Cid.Prefix().Codec
 	decoder, err := ipldmc.LookupDecoder(codec)
 	if err != nil {
 		log.Errorw("No decoder found", "codec", codec)
-		http.Error(w, "invalid cid", http.StatusBadRequest)
-		return
+		return err
 	}
 	nb := basicnode.Prototype.Any.NewBuilder()
-	if err = decoder(nb, r.Body); err != nil {
+	if err = decoder(nb, r); err != nil {
 		log.Errorw("Failed to decode pushed node as dagcbor", "err", err)
-		http.Error(w, "failed to decode node", http.StatusBadRequest)
-		return
+		return err
 	}
-	l, err := e.ls.Store(
-		ipld.LinkContext{Ctx: r.Context()}, cidlink.LinkPrototype{
-			Prefix: cidInPath.Prefix(),
-		}, nb.Build())
+	storedLink, err := e.ls.Store(
+		ipld.LinkContext{Ctx: ctx}, link.Prototype(), nb.Build())
 	if err != nil {
 		log.Errorw("Failed to store pushed node", "err", err)
-		http.Error(w, "failed to store node", http.StatusInternalServerError)
-		return
+		return err
 	}
-	log.Debugw("Successfully stored pushed node", "cid", l.(cidlink.Link).Cid)
-	log.Debugw("Notifying stored pushed link to IPNI publisher", "link", l)
-	e.pub.notifyReceivedLink(l)
-	log.Debugw("Successfully notified stored pushed link to IPNI publisher", "link", l)
+	log.Debugw("Successfully stored pushed node", "cid", storedLink.(cidlink.Link).Cid)
+	log.Debugw("Notifying stored pushed link to IPNI publisher", "link", storedLink)
+	e.pub.notifyReceivedLink(storedLink)
+	log.Debugw("Successfully notified stored pushed link to IPNI publisher", "link", storedLink)
+	return nil
 }
 
-func (e *FxExchange) handlePull(from peer.ID, w http.ResponseWriter, r *http.Request) {
+func (e *FxExchange) handlePull(from peer.ID, w http.ResponseWriter, r *http.Request, c string) {
 	log := log.With("action", actionPull, "from", from)
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		cc, err := cid.Decode(c)
+		if err != nil {
+			log.Errorw("Cannot decode CID while handking GET /pull", "cid", c, "err", err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+
+		raw, err := e.ls.LoadRaw(ipld.LinkContext{Ctx: r.Context()}, cidlink.Link{Cid: cc})
+		if err != nil {
+			if errors.Is(err, datastore.ErrNotFound) {
+				log.Errorw("Cannot find link locally while handing GET /pull", "cid", c)
+				http.Error(w, "", http.StatusNotFound)
+				return
+			}
+			log.Errorw("Failed to load link while handing GET /pull", "cid", c)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+		if _, err := w.Write(raw); err != nil {
+			log.Errorw("Failed to write response while handing GET /pull", "cid", c)
+		}
+		return
+	case http.MethodPost: // Proceed; POST is allowed.
+	default:
 		log.Errorw("Only POST is allowed on pull", "got", r.Method)
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
+
 	defer r.Body.Close()
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
