@@ -153,7 +153,7 @@ func (bl *FxBlockchain) startFetchCheck() {
 			log.Debug("called wg.Done in startFetchCheck ticker")
 			defer bl.wg.Done() // Decrement the counter when the goroutine completes
 		}
-		defer log.Debug("startFetchCheck go routine is ending")
+		defer log.Debug("startFetchCheck ticker go routine is ending")
 
 		for {
 			select {
@@ -778,7 +778,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	//Get the list of both join requests and joined members for the pool
 	// Create a struct for the POST req
 	req := PoolUserListRequest{
-		PoolID: topic,
+		PoolID:        topic,
+		RequestPoolID: topic,
 	}
 
 	// Call the existing function to make the request
@@ -819,7 +820,14 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 								log.Debug("Called wg.Add in somewhere before AnnounceJoinPoolRequestPeriodically")
 								bl.wg.Add(1)
 							}
-							go bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+							go func() {
+								if bl.wg != nil {
+									log.Debug("called wg.Done in somewhere before AnnounceJoinPoolRequestPeriodically")
+									defer bl.wg.Done() // Decrement the counter when the goroutine completes
+								}
+								defer log.Debug("somewhere before AnnounceJoinPoolRequestPeriodically go routine is ending")
+								bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+							}()
 						}
 					} else {
 						log.Debugw("Ping Server is already running for self peerID", user.PeerID)

@@ -17,7 +17,7 @@ var lp = cidlink.LinkPrototype{
 	Prefix: cid.Prefix{
 		Version:  1,
 		Codec:    uint64(multicodec.DagCbor),
-		MhType:   uint64(multicodec.Sha2_256),
+		MhType:   uint64(multicodec.Blake3),
 		MhLength: -1,
 	},
 }

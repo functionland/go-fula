@@ -42,15 +42,24 @@ func newHubPublisher(h host.Host, opts *options) (*hubPublisher, error) {
 	tr := &http.Transport{}
 	tr.RegisterProtocol("libp2p", p2phttp.NewTransport(h, p2phttp.ProtocolOption("/fx.land/hub/0.0.1")))
 	p.client = &http.Client{Transport: tr}
-
-	a, err := peer.AddrInfoFromString("/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R")
-	if err != nil {
+	if err := p.assureConnectionToHub(p.ctx); err != nil {
 		return nil, err
 	}
-	h.Peerstore().AddAddr(a.ID, a.Addrs[0], peerstore.PermanentAddrTTL)
 	return p, nil
 }
 
+func (p *hubPublisher) assureConnectionToHub(ctx context.Context) error {
+	a, err := peer.AddrInfoFromString("/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R")
+	if err != nil {
+		return err
+	}
+	p.h.Peerstore().AddAddrs(a.ID, a.Addrs, peerstore.PermanentAddrTTL)
+	if err := p.h.Connect(ctx, *a); err != nil {
+		log.Errorw("Failed to connect to hub", "err", err)
+		return err
+	}
+	return nil
+}
 func (p *hubPublisher) Start(_ context.Context) error {
 	go func() {
 		unpublished := make(map[cid.Cid]struct{})
@@ -112,6 +121,9 @@ func (p *hubPublisher) notifyReceivedLink(l ipld.Link) {
 }
 
 func (p *hubPublisher) publish(mhs []multihash.Multihash) error {
+	if err := p.assureConnectionToHub(p.ctx); err != nil {
+		return err
+	}
 	r := &PutContentRequest{
 		Mutlihashes: mhs,
 	}

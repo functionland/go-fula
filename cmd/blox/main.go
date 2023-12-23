@@ -87,6 +87,7 @@ var (
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
+			MaxCIDPushRate            int           `yaml:"maxCIDPushRate"`
 			IpniPublishDisabled       bool          `yaml:"ipniPublishDisabled"`
 			IpniPublishInterval       time.Duration `yaml:"ipniPublishInterval"`
 			IpniPublishDirectAnnounce []string      `yaml:"IpniPublishDirectAnnounce"`
@@ -298,7 +299,7 @@ func init() {
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "listenAddr",
 				Destination: &app.config.listenAddrs,
-				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic"),
+				Value:       cli.NewStringSlice("/ip4/0.0.0.0/tcp/40001", "/ip4/0.0.0.0/udp/40001/quic", "/ip4/0.0.0.0/udp/40001/quic-v1", "/ip4/0.0.0.0/udp/40001/quic-v1/webtransport"),
 			}),
 			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 				Name:        "staticRelays",
@@ -318,6 +319,13 @@ func init() {
 				Usage:       "Weather to allow transient connection to other participants.",
 				Destination: &app.config.AllowTransientConnection,
 				Value:       true,
+			}),
+			altsrc.NewIntFlag(&cli.IntFlag{
+				Name:        "maxCIDPushRate",
+				Aliases:     []string{"mcidpr"},
+				Usage:       "Maximum number of CIDs pushed per second.",
+				Destination: &app.config.MaxCIDPushRate,
+				Value:       100,
 			}),
 			altsrc.NewBoolFlag(&cli.BoolFlag{
 				Name:        "ipniPublisherDisabled",
@@ -714,8 +722,8 @@ func action(ctx *cli.Context) error {
 		logger.Info("ipfscoreapi successfully instantiated")
 	}
 
-	logger.Debug("called wg.Add in blox start")
-	/*opts := []corehttp.ServeOption{
+	/*logger.Debug("called wg.Add in blox start")
+	opts := []corehttp.ServeOption{
 		// Add necessary handlers, CORS, etc.
 		corehttp.GatewayOption("127.0.0.1:5001"),
 		corehttp.CheckVersionOption(),
@@ -758,6 +766,7 @@ func action(ctx *cli.Context) error {
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
+			exchange.WithMaxPushRate(app.config.MaxCIDPushRate),
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
 			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
