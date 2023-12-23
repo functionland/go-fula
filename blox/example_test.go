@@ -746,7 +746,7 @@ func Example_testMockserver() {
 		}
 	}()
 	// Define the URL
-	url := "http://127.0.0.1:4000/cid/bafyreibzsetfhqrayathm5tkmm7axuljxcas3pbqrncrosx2fiky4wj5gy"
+	url := "http://127.0.0.1:4000/cid/bafyr4iauqnsshryxfg2262z6mqev5fyef7gmgjk54skmtggnplehusyno4"
 
 	// Send a GET request to the server
 	resp, err := http.Get(url)
