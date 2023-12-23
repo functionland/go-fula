@@ -304,6 +304,11 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
+	log.Debugw("Setting a temporary auth for Push in Pull", "from", from, "cid", l.(cidlink.Link).Cid.String())
+	e.tempAuthsLock.Lock()
+	e.tempAuths[l.(cidlink.Link).Cid.String()] = tempAuthEntry{peerID: from, timestamp: time.Now()}
+	e.tempAuthsLock.Unlock()
+
 	r := pullRequest{Link: l.(cidlink.Link).Cid}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
@@ -429,16 +434,14 @@ func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
 	if len(segments) > 1 {
 		c = segments[1]
 	}
+	log.Debugw("serve", "action", action, "from", from, "c", c)
 	if !e.authorized(from, action, c) {
-		log.Debugw("rejected unauthorized request", "from", from, "action", action)
+		log.Debugw("rejected unauthorized request", "from", from, "action", action, "c", c)
 		http.Error(w, errUnauthorized.Error(), http.StatusUnauthorized)
 		return
 	}
 	switch action {
 	case actionPull:
-		e.tempAuthsLock.Lock()
-		e.tempAuths[c] = tempAuthEntry{peerID: from, timestamp: time.Now()}
-		e.tempAuthsLock.Unlock()
 		e.handlePull(from, w, r)
 	case actionPush:
 		e.handlePush(from, w, r, c)
@@ -625,6 +628,7 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 }
 
 func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
+	log.Debugw("checking authorization", "pid", pid, "action", action, "cid", cid)
 	if e.authorizer == "" {
 		// If no authorizer is set allow all.
 		return true
@@ -634,6 +638,7 @@ func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
 		e.tempAuthsLock.Lock()
 		defer e.tempAuthsLock.Unlock()
 
+		log.Debugw("Temporary auth check", "e.tempAuths", e.tempAuths, "pid", pid, "cid", cid)
 		// Retrieve the temporary authorization entry for the CID
 		entry, ok := e.tempAuths[cid]
 		if ok {
@@ -653,7 +658,10 @@ func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
 		return pid == e.authorizer
 	case actionPull:
 		//TODO: Check if requestor is part of the same pool or the owner of the cid
-		return true
+		e.authorizedPeersLock.RLock()
+		_, ok := e.authorizedPeers[pid]
+		e.authorizedPeersLock.RUnlock()
+		return ok
 	default:
 		return false
 	}

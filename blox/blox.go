@@ -141,12 +141,13 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 					continue
 				}
 				p.h.Peerstore().AddAddrs(provider.ID, []multiaddr.Multiaddr{addr}, peerstore.ConnectedAddrTTL)
+				log.Debugw("Started Pull in StoreCid", "from", provider.ID, "l", l)
 				err = p.ex.Pull(ctx, provider.ID, l)
 				if err != nil {
 					log.Errorw("Error happened in pulling from provider", "err", err)
 					continue
 				}
-				log.Debugw("link is successfully stored", "l", l, "from", provider.ID)
+				log.Debugw("link might be successfully stored", "l", l, "from", provider.ID)
 				return nil
 			} else {
 				return fmt.Errorf("limit of %d is reached for %s", limit, l.String())
@@ -180,12 +181,13 @@ func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLim
 			log.Errorw("Error storing CID", "link", l, "err", err)
 			continue // Skip appending this link to the storedLinks slice
 		}
-		// Append to storedLinks only if StoreCid is successful
+		// Append to storedLinks only if StoreCid is successful but since Pull is async we need t0 check for existence of link before submitting to blockchain
 		storedLinks = append(storedLinks, l.Link)
 	}
 	log.Debugw("StoreManifest", "storedLinks", storedLinks)
 	// Handle the successfully stored links with the blockchain
 	if len(storedLinks) > 0 {
+		//TODO: Here before submitting hte request to blockchain we should check to make sure the links exit in datastore
 		_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, storedLinks)
 		if err != nil {
 			log.Errorw("Error happened in storing manifest", "err", err)
