@@ -12,6 +12,7 @@ import (
 	"github.com/functionland/go-fula/common"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/functionland/go-fula/ping"
+	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -163,7 +164,6 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLimit, maxCids int) error {
 	log.Debugw("StoreManifest", "links", links)
 	var storedLinks []ipld.Link // Initialize an empty slice for successful storage
-
 	for _, l := range links {
 		if len(storedLinks) >= maxCids {
 			break
@@ -187,11 +187,29 @@ func (p *Blox) StoreManifest(ctx context.Context, links []blockchain.LinkWithLim
 	log.Debugw("StoreManifest", "storedLinks", storedLinks)
 	// Handle the successfully stored links with the blockchain
 	if len(storedLinks) > 0 {
-		//TODO: Here before submitting hte request to blockchain we should check to make sure the links exit in datastore
-		_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, storedLinks)
-		if err != nil {
-			log.Errorw("Error happened in storing manifest", "err", err)
-			return err
+		time.Sleep(2 * time.Minute)
+		// Collect confirmed CIDs
+		var hasLinks []ipld.Link
+		for _, link := range storedLinks {
+			h, err := p.Has(ctx, link)
+			if err != nil || !h {
+				continue
+			}
+			hasLinks = append(hasLinks, link)
+		}
+		log.Debugw("confirmed links done", "hasLinks", hasLinks)
+		// Handle the successfully stored and confirmed links with the blockchain
+		if len(hasLinks) > 0 {
+			_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, hasLinks)
+			if err != nil {
+				log.Errorw("Error happened in storing manifest", "err", err)
+				return err
+			}
+		}
+
+		// If all links failed to store or confirm, return an error
+		if len(hasLinks) == 0 {
+			return errors.New("all links failed to confirm for storage")
 		}
 	}
 
@@ -298,10 +316,21 @@ func (p *Blox) Start(ctx context.Context) error {
 		for {
 			select {
 			case <-ticker.C:
+				hasFreeSpace := true
 				// This block will execute every 5 minutes
-				if err := p.FetchAvailableManifestsAndStore(ctx, 10); err != nil {
-					log.Errorw("Error in FetchAvailableManifestsAndStore", "err", err)
-					// Handle the error or continue based on your requirement
+				freeSpace, err := wifi.GetBloxFreeSpace()
+				if err != nil {
+					if freeSpace.Size != 0 {
+						if freeSpace.UsedPercentage > 90 {
+							hasFreeSpace = false
+						}
+					}
+				}
+				if hasFreeSpace {
+					if err := p.FetchAvailableManifestsAndStore(ctx, 50); err != nil {
+						log.Errorw("Error in FetchAvailableManifestsAndStore", "err", err)
+						// Handle the error or continue based on your requirement
+					}
 				}
 			case <-ctx.Done():
 				// This will handle the case where the parent context is canceled

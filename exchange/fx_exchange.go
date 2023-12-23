@@ -304,12 +304,15 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
-	log.Debugw("Setting a temporary auth for Push in Pull", "from", from, "cid", l.(cidlink.Link).Cid.String())
-	e.tempAuthsLock.Lock()
-	e.tempAuths[l.(cidlink.Link).Cid.String()] = tempAuthEntry{peerID: from, timestamp: time.Now()}
-	e.tempAuthsLock.Unlock()
 
-	r := pullRequest{Link: l.(cidlink.Link).Cid}
+	cid := l.(cidlink.Link).Cid
+
+	e.tempAuthsLock.Lock()
+	e.tempAuths[cid.String()] = tempAuthEntry{peerID: from, timestamp: time.Now()}
+	e.tempAuthsLock.Unlock()
+	log.Debugw("Setting a temporary auth for Push in Pull", "from", from, "cid", cid.String(), "e.tempAuths", e.tempAuths)
+
+	r := pullRequest{Link: cid}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
 		log.Errorw("Failed to encode pull request", "err", err)
@@ -645,6 +648,7 @@ func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
 			// Check if the peer ID matches and the authorization hasn't expired
 			if entry.peerID == pid {
 				delete(e.tempAuths, cid) // Remove the temporary authorization after it's used
+				log.Debugw("Temporary auth check passed", "pid", pid, "cid", cid)
 				return true
 			}
 		}
