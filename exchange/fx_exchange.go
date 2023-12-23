@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	bsfetcher "github.com/ipfs/boxo/fetcher/impl/blockservice"
 	"github.com/ipfs/go-cid"
@@ -51,6 +52,11 @@ var (
 	exploreAllRecursivelySelector selector.Selector
 )
 
+type tempAuthEntry struct {
+	peerID    peer.ID
+	timestamp time.Time
+}
+
 func init() {
 	var err error
 	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
@@ -76,6 +82,9 @@ type (
 		authorizedPeersLock sync.RWMutex
 		pub                 *hubPublisher
 		dht                 *fulaDht
+
+		tempAuths     map[string]tempAuthEntry // A map of CID to peer ID for temporary push authorization
+		tempAuthsLock sync.RWMutex             // A lock to ensure concurrent access to tempAuths is safe
 	}
 	pullRequest struct {
 		Link cid.Cid `json:"link"`
@@ -118,6 +127,7 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 	if err != nil {
 		return nil, err
 	}
+	e.tempAuths = make(map[string]tempAuthEntry)
 	return e, nil
 }
 
@@ -250,7 +260,8 @@ func (e *FxExchange) IpniNotifyLink(link ipld.Link) {
 }
 
 func (e *FxExchange) Start(ctx context.Context) error {
-
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel() // Ensures we cancel the context when someFunction exits
 	if err := e.pub.Start(ctx); err != nil {
 		return err
 	}
@@ -259,7 +270,33 @@ func (e *FxExchange) Start(ctx context.Context) error {
 		return err
 	}
 	e.s.Handler = http.HandlerFunc(e.serve)
-	go func() { e.s.Serve(listen) }()
+	if e.wg != nil {
+		log.Debug("Called wg.Add after HandlerFunc")
+		e.wg.Add(1)
+	}
+	go func() {
+		if e.wg != nil {
+			log.Debug("Called wg.Done after HandlerFunc")
+			defer e.wg.Done() // Decrement the counter when the goroutine completes
+		}
+		defer log.Debug("After HandlerFunc go routine is ending")
+		if err := e.s.Serve(listen); err != http.ErrServerClosed {
+			log.Errorw("HTTP server stopped with error", "err", err)
+		}
+	}()
+
+	if e.wg != nil {
+		log.Debug("Called wg.Add after HandlerFunc2")
+		e.wg.Add(1)
+	}
+	go func() {
+		if e.wg != nil {
+			log.Debug("Called wg.Done after HandlerFunc2")
+			defer e.wg.Done() // Decrement the counter when the goroutine completes
+		}
+		defer log.Debug("After HandlerFunc2 go routine is ending")
+		e.startTempAuthCleanup(ctx)
+	}()
 	return nil
 }
 
@@ -267,7 +304,15 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 	if e.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.exchange")
 	}
-	r := pullRequest{Link: l.(cidlink.Link).Cid}
+
+	cid := l.(cidlink.Link).Cid
+
+	e.tempAuthsLock.Lock()
+	e.tempAuths[cid.String()] = tempAuthEntry{peerID: from, timestamp: time.Now()}
+	e.tempAuthsLock.Unlock()
+	log.Debugw("Setting a temporary auth for Push in Pull", "from", from, "cid", cid.String(), "e.tempAuths", e.tempAuths)
+
+	r := pullRequest{Link: cid}
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
 		log.Errorw("Failed to encode pull request", "err", err)
@@ -392,8 +437,9 @@ func (e *FxExchange) serve(w http.ResponseWriter, r *http.Request) {
 	if len(segments) > 1 {
 		c = segments[1]
 	}
-	if !e.authorized(from, action) {
-		log.Debugw("rejected unauthorized request", "from", from, "action", action)
+	log.Debugw("serve", "action", action, "from", from, "c", c)
+	if !e.authorized(from, action, c) {
+		log.Debugw("rejected unauthorized request", "from", from, "action", action, "c", c)
 		http.Error(w, errUnauthorized.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -584,24 +630,70 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 	}
 }
 
-func (e *FxExchange) authorized(pid peer.ID, action string) bool {
+func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
+	log.Debugw("checking authorization", "pid", pid, "action", action, "cid", cid)
 	if e.authorizer == "" {
 		// If no authorizer is set allow all.
 		return true
 	}
 	switch action {
 	case actionPush:
+		e.tempAuthsLock.Lock()
+		defer e.tempAuthsLock.Unlock()
+
+		log.Debugw("Temporary auth check", "e.tempAuths", e.tempAuths, "pid", pid, "cid", cid)
+		// Retrieve the temporary authorization entry for the CID
+		entry, ok := e.tempAuths[cid]
+		if ok {
+			// Check if the peer ID matches and the authorization hasn't expired
+			if entry.peerID == pid {
+				delete(e.tempAuths, cid) // Remove the temporary authorization after it's used
+				log.Debugw("Temporary auth check passed", "pid", pid, "cid", cid)
+				return true
+			}
+		}
+
+		// Check for permanent authorization
 		e.authorizedPeersLock.RLock()
-		_, ok := e.authorizedPeers[pid]
+		_, ok = e.authorizedPeers[pid]
 		e.authorizedPeersLock.RUnlock()
 		return ok
 	case actionAuth:
 		return pid == e.authorizer
 	case actionPull:
 		//TODO: Check if requestor is part of the same pool or the owner of the cid
-		return true
+		e.authorizedPeersLock.RLock()
+		_, ok := e.authorizedPeers[pid]
+		e.authorizedPeersLock.RUnlock()
+		return ok
 	default:
 		return false
+	}
+}
+
+func (e *FxExchange) startTempAuthCleanup(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			e.cleanupTempAuths()
+		case <-ctx.Done():
+			log.Debug("After HandlerFunc2 go routine (startTempAuthCleanup) should end now")
+			return
+		}
+	}
+}
+
+func (e *FxExchange) cleanupTempAuths() {
+	e.tempAuthsLock.Lock()
+	defer e.tempAuthsLock.Unlock()
+
+	for cid, entry := range e.tempAuths {
+		if time.Since(entry.timestamp) >= 5*time.Minute {
+			delete(e.tempAuths, cid)
+		}
 	}
 }
 
