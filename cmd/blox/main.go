@@ -327,7 +327,7 @@ func init() {
 				Aliases:     []string{"drm"},
 				Usage:       "Weather to disable the libp2p resource manager.",
 				Destination: &app.config.DisableResourceManger,
-				Value:       false,
+				Value:       true,
 			}),
 			altsrc.NewIntFlag(&cli.IntFlag{
 				Name:        "maxCIDPushRate",
