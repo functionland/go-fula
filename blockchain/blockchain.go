@@ -326,6 +326,12 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionAssetsBalance: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionAssetsBalance, from, w, r)
 		},
+		actionTransferToGoerli: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(http.MethodPost, actionTransferToGoerli, from, w, r)
+		},
+		actionTransferToMumbai: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(http.MethodPost, actionTransferToMumbai, from, w, r)
+		},
 		actionPoolCreate: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			//TODO: We should check if from owns the blox
 			bl.handleAction(http.MethodPost, actionPoolCreate, from, w, r)

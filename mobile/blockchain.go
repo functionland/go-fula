@@ -2,6 +2,8 @@ package fulamobile
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"github.com/functionland/go-fula/blockchain"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
@@ -32,6 +34,21 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 func (c *Client) AssetsBalance(account string, assetId string, classId string) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: assetId, ClassId: classId})
+}
+
+func (c *Client) TransferToFula(amountStr string, walletAccount string, chain string) ([]byte, error) {
+	ctx := context.TODO()
+	// Convert amount from string to uint64
+	amount, err := strconv.ParseUint(amountStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid amount: %v", err)
+	}
+	convertInput := blockchain.TransferToFulaRequest{
+		Wallet: walletAccount,
+		Amount: amount, // Use the converted amount
+		Chain:  chain,
+	}
+	return c.bl.TransferToFula(ctx, c.bloxPid, convertInput)
 }
 
 // PoolJoin requests blox at Config.BloxAddr to join a pool with the id.
@@ -146,7 +163,7 @@ func (c *Client) DeleteFulaConfig() ([]byte, error) {
 	return c.bl.DeleteFulaConfig(ctx, c.bloxPid)
 }
 
-// AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
+// GetAccount requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) GetAccount() ([]byte, error) {
 	ctx := context.TODO()
