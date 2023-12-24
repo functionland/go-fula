@@ -16,6 +16,8 @@ const (
 	actionAccountFund          = "account-fund"
 	actionAccountBalance       = "account-balance"
 	actionAssetsBalance        = "assets-balance"
+	actionTransferToMumbai     = "fula-mumbai-convert_tokens"
+	actionTransferToGoerli     = "fula-goerli-convert_tokens"
 	actionPoolCreate           = "fula-pool-create"
 	actionPoolJoin             = "fula-pool-join"
 	actionPoolCancelJoin       = "fula-pool-cancel_join"
@@ -104,6 +106,16 @@ type AssetsBalanceRequest struct {
 }
 type AssetsBalanceResponse struct {
 	Amount string `json:"amount"`
+}
+
+type TransferToFulaRequest struct {
+	Wallet string `json:"wallet_account"`
+	Amount uint64 `json:"amount"`
+	Chain  string `json:"chain"`
+}
+type TransferToFulaResponse struct {
+	Msg         string `json:"msg"`
+	Description string `json:"description"`
 }
 
 type PoolCreateRequest struct {
@@ -312,6 +324,7 @@ type Blockchain interface {
 	AccountFund(context.Context, peer.ID, AccountFundRequest) ([]byte, error)
 	AccountBalance(context.Context, peer.ID, AccountBalanceRequest) ([]byte, error)
 	AssetsBalance(context.Context, peer.ID, AssetsBalanceRequest) ([]byte, error)
+	TransferToFula(context.Context, peer.ID, TransferToFulaRequest) ([]byte, error)
 	PoolCreate(context.Context, peer.ID, PoolCreateRequest) ([]byte, error)
 	PoolJoin(context.Context, peer.ID, PoolJoinRequest) ([]byte, error)
 	PoolCancelJoin(context.Context, peer.ID, PoolCancelJoinRequest) ([]byte, error)
@@ -361,6 +374,8 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredRequest{}),
 	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceRequest{}),
+	actionTransferToGoerli:     reflect.TypeOf(TransferToFulaRequest{}),
+	actionTransferToMumbai:     reflect.TypeOf(TransferToFulaRequest{}),
 
 	//Hardware
 	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
@@ -395,6 +410,8 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),
 	actionManifestRemoveStored: reflect.TypeOf(ManifestRemoveStoredResponse{}),
 	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceResponse{}),
+	actionTransferToGoerli:     reflect.TypeOf(TransferToFulaResponse{}),
+	actionTransferToMumbai:     reflect.TypeOf(TransferToFulaResponse{}),
 
 	//Hardware
 	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -248,4 +249,46 @@ func (bl *FxBlockchain) AssetsBalance(ctx context.Context, to peer.ID, r AssetsB
 	}
 
 	return b, nil
+}
+
+func (bl *FxBlockchain) TransferToFula(ctx context.Context, to peer.ID, r TransferToFulaRequest) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(r); err != nil {
+		return nil, err
+	}
+	action := ""
+	switch r.Chain {
+	case "mumbai":
+		action = actionTransferToMumbai
+	case "goerli":
+		action = actionTransferToGoerli
+	default:
+		action = ""
+	}
+
+	if action != "" {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+action, &buf)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := bl.c.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusAccepted {
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+
+		return b, nil
+	}
+	return []byte{}, errors.New("selected chain is not supported yet")
 }
