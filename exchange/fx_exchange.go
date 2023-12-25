@@ -729,10 +729,7 @@ func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
 		return pid == e.authorizer
 	case actionPull:
 		//TODO: Check if requestor is part of the same pool or the owner of the cid
-		e.authorizedPeersLock.RLock()
-		_, ok := e.authorizedPeers[pid]
-		e.authorizedPeersLock.RUnlock()
-		return ok
+		return true
 	default:
 		return false
 	}
