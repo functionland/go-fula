@@ -198,11 +198,13 @@ type PoolVoteRequest struct {
 	PoolID    int    `json:"pool_id"`
 	Account   string `json:"account"`
 	VoteValue bool   `json:"vote_value"`
+	PeerID    string `json:"peer_id"`
 }
 
 type PoolVoteResponse struct {
 	Account string `json:"account"`
 	PoolID  int    `json:"pool_id"`
+	Result  string `json:"result"`
 }
 
 type PoolLeaveRequest struct {

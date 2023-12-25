@@ -124,7 +124,8 @@ func (an *FxAnnouncements) processAnnouncement(ctx context.Context, from peer.ID
 		an.h.Peerstore().AddAddrs(from, addrs, peerstore.ConnectedAddrTTL)
 	case PoolJoinRequestAnnouncementType:
 		log.Info("PoolJoin request", "on", an.h.ID(), "from", from)
-		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, topicString, true); err != nil {
+		//TODO: second '' string should be account
+		if err := an.PoolJoinRequestHandler.HandlePoolJoinRequest(ctx, from, "", topicString, true); err != nil {
 			log.Errorw("An error occurred in handling pool join request announcement", "on", an.h.ID(), "from", from, err)
 			return err
 		}

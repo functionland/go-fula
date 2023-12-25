@@ -408,7 +408,7 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 	}
 }
 
-func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, topicString string, withMemberListUpdate bool) error {
+func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, account string, topicString string, withMemberListUpdate bool) error {
 	if withMemberListUpdate {
 		err := bl.FetchUsersAndPopulateSets(ctx, topicString, false)
 		if err != nil {
@@ -440,7 +440,8 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		}
 		voteRequest := PoolVoteRequest{
 			PoolID:    poolID,
-			Account:   from.String(), // Assuming 'from' has the necessary account information
+			Account:   account,
+			PeerID:    from.String(), // Assuming 'from' has the necessary account information
 			VoteValue: vote,
 		}
 

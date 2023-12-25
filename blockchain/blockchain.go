@@ -808,6 +808,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		if err != nil {
 			log.Errorw("Could not debug PeerID in response.Users", "user.PeerID", user.PeerID, "err", err)
 		}
+		account := user.Account
 
 		if initiate {
 			keepPeers = append(keepPeers, pid)
@@ -861,7 +862,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			//Vote for any peer that has not voted already
 			if exists && existingStatus == common.Pending {
 				log.Debugw("Voting for peers", "pool", topicString, "from", bl.h.ID(), "for", pid)
-				err = bl.HandlePoolJoinRequest(ctx, pid, topicString, false)
+				err = bl.HandlePoolJoinRequest(ctx, pid, account, topicString, false)
 				if err == nil {
 					status = common.Unknown
 				} else {
