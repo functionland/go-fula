@@ -52,11 +52,11 @@ type LinkWithLimit struct {
 }
 
 type SeededRequest struct {
-	Seed string `json:"seed"`
+	//Seed string `json:"seed"`
 }
 
 type SeededResponse struct {
-	Seed    string `json:"seed"`
+	//Seed    string `json:"seed"`
 	Account string `json:"account"`
 }
 

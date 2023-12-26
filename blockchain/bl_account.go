@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -192,16 +191,8 @@ func (bl *FxBlockchain) HandleGetAccount(ctx context.Context, from peer.ID, w ht
 		return
 	}
 
-	// Read the seed from file
-	seedBytes, err := os.ReadFile("/internal/.secrets/secret_seed.txt")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("error reading seed file: %v", err), http.StatusInternalServerError)
-		return
-	}
-	seed := string(seedBytes)
-
 	// Call HandleSeeded to get the account
-	seededReq := SeededRequest{Seed: seed}
+	seededReq := SeededRequest{}
 	account, err := bl.HandleSeeded(ctx, seededReq)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error getting account from seed: %v", err), http.StatusInternalServerError)
