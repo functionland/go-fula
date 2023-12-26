@@ -164,7 +164,7 @@ func (bl *FxBlockchain) AccountBalance(ctx context.Context, to peer.ID, r Accoun
 	}
 }
 
-func (bl *FxBlockchain) HandleSeeded(ctx context.Context, req SeededRequest) (string, error) {
+func (bl *FxBlockchain) HandleSeeded(ctx context.Context, req *SeededRequest) (string, error) {
 	// Call manifestBatchStore method
 	responseBody, err := bl.callBlockchain(ctx, "POST", actionSeeded, req)
 	if err != nil {
@@ -193,7 +193,7 @@ func (bl *FxBlockchain) HandleGetAccount(ctx context.Context, from peer.ID, w ht
 
 	// Call HandleSeeded to get the account
 	seededReq := SeededRequest{}
-	account, err := bl.HandleSeeded(ctx, seededReq)
+	account, err := bl.HandleSeeded(ctx, &seededReq)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error getting account from seed: %v", err), http.StatusInternalServerError)
 		return
