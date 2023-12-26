@@ -267,6 +267,7 @@ func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req
 		val := reflect.ValueOf(req)
 		if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
 			log.Error("req is not a pointer to a struct")
+			log.Errorf("Invalid req type: %T", req)
 			return req
 		}
 
