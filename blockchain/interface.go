@@ -56,7 +56,7 @@ type SeededRequest struct {
 }
 
 type SeededResponse struct {
-	//Seed    string `json:"seed"`
+	Seed    string `json:"seed"`
 	Account string `json:"account"`
 }
 
