@@ -312,7 +312,7 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	action := path.Base(r.URL.Path)
 	if !bl.authorized(from, action) {
-		log.Errorw("rejected unauthorized request from %s for action %s", from, action)
+		log.Errorw("rejected unauthorized request", "from", from, "action", action)
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
