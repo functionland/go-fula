@@ -15,7 +15,7 @@ const (
 	actionAccountCreate        = "account-create"
 	actionAccountFund          = "account-fund"
 	actionAccountBalance       = "account-balance"
-	actionAssetsBalance        = "assets-balance"
+	actionAssetsBalance        = "asset-balance"
 	actionTransferToMumbai     = "fula-mumbai-convert_tokens"
 	actionTransferToGoerli     = "fula-goerli-convert_tokens"
 	actionPoolCreate           = "fula-pool-create"
