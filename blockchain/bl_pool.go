@@ -417,38 +417,46 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 	}
 	status, exists := bl.GetMemberStatus(from)
 	if !exists {
-		return fmt.Errorf("peerID does not exists in the list of pool requests or pool members: %s", from)
+		return fmt.Errorf("peerID does not exist in the list of pool requests or pool members: %s", from)
 	}
 	if status == common.Pending {
-		//Ping
+		// Ping
 		averageDuration, successCount, err := bl.p.Ping(ctx, from)
 		if err != nil {
-			log.Errorw("An error occurred in ping", err)
+			log.Errorw("An error occurred during ping", "error", err)
 			return err
 		}
 		vote := averageDuration <= bl.maxPingTime && successCount >= bl.minPingSuccessCount
 
 		log.Debugw("Ping result", "averageDuration", averageDuration, "successCount", successCount, "vote", vote)
 
-		//Call PoolVote method
-		// Construct the PoolVoteRequest
 		// Convert topic from string to int
 		poolID, err := strconv.Atoi(topicString)
 		if err != nil {
-			// Handle the error if the conversion fails
 			return fmt.Errorf("invalid topic, not an integer: %s", err)
 		}
 		voteRequest := PoolVoteRequest{
 			PoolID:    poolID,
 			Account:   account,
-			PeerID:    from.String(), // Assuming 'from' has the necessary account information
+			PeerID:    from.String(),
 			VoteValue: vote,
 		}
 
 		// Call PoolVote method
-		responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolVote, voteRequest)
+		responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolVote, voteRequest)
 		if err != nil {
-			return err
+			return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
+		}
+
+		// Check if the status code is OK; if not, handle it as an error
+		if statusCode != http.StatusOK {
+			var errMsg map[string]interface{}
+			if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+				return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+					statusCode, errMsg["message"], errMsg["description"])
+			} else {
+				return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+			}
 		}
 
 		// Interpret the response
@@ -460,12 +468,11 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		// Handle the response as needed
 		log.Infow("Vote cast successfully", "response", voteResponse, "on", from, "by", bl.h.ID())
 		// Update member status to unknown
-		bl.membersLock.Lock() // Lock before accessing the map
+		bl.membersLock.Lock()
 		bl.members[from] = common.Unknown
-		bl.membersLock.Unlock() // Unlock after accessing the map
-
+		bl.membersLock.Unlock()
 	} else {
-		return fmt.Errorf("peerID does not exists in the list of pool requests: %s with status %d", from, status)
+		return fmt.Errorf("peerID does not exist in the list of pool requests: %s with status %d", from, status)
 	}
 	return nil
 }

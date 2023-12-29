@@ -166,18 +166,33 @@ func (bl *FxBlockchain) AccountBalance(ctx context.Context, to peer.ID, r Accoun
 
 func (bl *FxBlockchain) HandleSeeded(ctx context.Context, req *SeededRequest) (string, error) {
 	// Call manifestBatchStore method
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionSeeded, req)
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionSeeded, req)
 	if err != nil {
-		return "", err
+		// If there's an error, return it directly without processing the response body
+		return "", fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
 	}
-	// Interpret the response
+
+	// Check if the status code is OK; if not, handle it as an error
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			// If the responseBody is JSON, use it in the error message
+			return "", fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			// If the responseBody is not JSON, return it as a plain text error message
+			return "", fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
+	}
+
+	// If the status code is 200, interpret the response
 	var seededResponse SeededResponse
 	if err := json.Unmarshal(responseBody, &seededResponse); err != nil {
 		return "", fmt.Errorf("failed to unmarshal seededResponse response: %w", err)
 	}
 	return seededResponse.Account, nil
-
 }
+
 func isValidAccountFormat(account string) bool {
 	// This is an example pattern: exactly 48 alphanumeric characters.
 	// Modify the regex according to your actual account format requirements.

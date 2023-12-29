@@ -754,20 +754,31 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			req := PoolRequestsRequest{
 				PoolID: topic, // assuming 'topic' is your pool id
 			}
-			responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolRequests, req)
+			responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolRequests, req)
 			if err != nil {
-				return err
+				return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
 			}
-			var poolRequestsResponse PoolRequestsResponse
 
+			// Check if the status code is OK; if not, handle it as an error
+			if statusCode != http.StatusOK {
+				var errMsg map[string]interface{}
+				if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+					return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+						statusCode, errMsg["message"], errMsg["description"])
+				} else {
+					return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+				}
+			}
+
+			var poolRequestsResponse PoolRequestsResponse
 			// Unmarshal the response body into the poolRequestsResponse struct
 			if err := json.Unmarshal(responseBody, &poolRequestsResponse); err != nil {
-				return err
+				return fmt.Errorf("failed to unmarshal poolRequests response: %w", err)
 			}
 
-			// For each one check if voted field in the response, contains the bl.h.ID().String() and if so it means we already voted
-			// Move it to members with status UnKnown.
-			log.Debugw("Empty members for ", "peer", bl.h.ID(), "Received response from blockchian", poolRequestsResponse.PoolRequests)
+			// For each one check if the voted field in the response contains the bl.h.ID().String() and if so it means we already voted
+			// Move it to members with status Unknown.
+			log.Debugw("Empty members for ", "peer", bl.h.ID(), "Received response from blockchain", poolRequestsResponse.PoolRequests)
 			for _, request := range poolRequestsResponse.PoolRequests {
 				if contains(request.Voted, bl.h.ID().String()) {
 					pid, err := peer.Decode(request.PeerID)
@@ -797,6 +808,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				}
 			}
 		}
+
 		log.Debugw("stored members after empty member list", "peer", bl.h.ID(), "members", bl.members)
 	}
 
@@ -808,9 +820,23 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Call the existing function to make the request
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
 	if err != nil {
-		return err
+		// Handle the error from callBlockchain, including the status code for more context
+		return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
+	}
+
+	// Check if the status code is OK; if not, handle it as an error
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			// If the responseBody is JSON, use it in the error message
+			return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			// If the responseBody is not JSON, return it as a plain text error message
+			return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
 	}
 	var response PoolUserListResponse
 

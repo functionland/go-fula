@@ -92,7 +92,7 @@ func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDStri
 	poolID, err := strconv.Atoi(poolIDString)
 	if err != nil {
 		// Handle the error if the conversion fails
-		return nil, fmt.Errorf("invalid topic, not an integer: %s", err)
+		return nil, fmt.Errorf("invalid poolID, not an integer: %s", err)
 	}
 	manifestBatchStoreRequest := ManifestBatchStoreRequest{
 		PoolID: poolID,
@@ -100,43 +100,69 @@ func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDStri
 	}
 
 	// Call manifestBatchStore method
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionManifestBatchStore, manifestBatchStoreRequest)
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestBatchStore, manifestBatchStoreRequest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
 	}
-	// Interpret the response
+
+	// Check if the status code is OK; if not, handle it as an error
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			// If the responseBody is JSON, use it in the error message
+			return nil, fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			// If the responseBody is not JSON, return it as a plain text error message
+			return nil, fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
+	}
+
+	// If the status code is 200, interpret the response
 	var manifestBatchStoreResponse ManifestBatchStoreResponse
 	if err := json.Unmarshal(responseBody, &manifestBatchStoreResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal manifestBatchStore response: %w", err)
 	}
 	return manifestBatchStoreResponse.Cid, nil
-
 }
-func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDString string, limit int) ([]LinkWithLimit, error) {
 
+func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDString string, limit int) ([]LinkWithLimit, error) {
 	poolID, err := strconv.Atoi(poolIDString)
 	if err != nil {
 		// Handle the error if the conversion fails
-		return nil, fmt.Errorf("invalid topic, not an integer: %s", err)
+		return nil, fmt.Errorf("invalid poolID, not an integer: %s", err)
 	}
 	manifestAvailableRequest := ManifestAvailableRequest{
 		PoolID: poolID,
 	}
 
-	// Call manifestBatchStore method
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionManifestAvailable, manifestAvailableRequest)
+	// Call manifestAvailable method
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestAvailable, manifestAvailableRequest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
 	}
-	// Interpret the response
+
+	// Check if the status code is OK; if not, handle it as an error
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			// If the responseBody is JSON, use it in the error message
+			return nil, fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			// If the responseBody is not JSON, return it as a plain text error message
+			return nil, fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
+	}
+
+	// If the status code is 200, interpret the response
 	var manifestAvailableResponse ManifestAvailableResponse
 	if err := json.Unmarshal(responseBody, &manifestAvailableResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal manifestAvailable response: %w", err)
 	}
 
 	var linksWithLimits []LinkWithLimit
-
-	// Group links by uploader
+	// Group links by uploader and limit the number of links according to the provided limit
 	for _, manifest := range manifestAvailableResponse.Manifests {
 		c, err := cid.Decode(manifest.ManifestMetadata.Job.Uri)
 		if err != nil {
