@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
@@ -27,8 +28,16 @@ import (
 
 const (
 	noopExchange = "noop"
-	devRelay     = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
 )
+
+var devRelays = []string{
+	"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835",
+	"/dns/alpha-relay.dev.fx.land/tcp/4001/p2p/12D3KooWFLhr8j6LTF7QV1oGCn3DVNTs1eMz2u4KCDX6Hw3BFyag",
+	"/dns/bravo-relay.dev.fx.land/tcp/4001/p2p/12D3KooWA2JrcPi2Z6i2U8H3PLQhLYacx6Uj9MgexEsMsyX6Fno7",
+	"/dns/charlie-relay.dev.fx.land/tcp/4001/p2p/12D3KooWKaK6xRJwjhq6u6yy4Mw2YizyVnKxptoT9yXMn3twgYns",
+	"/dns/delta-relay.dev.fx.land/tcp/4001/p2p/12D3KooWDtA7kecHAGEB8XYEKHBUTt8GsRfMen1yMs7V85vrpMzC",
+	"/dns/echo-relay.dev.fx.land/tcp/4001/p2p/12D3KooWQBigsW1tvGmZQet8t5MLMaQnDJKXAP2JNh7d1shk2fb2",
+}
 
 type Config struct {
 	Identity  []byte
@@ -71,7 +80,7 @@ type Config struct {
 // NewConfig instantiates a new Config with default values.
 func NewConfig() *Config {
 	return &Config{
-		StaticRelays:             []string{devRelay},
+		StaticRelays:             devRelays,
 		ForceReachabilityPrivate: true,
 		AllowTransientConnection: true,
 		PoolName:                 "0",
@@ -104,7 +113,12 @@ func (cfg *Config) init(mc *Client) error {
 			}
 			sr = append(sr, *rai)
 		}
-		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr, autorelay.WithNumRelays(1)))
+		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr,
+			autorelay.WithMinCandidates(1),
+			autorelay.WithNumRelays(1),
+			autorelay.WithBootDelay(30*time.Second),
+			autorelay.WithMinInterval(10*time.Second),
+		))
 	}
 
 	if cfg.ForceReachabilityPrivate {
