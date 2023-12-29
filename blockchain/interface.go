@@ -22,7 +22,7 @@ const (
 	actionPoolJoin             = "fula-pool-join"
 	actionPoolCancelJoin       = "fula-pool-cancel_join"
 	actionPoolRequests         = "fula-pool-poolrequests"
-	actionPoolList             = "fula-pool-all"
+	actionPoolList             = "fula-pool"
 	actionPoolUserList         = "fula-pool-users"
 	actionPoolVote             = "fula-pool-vote"
 	actionPoolLeave            = "fula-pool-leave"
@@ -180,10 +180,11 @@ type User struct {
 
 type Pool struct {
 	PoolID       int      `json:"pool_id"`
-	Owner        string   `json:"owner"`
+	Creator      string   `json:"creator"`
 	PoolName     string   `json:"pool_name"`
 	Parent       string   `json:"parent"`
 	Participants []string `json:"participants"`
+	Region       string   `json:"region"`
 }
 
 type PoolListResponse struct {

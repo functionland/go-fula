@@ -207,7 +207,7 @@ func prependProtocol(addr string) string {
 	return "https://" + addr
 }
 
-func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, action string, p interface{}) ([]byte, error) {
+func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, action string, p interface{}) ([]byte, int, error) {
 	endpoint := prependProtocol(bl.blockchainEndPoint)
 	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
 
@@ -221,35 +221,29 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 
 	preparedRequest := bl.PlugSeedIfNeeded(ctx, action, p)
 	if err := json.NewEncoder(buf).Encode(preparedRequest); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req, err := http.NewRequestWithContext(ctx, method, addr, buf)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := bl.ch.Do(req)
-
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-
 	defer resp.Body.Close()
 
 	var bufRes bytes.Buffer
 	_, err = io.Copy(&bufRes, resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, resp.StatusCode, err
 	}
 	b := bufRes.Bytes()
-	switch {
-	case resp.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
-	default:
-		return b, nil
-	}
+
+	return b, resp.StatusCode, nil
 }
 
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
@@ -430,16 +424,40 @@ func (bl *FxBlockchain) handleAction(method string, action string, from peer.ID,
 	//TODO: Ensure it is optimized for long-running calls
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
-	response, err := bl.callBlockchain(ctx, method, action, req)
+	response, statusCode, err := bl.callBlockchain(ctx, method, action, req)
 	if err != nil {
-		errorMessage := err.Error()
-		http.Error(w, errorMessage, http.StatusBadRequest)
-		log.Error("failed to process action request: %v", err)
+		log.Error("failed to call blockchain: %v", err)
+		w.WriteHeader(statusCode)
+		// Try to parse the error and format it as JSON
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr != nil {
+			// If the response isn't JSON or can't be parsed, use a generic message
+			errMsg = map[string]interface{}{
+				"message":     "An error occurred",
+				"description": err.Error(),
+			}
+		}
+		json.NewEncoder(w).Encode(errMsg)
 		return
-	} else {
-		w.WriteHeader(http.StatusAccepted)
 	}
-
+	// If status code is not 200, attempt to format the response as JSON
+	if statusCode != http.StatusOK {
+		w.WriteHeader(statusCode)
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr == nil {
+			// If it's already a JSON, write it as is
+			w.Write(response)
+		} else {
+			// If it's not JSON, wrap the response in the expected format
+			errMsg = map[string]interface{}{
+				"message":     "Error",
+				"description": string(response),
+			}
+			json.NewEncoder(w).Encode(errMsg)
+		}
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 	err1 := json.Unmarshal(response, &res)
 	if err1 != nil {
 		log.Error("failed to format response: %v", err1)
@@ -736,20 +754,31 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			req := PoolRequestsRequest{
 				PoolID: topic, // assuming 'topic' is your pool id
 			}
-			responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolRequests, req)
+			responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolRequests, req)
 			if err != nil {
-				return err
+				return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
 			}
-			var poolRequestsResponse PoolRequestsResponse
 
+			// Check if the status code is OK; if not, handle it as an error
+			if statusCode != http.StatusOK {
+				var errMsg map[string]interface{}
+				if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+					return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+						statusCode, errMsg["message"], errMsg["description"])
+				} else {
+					return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+				}
+			}
+
+			var poolRequestsResponse PoolRequestsResponse
 			// Unmarshal the response body into the poolRequestsResponse struct
 			if err := json.Unmarshal(responseBody, &poolRequestsResponse); err != nil {
-				return err
+				return fmt.Errorf("failed to unmarshal poolRequests response: %w", err)
 			}
 
-			// For each one check if voted field in the response, contains the bl.h.ID().String() and if so it means we already voted
-			// Move it to members with status UnKnown.
-			log.Debugw("Empty members for ", "peer", bl.h.ID(), "Received response from blockchian", poolRequestsResponse.PoolRequests)
+			// For each one check if the voted field in the response contains the bl.h.ID().String() and if so it means we already voted
+			// Move it to members with status Unknown.
+			log.Debugw("Empty members for ", "peer", bl.h.ID(), "Received response from blockchain", poolRequestsResponse.PoolRequests)
 			for _, request := range poolRequestsResponse.PoolRequests {
 				if contains(request.Voted, bl.h.ID().String()) {
 					pid, err := peer.Decode(request.PeerID)
@@ -779,6 +808,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				}
 			}
 		}
+
 		log.Debugw("stored members after empty member list", "peer", bl.h.ID(), "members", bl.members)
 	}
 
@@ -790,9 +820,23 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Call the existing function to make the request
-	responseBody, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
 	if err != nil {
-		return err
+		// Handle the error from callBlockchain, including the status code for more context
+		return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
+	}
+
+	// Check if the status code is OK; if not, handle it as an error
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			// If the responseBody is JSON, use it in the error message
+			return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			// If the responseBody is not JSON, return it as a plain text error message
+			return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
 	}
 	var response PoolUserListResponse
 
