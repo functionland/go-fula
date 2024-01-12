@@ -36,7 +36,6 @@ var apiError struct {
 const (
 	FxBlockchainProtocolID = "/fx.land/blockchain/0.0.1"
 	actionAuth             = "auth"
-	devRelay               = "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
 )
 
 var (
