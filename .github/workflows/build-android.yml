@@ -44,15 +44,34 @@ jobs:
       with:
         java-version: '11' # Specify the Java version
         distribution: 'adopt'
+    
+    - name: Get Release Info
+      id: get-release-info
+      uses: actions/github-script@v5
+      with:
+        script: |
+          let releaseVersion = '0.0.0';
+          try {
+            const release = await github.rest.repos.getLatestRelease({
+             owner: context.repo.owner,
+             repo: context.repo.repo,
+            });
+            releaseVersion = release.data.tag_name;
+          } catch (error) {
+            console.log('Error fetching latest release: ', error.message);
+          }
+          return releaseVersion;
+    - name: Print release 
+      run: echo "Latest Release is ${{ steps.get-release-info.outputs.result }}"
 
     - name: Install package with Maven
       run: |
         FILE="-Dfile=./build/mobile.aar"
-        mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ github.event.release.tag_name }} -Dpackaging=aar -DgeneratePom=true
+        mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ steps.get-release-info.outputs.result }} -Dpackaging=aar -DgeneratePom=true
 
     - name: Deploy to GitHub Packages
       run: |
-        mvn deploy -Drelease_version=${{ github.event.release.tag_name }}
+        mvn deploy -Drelease_version=${{ steps.get-release-info.outputs.result }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
