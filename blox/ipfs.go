@@ -95,6 +95,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 	mux := http.NewServeMux()
 	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-pin-ls
 	mux.HandleFunc("/api/v0/pin/ls", func(w http.ResponseWriter, r *http.Request) {
+		log.Debug("pin/ls request received")
 		var resp pinListResp
 		resp.PinLsList.Keys = make(map[string]pinListKeysType)
 		results, err := p.ds.Query(r.Context(), query.Query{
@@ -111,12 +112,22 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 				http.Error(w, "internal error while traversing datastore results: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			c, err := cid.Cast([]byte(result.Key))
-			if err != nil {
-				log.Debugw("failed to cast key to cid", "key", result.Key, "err", err)
-				continue
+			keyBytes := []byte(result.Key) // Convert the key to a byte slice
+
+			if len(keyBytes) > 1 {
+				// Slice the keyBytes to remove the first byte
+				slicedKeyBytes := keyBytes[1:]
+
+				c, err := cid.Cast(slicedKeyBytes)
+				if err != nil {
+					log.Debugw("failed to cast sliced key to cid", "slicedKeyBytes", slicedKeyBytes, "err", err)
+					continue
+				}
+
+				resp.PinLsList.Keys[c.String()] = pinListKeysType{Type: "fx"} //TODO: what should the type be?
+			} else {
+				log.Debugw("key too short to be a valid CID", "keyBytes", keyBytes)
 			}
-			resp.PinLsList.Keys[c.String()] = pinListKeysType{Type: "fx"} //TODO: what should the type be?
 		}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			log.Errorw("failed to encode response to pin ls", "err", err)
