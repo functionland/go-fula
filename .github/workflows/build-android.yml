@@ -70,6 +70,7 @@ jobs:
         mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ steps.get-release-info.outputs.result }} -Dpackaging=aar -DgeneratePom=true
 
     - name: Deploy to GitHub Packages
+      working-directory: ./build
       run: |
         mvn deploy -Drelease_version=${{ steps.get-release-info.outputs.result }}
       env:
