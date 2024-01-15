@@ -32,12 +32,9 @@ jobs:
     - name: Install gomobile
       run: go get golang.org/x/mobile/bind@latest
 
-    - name: Create build directory
-      run: mkdir -p ./build
-
     - name: Build mobile package
       run: |
-        gomobile bind -v -o ./build/mobile.aar -target=android -androidapi 26 ./mobile
+        gomobile bind -v -o mobile.aar -target=android -androidapi 26 ./mobile
 
     - name: Set up Maven
       uses: actions/setup-java@v1
@@ -66,18 +63,17 @@ jobs:
 
     - name: Install package with Maven
       run: |
-        FILE="-Dfile=./build/mobile.aar"
+        FILE="-Dfile=mobile.aar"
         mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ steps.get-release-info.outputs.result }} -Dpackaging=aar -DgeneratePom=true
 
-    - name: Copy pom.xml to build directory
-      run: cp ./.github/pom.xml ./build/pom.xml
+    - name: Copy pom.xml to directory
+      run: cp ./.github/pom.xml ./pom.xml
 
     - name: Prepare for Maven deployment
       run: |
-        sed -i "s/\${release_version}/${{ steps.get-release-info.outputs.result }}/g" build/pom.xml
+        sed -i "s/\${release_version}/${{ steps.get-release-info.outputs.result }}/g" pom.xml
 
     - name: Deploy to GitHub Packages
-      working-directory: ./build
       run: |
         mvn deploy -Drelease_version=${{ steps.get-release-info.outputs.result }}
       env:
