@@ -46,13 +46,13 @@ jobs:
     - name: Install Android SDK
       run: |
         wget https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
-        unzip commandlinetools-linux-6609375_latest.zip -d $HOME/cmdline-tools
-        echo "ANDROID_HOME=$HOME/cmdline-tools" >> $GITHUB_ENV
-        echo "$HOME/cmdline-tools/bin" >> $GITHUB_PATH
-    - name: Install SDK Packages
-      run: |
-        yes | $HOME/cmdline-tools/bin/sdkmanager --licenses
-        $HOME/cmdline-tools/bin/sdkmanager "platforms;android-31" "build-tools;31.0.3"
+        unzip commandlinetools-linux-6609375_latest.zip -d $HOME/android-sdk
+        mkdir -p $HOME/android-sdk/cmdline-tools/latest
+        mv $HOME/android-sdk/cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-31" "build-tools;31.0.3"
     - name: Get Release Info
       id: get-release-info
       uses: actions/github-script@v5
