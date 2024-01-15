@@ -69,6 +69,9 @@ jobs:
         FILE="-Dfile=./build/mobile.aar"
         mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ steps.get-release-info.outputs.result }} -Dpackaging=aar -DgeneratePom=true
 
+    - name: Copy pom.xml to build directory
+      run: cp ./github/pom.xml ./build/pom.xml
+      
     - name: Deploy to GitHub Packages
       working-directory: ./build
       run: |
