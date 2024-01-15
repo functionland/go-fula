@@ -1,0 +1,49 @@
+name: Android Build and Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up Git LFS
+      run: |
+        git lfs install
+        git lfs pull
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.x' # Specify the Go version
+
+    - name: Install gomobile
+      run: go get golang.org/x/mobile/bind@latest
+
+    - name: Build mobile package
+      run: |
+        gomobile bind -v -o ./build/mobile.aar -target=android -androidapi 26 ./mobile
+
+    - name: Set up Maven
+      uses: actions/setup-java@v1
+      with:
+        java-version: '11' # Specify the Java version
+        distribution: 'adopt'
+
+    - name: Install package with Maven
+      run: |
+        FILE="-Dfile=./build/mobile.aar"
+        mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ github.event.release.tag_name }} -Dpackaging=aar -DgeneratePom=true
+
+    - name: Deploy to GitHub Packages
+      run: |
+        mvn deploy -Drelease_version=${{ github.event.release.tag_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
