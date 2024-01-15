@@ -1,4 +1,4 @@
-name: Android Build and Release
+name: Build for Android
 
 on:
   workflow_dispatch:
@@ -19,9 +19,15 @@ jobs:
         git lfs pull
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: '1.x' # Specify the Go version
+        go-version: '1.21.4' # Specify the Go version
+
+    - name: Install gomobile
+      run: |
+        go get golang.org/x/mobile/bind@latest
+        echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
     - name: Install gomobile
       run: go get golang.org/x/mobile/bind@latest
