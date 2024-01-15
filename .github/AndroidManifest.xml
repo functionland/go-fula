@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="land.fx.fulamobile">
+     <!-- Permission for internet access -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Permissions for accessing storage -->
+    <!-- Read external storage -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- Write external storage -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <application>
+        <!-- Since it's a library, this section might be empty -->
+    </application>
+</manifest>
