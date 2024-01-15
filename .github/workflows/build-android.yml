@@ -71,7 +71,11 @@ jobs:
 
     - name: Copy pom.xml to build directory
       run: cp ./.github/pom.xml ./build/pom.xml
-      
+
+    - name: Prepare for Maven deployment
+      run: |
+        sed -i "s/\${release_version}/${{ steps.get-release-info.outputs.result }}/g" build/pom.xml
+
     - name: Deploy to GitHub Packages
       working-directory: ./build
       run: |
