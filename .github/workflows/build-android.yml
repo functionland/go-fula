@@ -69,8 +69,12 @@ jobs:
         FILE="-Dfile=./build/mobile.aar"
         mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ steps.get-release-info.outputs.result }} -Dpackaging=aar -DgeneratePom=true
 
-    - name: Copy pom.xml to build directory
-      run: cp ./.github/pom.xml ./build/pom.xml
+    - name: Copy pom.xml and AndroidManifest.xml to build directory
+      run: |
+        mkdir -p ./build/src/main
+        cp ./.github/pom.xml ./build/pom.xml
+        cp ./.github/AndroidManifest.xml ./build/src/main/AndroidManifest.xml
+
 
     - name: Prepare for Maven deployment
       run: |
