@@ -32,6 +32,9 @@ jobs:
     - name: Install gomobile
       run: go get golang.org/x/mobile/bind@latest
 
+    - name: Create build directory
+      run: mkdir -p ./build
+
     - name: Build mobile package
       run: |
         gomobile bind -v -o ./build/mobile.aar -target=android -androidapi 26 ./mobile
