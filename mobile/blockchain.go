@@ -31,9 +31,9 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 
 // AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
-func (c *Client) AssetsBalance(account string, assetId string, classId string) ([]byte, error) {
+func (c *Client) AssetsBalance(account string, assetId int, classId int) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: assetId, ClassId: classId})
+	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: uint64(assetId), ClassId: uint64(classId)})
 }
 
 func (c *Client) TransferToFula(amountStr string, walletAccount string, chain string) ([]byte, error) {

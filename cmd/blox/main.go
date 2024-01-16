@@ -564,19 +564,21 @@ func updatePoolName(newPoolName string) error {
 	}
 
 	// Update the pool name
-	app.config.PoolName = newPoolName
+	if app.config.PoolName != newPoolName {
+		app.config.PoolName = newPoolName
 
-	logger.Infof("Updated pool name to: %s", app.config.PoolName)
+		logger.Infof("Updated pool name to: %s", app.config.PoolName)
 
-	// Marshal the updated config back to YAML
-	configData, err = yaml.Marshal(app.config)
-	if err != nil {
-		return err
-	}
+		// Marshal the updated config back to YAML
+		configData, err = yaml.Marshal(app.config)
+		if err != nil {
+			return err
+		}
 
-	// Write the updated config back to the file
-	if err := os.WriteFile(app.configPath, configData, 0700); err != nil {
-		return err
+		// Write the updated config back to the file
+		if err := os.WriteFile(app.configPath, configData, 0760); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -778,6 +780,7 @@ func action(ctx *cli.Context) error {
 		blox.WithWg(&wg),
 		blox.WithDatastore(ds),
 		blox.WithPoolName(app.config.PoolName),
+		blox.WithTopicName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
 		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),

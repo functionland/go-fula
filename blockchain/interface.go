@@ -101,8 +101,8 @@ type AccountBalanceResponse struct {
 
 type AssetsBalanceRequest struct {
 	Account string `json:"account"`
-	ClassId string `json:"class_id"`
-	AssetId string `json:"asset_id"`
+	ClassId uint64 `json:"class_id"`
+	AssetId uint64 `json:"asset_id"`
 }
 type AssetsBalanceResponse struct {
 	Amount string `json:"amount"`
