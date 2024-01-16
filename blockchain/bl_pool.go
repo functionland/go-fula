@@ -229,8 +229,10 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 	b, err := io.ReadAll(resp.Body)
 	switch {
 	case err != nil:
+		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
+		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		// Attempt to parse the body as JSON.
 		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
 			// If we can't parse the JSON, return the original body in the error.
@@ -239,21 +241,24 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
-		err := bl.StopPingServer(ctx)
-		if err != nil {
-			return b, err
-		}
-		if bl.a != nil {
-			bl.a.StopJoinPoolRequestAnnouncements()
-		}
-		// Send a stop signal if the channel is not nil
-		if bl.stopFetchUsersAfterJoinChan != nil {
-			close(bl.stopFetchUsersAfterJoinChan)
-			// Reset the channel to nil to avoid closing a closed channel
-			bl.stopFetchUsersAfterJoinChan = nil
-		}
+		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
+	bl.updatePoolName("0")
+	bl.StopPingServer(ctx)
+	if bl.a != nil {
+		bl.a.StopJoinPoolRequestAnnouncements()
+	}
+	// Send a stop signal if the channel is not nil
+	if bl.stopFetchUsersAfterJoinChan != nil {
+		close(bl.stopFetchUsersAfterJoinChan)
+		// Reset the channel to nil to avoid closing a closed channel
+		bl.stopFetchUsersAfterJoinChan = nil
+	}
+	bl.clearPoolPeersFromPeerAddr(ctx, PoolID)
 }
 
 func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequestsRequest) ([]byte, error) {

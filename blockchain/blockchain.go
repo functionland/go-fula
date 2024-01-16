@@ -790,10 +790,73 @@ func (bl *FxBlockchain) checkIfUserHasOpenPoolRequests(ctx context.Context, topi
 	}
 	return false, nil
 }
+
+func (bl *FxBlockchain) clearPoolPeersFromPeerAddr(ctx context.Context, topic int) error {
+	bl.membersLock.Lock()
+	for i := range bl.members {
+		delete(bl.members, i)
+	}
+	bl.membersLock.Unlock()
+
+	localPeerID := bl.h.ID()
+
+	if topic <= 0 {
+		log.Info("Not a member of any pool at the moment")
+		return nil
+	}
+
+	//Get the list of both join requests and joined members for the pool
+	// Create a struct for the POST req
+	req := PoolUserListRequest{
+		PoolID:        topic,
+		RequestPoolID: topic,
+	}
+
+	// Call the existing function to make the request
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
+	if err != nil {
+		// Handle the error from callBlockchain, including the status code for more context
+		return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
+	}
+
+	// Check if the status code is OK; if not, handle it as an error
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			// If the responseBody is JSON, use it in the error message
+			return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			// If the responseBody is not JSON, return it as a plain text error message
+			return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
+	}
+	var response PoolUserListResponse
+
+	// Unmarshal the response body into the response struct
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return err
+	}
+
+	// Now iterate through the users and populate the member map
+	log.Debugw("Now iterate through the users and populate the member map", "peer", localPeerID, "response", response.Users)
+
+	for _, user := range response.Users {
+		pid, err := peer.Decode(user.PeerID)
+		if err != nil {
+			log.Errorw("Could not debug PeerID in response.Users", "user.PeerID", user.PeerID, "err", err)
+		}
+		bl.h.Peerstore().ClearAddrs(pid)
+	}
+	return nil
+}
+
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
 	// Initialize the map if it's nil
 	if bl.members == nil {
+		bl.membersLock.Lock()
 		bl.members = make(map[peer.ID]common.MemberStatus)
+		bl.membersLock.Unlock()
 	}
 
 	// Store repeated method calls as variables to avoid redundant calls
@@ -970,6 +1033,8 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 						log.Debugw("Ping Server is already running for self peerID or current requested pool does not match the new request", user.PeerID)
 					}
 				} else {
+					userPoolIDStr := strconv.Itoa(*user.PoolID)
+					bl.updatePoolName(userPoolIDStr)
 					log.Debugw("PeerID is already a member of the pool", user.PeerID)
 				}
 
