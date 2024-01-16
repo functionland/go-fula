@@ -87,7 +87,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint(p.blockchainEndpoint),
-		blockchain.WithTimeout(30),
+		blockchain.WithTimeout(65),
 		blockchain.WithWg(p.wg),
 		blockchain.WithFetchFrequency(3),
 		blockchain.WithTopicName(p.topicName),

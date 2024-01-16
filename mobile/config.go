@@ -213,7 +213,7 @@ func (cfg *Config) init(mc *Client) error {
 			blockchain.WithBlockchainEndPoint(cfg.BlockchainEndpoint),
 			blockchain.WithRelays(cfg.StaticRelays),
 			blockchain.WithTopicName(cfg.PoolName),
-			blockchain.WithTimeout(30))
+			blockchain.WithTimeout(65))
 		if err != nil {
 			return err
 		}

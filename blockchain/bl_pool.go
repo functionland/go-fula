@@ -76,9 +76,38 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 	b, err := io.ReadAll(resp.Body)
 	switch {
 	case err != nil:
+		poolID := r.PoolID
+		poolIDStr := strconv.Itoa(poolID)
+		requestSubmitted, err := bl.checkIfUserHasOpenPoolRequests(ctx, poolIDStr)
+		if err == nil && requestSubmitted {
+			err := bl.updatePoolName(poolIDStr)
+			if err != nil {
+				return []byte("{}"), err
+			}
+			err = bl.StartPingServer(ctx)
+			if err != nil {
+				return []byte("{}"), err
+			}
+			bl.processSuccessfulPoolJoinRequest(ctx, poolIDStr, to)
+			return []byte("{}"), nil
+		}
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-
+		poolID := r.PoolID
+		poolIDStr := strconv.Itoa(poolID)
+		requestSubmitted, err := bl.checkIfUserHasOpenPoolRequests(ctx, poolIDStr)
+		if err == nil && requestSubmitted {
+			err := bl.updatePoolName(poolIDStr)
+			if err != nil {
+				return []byte("{}"), err
+			}
+			err = bl.StartPingServer(ctx)
+			if err != nil {
+				return []byte("{}"), err
+			}
+			bl.processSuccessfulPoolJoinRequest(ctx, poolIDStr, to)
+			return []byte("{}"), nil
+		}
 		// Attempt to parse the body as JSON.
 		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
 			// If we can't parse the JSON, return the original body in the error.
@@ -97,63 +126,67 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 		if err != nil {
 			return b, err
 		}
-		// Create a ticker that triggers every 10 minutes
-		err = bl.FetchUsersAndPopulateSets(ctx, poolIDStr, true)
-		if err != nil {
-			log.Errorw("Error fetching and populating users", "err", err)
-		}
-		bl.stopFetchUsersAfterJoinChan = make(chan struct{})
-		ticker := time.NewTicker(bl.fetchInterval * time.Minute)
-		defer ticker.Stop()
+		bl.processSuccessfulPoolJoinRequest(ctx, poolIDStr, to)
+		return b, nil
+	}
+}
+
+func (bl *FxBlockchain) processSuccessfulPoolJoinRequest(ctx context.Context, poolIDStr string, to peer.ID) {
+	// Create a ticker that triggers every 10 minutes
+	err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, true)
+	if err != nil {
+		log.Errorw("Error fetching and populating users", "err", err)
+	}
+	bl.stopFetchUsersAfterJoinChan = make(chan struct{})
+	ticker := time.NewTicker(bl.fetchInterval * time.Minute)
+	defer ticker.Stop()
+	if bl.wg != nil {
+		log.Debug("called wg.Add in PoolJoin ticker")
+		bl.wg.Add(1) // Increment the wait group counter
+	}
+	go func() {
 		if bl.wg != nil {
-			log.Debug("called wg.Add in PoolJoin ticker")
-			bl.wg.Add(1) // Increment the wait group counter
+			log.Debug("called wg.Done in PoolJoin ticker")
+			defer bl.wg.Done() // Decrement the wait group counter when the goroutine completes
+		}
+		defer log.Debug("PoolJoin go routine is ending")
+		defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
+
+		for {
+			select {
+			case <-ticker.C:
+				// Call FetchUsersAndPopulateSets at every tick (10 minutes interval)
+				if err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, false); err != nil {
+					log.Errorw("Error fetching and populating users", "err", err)
+				}
+				status, exists := bl.GetMemberStatus(to)
+				if exists && status == common.Approved {
+					ticker.Stop()
+					bl.StopPingServer(ctx)
+					if bl.a != nil {
+						bl.a.StopJoinPoolRequestAnnouncements()
+					}
+				}
+			case <-bl.stopFetchUsersAfterJoinChan:
+				// Stop the ticker when receiving a stop signal
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+	if bl.a != nil {
+		if bl.wg != nil {
+			log.Debug("called wg.Add in PoolJoin ticker2")
+			bl.wg.Add(1)
 		}
 		go func() {
 			if bl.wg != nil {
-				log.Debug("called wg.Done in PoolJoin ticker")
-				defer bl.wg.Done() // Decrement the wait group counter when the goroutine completes
+				log.Debug("Called wg.Done in PoolJoin ticker2")
+				defer bl.wg.Done() // Decrement the counter when the goroutine completes
 			}
-			defer log.Debug("PoolJoin go routine is ending")
-			defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
-
-			for {
-				select {
-				case <-ticker.C:
-					// Call FetchUsersAndPopulateSets at every tick (10 minutes interval)
-					if err := bl.FetchUsersAndPopulateSets(ctx, strconv.Itoa(r.PoolID), false); err != nil {
-						log.Errorw("Error fetching and populating users", "err", err)
-					}
-					status, exists := bl.GetMemberStatus(to)
-					if exists && status == common.Approved {
-						ticker.Stop()
-						bl.StopPingServer(ctx)
-						if bl.a != nil {
-							bl.a.StopJoinPoolRequestAnnouncements()
-						}
-					}
-				case <-bl.stopFetchUsersAfterJoinChan:
-					// Stop the ticker when receiving a stop signal
-					ticker.Stop()
-					return
-				}
-			}
+			defer log.Debug("PoolJoin ticker2 go routine is ending")
+			bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
 		}()
-		if bl.a != nil {
-			if bl.wg != nil {
-				log.Debug("called wg.Add in PoolJoin ticker2")
-				bl.wg.Add(1)
-			}
-			go func() {
-				if bl.wg != nil {
-					log.Debug("Called wg.Done in PoolJoin ticker2")
-					defer bl.wg.Done() // Decrement the counter when the goroutine completes
-				}
-				defer log.Debug("PoolJoin ticker2 go routine is ending")
-				bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
-			}()
-		}
-		return b, nil
 	}
 }
 
@@ -196,8 +229,10 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 	b, err := io.ReadAll(resp.Body)
 	switch {
 	case err != nil:
+		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
+		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		// Attempt to parse the body as JSON.
 		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
 			// If we can't parse the JSON, return the original body in the error.
@@ -206,21 +241,24 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
-		err := bl.StopPingServer(ctx)
-		if err != nil {
-			return b, err
-		}
-		if bl.a != nil {
-			bl.a.StopJoinPoolRequestAnnouncements()
-		}
-		// Send a stop signal if the channel is not nil
-		if bl.stopFetchUsersAfterJoinChan != nil {
-			close(bl.stopFetchUsersAfterJoinChan)
-			// Reset the channel to nil to avoid closing a closed channel
-			bl.stopFetchUsersAfterJoinChan = nil
-		}
+		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
+	bl.updatePoolName("0")
+	bl.StopPingServer(ctx)
+	if bl.a != nil {
+		bl.a.StopJoinPoolRequestAnnouncements()
+	}
+	// Send a stop signal if the channel is not nil
+	if bl.stopFetchUsersAfterJoinChan != nil {
+		close(bl.stopFetchUsersAfterJoinChan)
+		// Reset the channel to nil to avoid closing a closed channel
+		bl.stopFetchUsersAfterJoinChan = nil
+	}
+	bl.clearPoolPeersFromPeerAddr(ctx, PoolID)
 }
 
 func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequestsRequest) ([]byte, error) {
