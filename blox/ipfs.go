@@ -96,11 +96,33 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-pin-ls
 	mux.HandleFunc("/api/v0/pin/ls", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug("pin/ls request received")
+		queryOptions := query.Query{
+			KeysOnly: true,
+			Filters:  []query.Filter{},
+		}
+		// Extract the 'arg' query parameter
+		cidStr := r.URL.Query().Get("arg")
+		log.Debugw("pin/ls request received with arg", "arg", cidStr)
+		// If cidStr is not empty, construct the prefix and create a filter
+		if cidStr != "" {
+			c, err := cid.Decode(cidStr)
+			if err != nil {
+				log.Errorw("failed to decode cidStr", "cidStr", cidStr, "err", err)
+				http.Error(w, "invalid cid: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			// Construct the prefix with byte 47 and the CID bytes
+			prefix := string(append([]byte{47}, c.Bytes()...))
+
+			// Use FilterKeyPrefix
+			queryOptions.Filters = append(queryOptions.Filters, query.FilterKeyPrefix{Prefix: prefix})
+			queryOptions.Limit = 1 // Set limit to 1 if arg is provided
+		}
+
 		var resp pinListResp
 		resp.PinLsList.Keys = make(map[string]pinListKeysType)
-		results, err := p.ds.Query(r.Context(), query.Query{
-			KeysOnly: true,
-		})
+		results, err := p.ds.Query(r.Context(), queryOptions)
 		if err != nil {
 			log.Errorw("failed to query datastore", "err", err)
 			http.Error(w, "internal error while querying datastore: "+err.Error(), http.StatusInternalServerError)
