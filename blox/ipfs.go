@@ -16,9 +16,7 @@ import (
 
 type (
 	pinListResp struct {
-		PinLsList struct {
-			Keys map[string]pinListKeysType `json:"Keys,omitempty"`
-		} `json:"PinLsList"`
+		Keys map[string]pinListKeysType `json:"Keys,omitempty"`
 	}
 	pinListKeysType struct {
 		Type string
@@ -121,7 +119,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 		}
 
 		var resp pinListResp
-		resp.PinLsList.Keys = make(map[string]pinListKeysType)
+		resp.Keys = make(map[string]pinListKeysType)
 		results, err := p.ds.Query(r.Context(), queryOptions)
 		if err != nil {
 			log.Errorw("failed to query datastore", "err", err)
@@ -146,7 +144,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 					continue
 				}
 
-				resp.PinLsList.Keys[c.String()] = pinListKeysType{Type: "fx"} //TODO: what should the type be?
+				resp.Keys[c.String()] = pinListKeysType{Type: "recursive"}
 			} else {
 				log.Debugw("key too short to be a valid CID", "keyBytes", keyBytes)
 			}
