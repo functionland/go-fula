@@ -155,7 +155,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 	})
 	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-block-stat
 	mux.HandleFunc("/api/v0/block/stat", func(w http.ResponseWriter, r *http.Request) {
-		c := r.URL.Query().Get("cid")
+		c := r.URL.Query().Get("arg")
 		if c == "" {
 			http.Error(w, "no cid specified", http.StatusBadRequest)
 			return
