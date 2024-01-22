@@ -334,7 +334,7 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 			bl.HandlePoolJoin(http.MethodPost, actionPoolJoin, from, w, r)
 		},
 		actionPoolCancelJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(http.MethodPost, actionPoolCancelJoin, from, w, r)
+			bl.HandlePoolCancelJoin(http.MethodPost, actionPoolCancelJoin, from, w, r)
 		},
 		actionPoolRequests: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodGet, actionPoolRequests, from, w, r)

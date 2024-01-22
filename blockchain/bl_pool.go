@@ -279,10 +279,8 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 	b, err := io.ReadAll(resp.Body)
 	switch {
 	case err != nil:
-		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		return nil, err
 	case resp.StatusCode != http.StatusAccepted:
-		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		// Attempt to parse the body as JSON.
 		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
 			// If we can't parse the JSON, return the original body in the error.
@@ -291,8 +289,93 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 		// Return the parsed error message and description.
 		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
 	default:
-		bl.cleanLeaveJoinPool(ctx, r.PoolID)
 		return b, nil
+	}
+}
+
+func (bl *FxBlockchain) HandlePoolCancelJoin(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	// This handles the join request sent from client for a blox which is not part of the pool yet
+	log := log.With("action", action, "from", from)
+	var req PoolCancelJoinRequest
+	var res PoolCancelJoinResponse
+
+	defer r.Body.Close()
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Debug("cannot parse request body: %v", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
+	defer cancel()
+	response, statusCode, err := bl.callBlockchain(ctx, method, action, &req)
+	if err != nil {
+		poolID := req.PoolID
+		poolIDStr := strconv.Itoa(poolID)
+		requestSubmitted, err := bl.checkIfUserHasOpenPoolRequests(ctx, poolIDStr)
+		if err == nil && !requestSubmitted {
+			errUpdateConfig := bl.updatePoolName("0")
+			errPingServer := bl.StopPingServer(ctx)
+			if errUpdateConfig != nil && errPingServer != nil {
+				errMsg := map[string]interface{}{
+					"message":     "Pool Cancel Join is submitted but Error in Stopping Ping Server and updating Config",
+					"description": fmt.Sprintf("Error in Ping server: %s , Error in updateConfig: %s", errPingServer.Error(), errUpdateConfig.Error()),
+				}
+				w.WriteHeader(http.StatusExpectationFailed)
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			} else if errUpdateConfig != nil {
+				errMsg := map[string]interface{}{
+					"message":     "Pool Cancel Join is submitted but Error in updating Config",
+					"description": fmt.Sprintf("Error in updateConfig: %s", errUpdateConfig.Error()),
+				}
+				w.WriteHeader(http.StatusExpectationFailed)
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			} else if errPingServer != nil {
+				errMsg := map[string]interface{}{
+					"message":     "Pool Cancel Join is submitted but Error in Ping Server Stop",
+					"description": fmt.Sprintf("Error in PingServer: %s", errPingServer.Error()),
+				}
+				w.WriteHeader(http.StatusExpectationFailed)
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			}
+			statusCode = http.StatusAccepted
+			err = nil
+			response = []byte(fmt.Sprintf("{\"account\":\"\",\"pool_id\":%d}", req.PoolID))
+		}
+	}
+	if statusCode == http.StatusOK {
+		statusCode = http.StatusAccepted
+	}
+	log.Debugw("callblockchain response in PoolCancelJoin", "statusCode", statusCode, "response", response, "err", err)
+	// If status code is not 200, attempt to format the response as JSON
+	if statusCode != http.StatusAccepted || err != nil {
+		w.WriteHeader(statusCode)
+		// Try to parse the error and format it as JSON
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr != nil {
+			// If the response isn't JSON or can't be parsed, use a generic message
+			errMsg = map[string]interface{}{
+				"message":     "An error occurred",
+				"description": err.Error(),
+			}
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
+	bl.cleanLeaveJoinPool(ctx, req.PoolID)
+	w.WriteHeader(statusCode)
+	err1 := json.Unmarshal(response, &res)
+	if err1 != nil {
+		log.Error("failed to format response: %v", err1)
+	}
+
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.Error("failed to write response: %v", err)
 	}
 }
 
