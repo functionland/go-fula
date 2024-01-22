@@ -39,6 +39,7 @@ type (
 		maxPingTime        int
 		minSuccessRate     int
 		blockchainEndpoint string
+		secretsPath        string
 		IPFShttpServer     *http.Server
 		wg                 *sync.WaitGroup
 	}
@@ -212,6 +213,13 @@ func WithBlockchainEndPoint(b string) Option {
 			b = "127.0.0.1:4000"
 		}
 		o.blockchainEndpoint = b
+		return nil
+	}
+}
+
+func WithSecretsPath(b string) Option {
+	return func(o *options) error {
+		o.secretsPath = b
 		return nil
 	}
 }

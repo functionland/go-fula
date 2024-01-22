@@ -126,7 +126,7 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 		},
 		keyStorer:      keyStorer,
 		lastFetchTime:  time.Now(),
-		fetchInterval:  opts.fetchFrequency * time.Hour,
+		fetchInterval:  opts.fetchFrequency,
 		fetchCheckStop: make(chan struct{}),
 	}
 	if bl.authorizer != "" {
@@ -139,7 +139,7 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 }
 
 func (bl *FxBlockchain) startFetchCheck() {
-	bl.fetchCheckTicker = time.NewTicker(1 * time.Hour) // check every hour, adjust as needed
+	bl.fetchCheckTicker = time.NewTicker(1 * time.Minute) // check every hour, adjust as needed
 
 	if bl.wg != nil {
 		// Increment the WaitGroup counter before starting the goroutine
@@ -331,7 +331,7 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionPoolCreate, from, w, r)
 		},
 		actionPoolJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.handleAction(http.MethodPost, actionPoolJoin, from, w, r)
+			bl.HandlePoolJoin(http.MethodPost, actionPoolJoin, from, w, r)
 		},
 		actionPoolCancelJoin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionPoolCancelJoin, from, w, r)
@@ -774,9 +774,8 @@ func (bl *FxBlockchain) checkIfUserHasOpenPoolRequests(ctx context.Context, topi
 	for _, user := range response.Users {
 		//Check if self status is in pool request, start ping server and announce join request
 		if user.PeerID == localPeerIDStr {
-			userRequestPoolIDStr := strconv.Itoa(*user.RequestPoolID)
 			log.Debugw("Found self peerID", user.PeerID)
-			if user.RequestPoolID != nil && userRequestPoolIDStr == topicString {
+			if user.RequestPoolID != nil && strconv.Itoa(*user.RequestPoolID) == topicString {
 				log.Debugw("Found self peerID in pool", "peer", user.PeerID, "pool", topicString)
 				return true, nil
 			} else if user.PoolID != nil {
@@ -852,6 +851,7 @@ func (bl *FxBlockchain) clearPoolPeersFromPeerAddr(ctx context.Context, topic in
 }
 
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
+	log.Debugw("FetchUsersAndPopulateSets executed", "initiate", initiate)
 	// Initialize the map if it's nil
 	if bl.members == nil {
 		bl.membersLock.Lock()
@@ -992,6 +992,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	// Now iterate through the users and populate the member map
 	log.Debugw("Now iterate through the users and populate the member map", "peer", localPeerID, "response", response.Users)
 
+	foundSelfInPool := false
 	for _, user := range response.Users {
 		pid, err := peer.Decode(user.PeerID)
 		if err != nil {
@@ -1004,6 +1005,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			//Check if self status is in pool request, start ping server and announce join request
 			if user.PeerID == localPeerIDStr {
 				log.Debugw("Found self peerID", user.PeerID)
+				foundSelfInPool = true
 				if user.RequestPoolID != nil {
 					userRequestPoolIDStr := strconv.Itoa(*user.RequestPoolID)
 					bl.updatePoolName(userRequestPoolIDStr)
@@ -1013,19 +1015,22 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 						if err != nil {
 							log.Errorw("Error when starting the Ping Server", "PeerID", user.PeerID, "err", err)
 						} else {
-							log.Debugw("Found self peerID and ran Ping Server and announcing pooljoinrequest now", "peer", user.PeerID)
-							if bl.wg != nil {
-								log.Debug("Called wg.Add in somewhere before AnnounceJoinPoolRequestPeriodically")
-								bl.wg.Add(1)
-							}
-							go func() {
+							// TODO: THIS METHOD BELOW NEEDS TO RE_INITIALIZE ANNONCEMENTS WITH NEW TOPIC ND START IT FIRST
+							/*
+								log.Debugw("Found self peerID and ran Ping Server and announcing pooljoinrequest now", "peer", user.PeerID)
 								if bl.wg != nil {
-									log.Debug("called wg.Done in somewhere before AnnounceJoinPoolRequestPeriodically")
-									defer bl.wg.Done() // Decrement the counter when the goroutine completes
+									log.Debug("Called wg.Add in somewhere before AnnounceJoinPoolRequestPeriodically")
+									bl.wg.Add(1)
 								}
-								defer log.Debug("somewhere before AnnounceJoinPoolRequestPeriodically go routine is ending")
-								bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
-							}()
+								go func() {
+									if bl.wg != nil {
+										log.Debug("called wg.Done in somewhere before AnnounceJoinPoolRequestPeriodically")
+										defer bl.wg.Done() // Decrement the counter when the goroutine completes
+									}
+									defer log.Debug("somewhere before AnnounceJoinPoolRequestPeriodically go routine is ending")
+									bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+								}()
+							*/
 						}
 					} else {
 						userPoolIDStr := strconv.Itoa(*user.PoolID)
@@ -1039,6 +1044,10 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				}
 
 			}
+		}
+
+		if initiate && !foundSelfInPool {
+			bl.updatePoolName("0")
 		}
 
 		// Determine the status based on pool_id and request_pool_id
@@ -1066,7 +1075,10 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			if err == nil {
 				status = common.Unknown
 			} else {
-				log.Errorw("Error happened while voting", "pool", topicString, "from", localPeerID, "for", pid)
+				log.Errorw("Error happened while voting", "pool", topicString, "from", localPeerID, "for", pid, "err", err)
+				if strings.Contains(err.Error(), "AlreadyVoted") {
+					status = common.Unknown
+				}
 			}
 		}
 		//}
