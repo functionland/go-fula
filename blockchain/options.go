@@ -14,6 +14,7 @@ type (
 		authorizedPeers          []peer.ID
 		allowTransientConnection bool
 		blockchainEndPoint       string
+		secretsPath              string
 		timeout                  int
 		wg                       *sync.WaitGroup
 		minPingSuccessCount      int
@@ -34,10 +35,11 @@ func newOptions(o ...Option) (*options, error) {
 		authorizedPeers:          []peer.ID{},           // default to an empty slice
 		allowTransientConnection: true,                  // or false, as per your default
 		blockchainEndPoint:       "127.0.0.1:4000",      // default endpoint
+		secretsPath:              "",                    //path to secrets dir
 		timeout:                  30,                    // default timeout in seconds
 		wg:                       nil,                   // initialized WaitGroup
 		minPingSuccessCount:      3,                     // default minimum success count
-		maxPingTime:              10,                    // default maximum ping time in seconds
+		maxPingTime:              200,                   // default maximum ping time in miliseconds
 		topicName:                "0",                   // default topic name
 		relays:                   []string{},            // default to an empty slice
 		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
@@ -78,6 +80,13 @@ func WithBlockchainEndPoint(b string) Option {
 			b = "127.0.0.1:4000"
 		}
 		o.blockchainEndPoint = b
+		return nil
+	}
+}
+
+func WithSecretsPath(b string) Option {
+	return func(o *options) error {
+		o.secretsPath = b
 		return nil
 	}
 }

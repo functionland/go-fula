@@ -70,7 +70,7 @@ func New(o ...Option) (*Blox, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	log.Debug("Ping server started successfully")
 	p.an, err = announcements.NewFxAnnouncements(p.h,
 		announcements.WithAnnounceInterval(5),
 		announcements.WithTimeout(3),
@@ -83,13 +83,14 @@ func New(o ...Option) (*Blox, error) {
 	}
 
 	p.bl, err = blockchain.NewFxBlockchain(p.h, p.pn, p.an,
-		blockchain.NewSimpleKeyStorer(""),
+		blockchain.NewSimpleKeyStorer(p.secretsPath),
 		blockchain.WithAuthorizer(authorizer),
 		blockchain.WithAuthorizedPeers(authorizedPeers),
 		blockchain.WithBlockchainEndPoint(p.blockchainEndpoint),
+		blockchain.WithSecretsPath(p.secretsPath),
 		blockchain.WithTimeout(65),
 		blockchain.WithWg(p.wg),
-		blockchain.WithFetchFrequency(3),
+		blockchain.WithFetchFrequency(1*time.Minute),
 		blockchain.WithTopicName(p.topicName),
 		blockchain.WithUpdatePoolName(p.updatePoolName),
 		blockchain.WithRelays(p.relays),

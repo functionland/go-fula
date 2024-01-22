@@ -225,8 +225,9 @@ func (pn *FxPing) authorized(pid peer.ID, action string) bool {
 			// If the peer has pinged before, increment the count
 			pn.pingedPeers[pid] = count + 1
 			// Check if the count exceeds the limit
-			if count >= pn.count {
-				log.Errorw("Rejecting ping request; count limit exceeded", "pid", pid, "count", count, "limit", pn.count)
+			// We allow 3 times the required ping to allow 3 retries for a peer t ping this one
+			if count >= pn.count*3 {
+				log.Errorw("Rejecting ping request; count limit exceeded", "pid", pid, "count", count, "limit", pn.count*3)
 				return false
 			}
 			log.Infow("Authorizing peer for additional ping", "pid", pid, "count", count)

@@ -74,6 +74,7 @@ var (
 		cli.App
 		initOnly           bool
 		blockchainEndpoint string
+		secretsPath        string
 		generateNodeKey    bool
 		wireless           bool
 		configPath         string
@@ -381,6 +382,12 @@ func init() {
 				Usage:       "Change the blockchain APIs endpoint",
 				Destination: &app.blockchainEndpoint,
 				Value:       "127.0.0.1:4000",
+			},
+			&cli.StringFlag{
+				Name:        "secretsPath",
+				Usage:       "Change the path for storing secret words",
+				Destination: &app.secretsPath,
+				Value:       "",
 			},
 		},
 		Before:    before,
@@ -785,6 +792,7 @@ func action(ctx *cli.Context) error {
 		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
+		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
