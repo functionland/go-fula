@@ -3,6 +3,7 @@ package fulamobile
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strconv"
 
 	"github.com/functionland/go-fula/blockchain"
@@ -34,6 +35,25 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 func (c *Client) AssetsBalance(account string, assetId int, classId int) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: uint64(assetId), ClassId: uint64(classId)})
+}
+
+// AccountFund requests blox at Config.BloxAddr to fund the account.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) AccountFund(account string) ([]byte, error) {
+	ctx := context.TODO()
+	amountString := "1000000000000000000"
+
+	// Create a new big.Int
+	bigAmount := new(big.Int)
+	_, ok := bigAmount.SetString(amountString, 10)
+	if !ok {
+		err := fmt.Errorf("error: the number %s is not valid", amountString)
+		return nil, err
+	}
+
+	// Convert big.Int to blockchain.BigInt
+	amount := blockchain.BigInt{Int: *bigAmount}
+	return c.bl.AccountFund(ctx, c.bloxPid, blockchain.AccountFundRequest{Amount: amount, To: account})
 }
 
 func (c *Client) TransferToFula(amountStr string, walletAccount string, chain string) ([]byte, error) {
