@@ -89,7 +89,7 @@ type AccountFundRequest struct {
 type AccountFundResponse struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
-	Amount BigInt `json:"amount"`
+	Amount string `json:"amount"`
 }
 
 type AccountBalanceRequest struct {
