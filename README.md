@@ -63,7 +63,12 @@ cd go-fula
 go run ./cmd/blox --authorizer [PeerID of client allowed to write to the backend] --logLevel=[info/debug] --ipniPublisherDisabled=[true/false]
 ```
 
-The default generated config goes to a YAML file in home directory, under /.fula/blox/config.yaml
+example on `Windows` is:
+```
+go run ./cmd/blox --authorizer=12D3KooWMMt4C3FKui14ai4r1VWwznRw6DoP5DcgTfzx2D5VZoWx --config=C:\Users\me\.fula\blox2\config.yaml --storeDir=C:\Users\me\.fula\blox2 --secretsPath=C:\Users\me\.fula\blox2\secret_seed.txt --logLevel=debug
+```
+
+The default generated config goes to a YAML file in home directory, under `/.fula/blox/config.yaml`
 
 ## Build
 
