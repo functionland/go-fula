@@ -27,6 +27,7 @@ var (
 	RESTART_NEEDED_AFTER   string
 	VERSION_FILE_PATH      string
 	RESTART_NEEDED_PATH    string
+	CONTROL_LED_PATH       string
 	PARTITION_NEEDED_PATH  string
 	FULA_CONFIG_PATH       string
 )
@@ -69,6 +70,7 @@ func init() {
 	RESTART_NEEDED_AFTER = getEnv("RESTART_NEEDED_AFTER", "6")
 	VERSION_FILE_PATH = getEnv("VERSION_FILE_PATH", "/home/go_fula_version.info")
 	RESTART_NEEDED_PATH = getEnv("RESTART_NEEDED_PATH", "/home/commands/.command_reboot")
+	CONTROL_LED_PATH = getEnv("CONTROL_LED_PATH", "/home/commands/.command_led")
 	PARTITION_NEEDED_PATH = getEnv("PARTITION_NEEDED_PATH", "/home/commands/.command_partition")
 
 }

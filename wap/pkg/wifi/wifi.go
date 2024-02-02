@@ -51,6 +51,15 @@ type RebootResponse struct {
 	Status bool   `json:"status"`
 }
 
+type ControlLedRequest struct {
+	Color string `json:"color"`
+	Time  int    `json:"time"`
+}
+type ControlLedResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type PartitionRequest struct {
 }
 type PartitionResponse struct {
@@ -155,6 +164,41 @@ func Reboot(ctx context.Context) RebootResponse {
 		defer file.Close()
 	}
 	return RebootResponse{
+		Msg:    res,
+		Status: status,
+	}
+}
+
+func ControlLed(ctx context.Context, color string, time int) ControlLedResponse {
+	file, err := os.OpenFile(config.CONTROL_LED_PATH, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	res := ""
+	status := true
+	if err != nil {
+		if os.IsExist(err) {
+			res = "File already exists"
+			log.Warnf(res)
+		} else {
+			// Other error
+			res = fmt.Sprintf("Failed to open file: %s", err)
+			log.Error(res)
+			status = false
+		}
+	} else {
+		// Successfully opened the file; now write color and time
+		_, err := fmt.Fprintf(file, "%s %d", color, time)
+		if err != nil {
+			// Handle any errors that occur during the write
+			res = fmt.Sprintf("Failed to write to file: %s", err)
+			log.Error(res)
+			status = false
+		} else {
+			res = "Command written to file"
+			log.Info(res)
+		}
+		// Don't forget to close the file when you're done
+		defer file.Close()
+	}
+	return ControlLedResponse{
 		Msg:    res,
 		Status: status,
 	}
