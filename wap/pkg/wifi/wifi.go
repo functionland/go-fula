@@ -394,37 +394,44 @@ func connectToFirstWifi(ctx context.Context, connections []string) error {
 	}
 
 	connection := connections[0]
-	passwd, err := getWiFiPassword(connection)
+	_, _, err := runCommand(ctx, fmt.Sprintf("nmcli connection up %s", connection))
+
 	if err != nil {
-		return err
-	}
-
-	if passwd != "" {
-		// Create a temporary file
-		tempFile, err := os.CreateTemp("", "passwd-")
+		log.Warnf("failed to connect to Wi-Fi without specifying password: %v", err)
+		passwd, err := getWiFiPassword(connection)
 		if err != nil {
-			return fmt.Errorf("failed to create temporary file: %w", err)
-		}
-		defer os.Remove(tempFile.Name())
-		// Write the password to the temporary file
-		_, err = tempFile.WriteString(fmt.Sprintf("802-11-wireless-security.psk:%s", passwd))
-		if err != nil {
-			return fmt.Errorf("failed to write password to temporary file: %w", err)
-		}
-		err = tempFile.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close temporary file: %w", err)
-		}
-
-		_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection up %s passwd-file %s", connection, tempFile.Name()))
-
-		if err != nil {
-			log.Warnf("failed to connect to Wi-Fi: %v", err)
-			log.Info("Trying to recreate the connection profile")
-			DeleteConnection(ctx, connection)
-			createConnection(ctx, connection, connection, passwd)
-			err = connectToNetwork(ctx, connection)
 			return err
+		}
+
+		if passwd != "" {
+			// Create a temporary file
+			tempFile, err := os.CreateTemp("", "passwd-")
+			if err != nil {
+				return fmt.Errorf("failed to create temporary file: %w", err)
+			}
+			defer os.Remove(tempFile.Name())
+			// Write the password to the temporary file
+			_, err = tempFile.WriteString(fmt.Sprintf("802-11-wireless-security.psk:%s", passwd))
+			if err != nil {
+				return fmt.Errorf("failed to write password to temporary file: %w", err)
+			}
+			err = tempFile.Close()
+			if err != nil {
+				return fmt.Errorf("failed to close temporary file: %w", err)
+			}
+
+			_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection up %s passwd-file %s", connection, tempFile.Name()))
+
+			if err != nil {
+				log.Warnf("failed to connect to Wi-Fi: %v", err)
+				log.Info("Trying to recreate the connection profile")
+				DeleteConnection(ctx, connection)
+				createConnection(ctx, connection, connection, passwd)
+				err = connectToNetwork(ctx, connection)
+				return err
+			}
+		} else {
+			log.Warnf("failed to read saved wifi password")
 		}
 	}
 	return nil
