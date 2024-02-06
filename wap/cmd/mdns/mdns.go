@@ -94,6 +94,8 @@ func LoadConfig() error {
 		HardwareID:       hardwareID,
 	}
 
+	log.Infow("mdns info loaded from config file", "infoSlice", infoSlice)
+
 	globalConfig = &infoSlice // Store the config globally
 	return nil
 }
@@ -124,7 +126,7 @@ func StartServer(ctx context.Context, port int) *MDNSServer {
 		log.Errorw("NewMDNSServer failed", "err", err)
 		return nil
 	}
-	log.Info("NewZeroConfService server started")
+	log.Debug("NewZeroConfService server started")
 
 	// Listen for context done signal to close the server
 	go func() {
@@ -137,7 +139,7 @@ func StartServer(ctx context.Context, port int) *MDNSServer {
 
 func NewZeroConfService(port int) (*MDNSServer, error) {
 	meta := createInfo()
-	log.Infow("mdns meta created", "meta", meta)
+	log.Debugw("mdns meta created", "meta", meta)
 
 	service, err := zeroconf.Register(
 		"fulatower",       // service instance name
@@ -152,7 +154,7 @@ func NewZeroConfService(port int) (*MDNSServer, error) {
 		log.Errorw("zeroconf.Register failed", "err", err)
 		return nil, err
 	}
-	log.Info("NewZeroConfService registered")
+	log.Debug("NewZeroConfService registered")
 	service.TTL(2)
 
 	return &MDNSServer{server: service}, nil
