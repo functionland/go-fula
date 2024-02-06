@@ -207,6 +207,10 @@ func handleServerLifecycle(ctx context.Context, serverControl chan bool) {
 // handleAppState monitors the application state and starts/stops services as needed.
 func handleAppState(ctx context.Context, isConnected bool, stopServer chan struct{}) {
 	log.Info("handleAppState is called")
+	// Load the config once at the start
+	if err := mdns.LoadConfig(); err != nil {
+		log.Fatal("Failed to load mdns configuration.")
+	}
 
 	currentState := atomic.LoadInt32(&currentIsConnected)
 	newState := int32(0)
@@ -295,20 +299,6 @@ func main() {
 	} else {
 		log.Info("Successfully checked and set version info")
 	}
-	serverControl := make(chan bool)
-	go handleServerLifecycle(ctx, serverControl)
-
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	go func() {
-		for range ticker.C {
-			// Toggle server state
-			serverControl <- false      // Stop the server
-			time.Sleep(1 * time.Second) // Wait a bit before restarting
-			serverControl <- true       // Start the server
-		}
-	}()
 
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
@@ -329,7 +319,24 @@ func main() {
 	handleAppState(ctx, isConnected, stopServer)
 	log.Infow("called handleAppState with ", isConnected)
 
-	// Start the server in a separate goroutine
+	//Start a periodic mdns server
+	serverControl := make(chan bool)
+	go handleServerLifecycle(ctx, serverControl)
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	go func() {
+		for range ticker.C {
+			// Toggle server state
+			serverControl <- false      // Stop the server
+			time.Sleep(1 * time.Second) // Wait a bit before restarting
+			serverControl <- true       // Start the server
+		}
+	}()
+	//end of mdns server handling
+
+	// Start the http server in a separate goroutine
 	go func() {
 		connectedCh := make(chan bool, 1)
 		serverMutex.Lock()

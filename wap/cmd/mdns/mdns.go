@@ -30,33 +30,44 @@ type Config struct {
 	// include other fields as needed
 }
 
-func createInfo() []string {
+type Meta struct {
+	BloxPeerIdString string
+	PoolName         string
+	Authorizer       string
+	HardwareID       string
+}
 
-	bloxPeerIdString := "NA"
-	poolName := "NA"
-	authorizer := "NA"
-	hardwareID := "NA"
-
-	hardwareID, err := wifi.GetHardwareID()
-	if err != nil {
-		log.Errorw("GetHardwareID failed", "err", err)
+var globalConfig *Meta // To store the loaded config globally
+// Load and parse the config file, then store it globally
+func LoadConfig() error {
+	if _, err := os.Stat(config.FULA_CONFIG_PATH); os.IsNotExist(err) {
+		log.Errorf("Config file does not exist: %s", config.FULA_CONFIG_PATH)
+		return err
 	}
 
 	data, err := os.ReadFile(config.FULA_CONFIG_PATH)
 	if err != nil {
 		log.Errorw("ReadFile failed", "err", err)
+		return err
 	}
 
-	// create a new Config
-	var config Config
-
-	// unmarshal the YAML data into the config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		log.Errorw("Unmarshal failed", "err", err)
+		return err
 	}
-	authorizer = config.Authorizer
+	bloxPeerIdString := "NA"
+	poolName := "NA"
+	authorizer := "NA"
+	hardwareID, err := wifi.GetHardwareID()
+	if err != nil {
+		log.Errorw("GetHardwareID failed", "err", err)
+		hardwareID = "NA"
+	}
 
-	km, err := base64.StdEncoding.DecodeString(config.Identity)
+	authorizer = cfg.Authorizer
+
+	km, err := base64.StdEncoding.DecodeString(cfg.Identity)
 	if err != nil {
 		log.Errorw("DecodeString failed", "err", err)
 	} else {
@@ -73,15 +84,34 @@ func createInfo() []string {
 			}
 		}
 	}
-
-	poolName = config.PoolName
+	poolName = cfg.PoolName
 
 	// Create a slice with the required information in key=value format
+	infoSlice := Meta{
+		BloxPeerIdString: bloxPeerIdString,
+		PoolName:         poolName,
+		Authorizer:       authorizer,
+		HardwareID:       hardwareID,
+	}
+
+	globalConfig = &infoSlice // Store the config globally
+	return nil
+}
+
+// Utilize the global config to create metadata info
+func createInfo() []string {
+	if globalConfig == nil {
+		log.Error("Config not loaded")
+		return nil
+	}
+
+	// Use the loaded globalConfig here to create your metadata
+	// Example:
 	infoSlice := []string{
-		"bloxPeerIdString=" + bloxPeerIdString,
-		"poolName=" + poolName,
-		"authorizer=" + authorizer,
-		"hardwareID=" + hardwareID,
+		"bloxPeerIdString=" + globalConfig.BloxPeerIdString, // Just an example, adjust according to actual data structure
+		"poolName=" + globalConfig.PoolName,
+		"authorizer=" + globalConfig.Authorizer,
+		"hardwareID=" + globalConfig.HardwareID, // Assuming you handle hardwareID differently
 	}
 
 	return infoSlice
@@ -123,7 +153,7 @@ func NewZeroConfService(port int) (*MDNSServer, error) {
 		return nil, err
 	}
 	log.Info("NewZeroConfService registered")
-	service.TTL(5)
+	service.TTL(2)
 
 	return &MDNSServer{server: service}, nil
 }
