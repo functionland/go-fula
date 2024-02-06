@@ -123,6 +123,7 @@ func NewZeroConfService(port int) (*MDNSServer, error) {
 		return nil, err
 	}
 	log.Info("NewZeroConfService registered")
+	service.TTL(5)
 
 	return &MDNSServer{server: service}, nil
 }
