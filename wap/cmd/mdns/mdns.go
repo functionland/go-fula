@@ -39,34 +39,47 @@ type Meta struct {
 
 var globalConfig *Meta // To store the loaded config globally
 // Load and parse the config file, then store it globally
-func LoadConfig() error {
-	if _, err := os.Stat(config.FULA_CONFIG_PATH); os.IsNotExist(err) {
-		log.Errorf("Config file does not exist: %s", config.FULA_CONFIG_PATH)
-		return err
+// Modified LoadConfig function to use default values if config file does not exist
+func LoadConfig() {
+	defaultValue := "NA" // Default value for all fields
+
+	// Initialize with default values
+	globalConfig = &Meta{
+		BloxPeerIdString: defaultValue,
+		PoolName:         defaultValue,
+		Authorizer:       defaultValue,
+		HardwareID:       defaultValue,
 	}
 
+	// Attempt to read hardware ID regardless of config file existence
+	hardwareID, err := wifi.GetHardwareID()
+	if err != nil {
+		log.Errorw("GetHardwareID failed", "err", err)
+		globalConfig.HardwareID = defaultValue
+	} else {
+		globalConfig.HardwareID = hardwareID
+	}
+
+	// Check if config file exists
+	if _, err := os.Stat(config.FULA_CONFIG_PATH); os.IsNotExist(err) {
+		log.Infof("Config file does not exist, using default values: %s", config.FULA_CONFIG_PATH)
+		return // Continue with default values
+	}
+
+	// Config file exists, attempt to read and parse it
 	data, err := os.ReadFile(config.FULA_CONFIG_PATH)
 	if err != nil {
 		log.Errorw("ReadFile failed", "err", err)
-		return err
+		return // Continue with default values upon read failure
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		log.Errorw("Unmarshal failed", "err", err)
-		return err
-	}
-	bloxPeerIdString := "NA"
-	poolName := "NA"
-	authorizer := "NA"
-	hardwareID, err := wifi.GetHardwareID()
-	if err != nil {
-		log.Errorw("GetHardwareID failed", "err", err)
-		hardwareID = "NA"
+		return // Continue with default values upon unmarshal failure
 	}
 
-	authorizer = cfg.Authorizer
-
+	// Successfully loaded config, attempt to decode identity
 	km, err := base64.StdEncoding.DecodeString(cfg.Identity)
 	if err != nil {
 		log.Errorw("DecodeString failed", "err", err)
@@ -78,26 +91,21 @@ func LoadConfig() error {
 			bloxPeerId, err := peer.IDFromPrivateKey(key)
 			if err != nil {
 				log.Errorw("IDFromPrivateKey failed", "err", err)
-				bloxPeerIdString = ""
 			} else {
-				bloxPeerIdString = bloxPeerId.String()
+				globalConfig.BloxPeerIdString = bloxPeerId.String() // Successfully decoded BloxPeerId
 			}
 		}
 	}
-	poolName = cfg.PoolName
 
-	// Create a slice with the required information in key=value format
-	infoSlice := Meta{
-		BloxPeerIdString: bloxPeerIdString,
-		PoolName:         poolName,
-		Authorizer:       authorizer,
-		HardwareID:       hardwareID,
+	// Update the rest of the fields if they were successfully loaded
+	if cfg.PoolName != "" {
+		globalConfig.PoolName = cfg.PoolName
+	}
+	if cfg.Authorizer != "" {
+		globalConfig.Authorizer = cfg.Authorizer
 	}
 
-	log.Infow("mdns info loaded from config file", "infoSlice", infoSlice)
-
-	globalConfig = &infoSlice // Store the config globally
-	return nil
+	log.Infow("mdns info loaded from config file", "infoSlice", globalConfig)
 }
 
 // Utilize the global config to create metadata info
