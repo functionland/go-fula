@@ -277,7 +277,7 @@ func listWifiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func connectWifiHandler(w http.ResponseWriter, r *http.Request, mdnsRestartCh chan bool) {
+func connectWifiHandler(w http.ResponseWriter, r *http.Request, connectedCh chan bool) {
 	if r.URL.Path != "/wifi/connect" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
@@ -313,7 +313,7 @@ func connectWifiHandler(w http.ResponseWriter, r *http.Request, mdnsRestartCh ch
 		return
 	}
 	log.Info("wifi connected. Calling mdns restart")
-	mdnsRestartCh <- true
+	connectedCh <- true
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -506,7 +506,7 @@ func getNonLoopbackIP() (string, error) {
 
 // This function accepts an ip and port that it runs the webserver on. Default is 10.42.0.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
-func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, mdnsRestartCh chan bool) io.Closer {
+func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, connectedCh chan bool) io.Closer {
 	ctx := context.Background()
 	peerFunction = peerFn
 	mux := http.NewServeMux()
@@ -514,7 +514,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	mux.HandleFunc("/wifi/list", listWifiHandler)
 	mux.HandleFunc("/wifi/status", wifiStatusHandler)
 	mux.HandleFunc("/wifi/connect", func(w http.ResponseWriter, r *http.Request) {
-		connectWifiHandler(w, r, mdnsRestartCh)
+		connectWifiHandler(w, r, connectedCh)
 	})
 	mux.HandleFunc("/ap/enable", enableAccessPointHandler)
 	mux.HandleFunc("/ap/disable", disableAccessPointHandler)

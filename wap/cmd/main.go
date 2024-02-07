@@ -175,9 +175,42 @@ func checkConfigExists() bool {
 	}
 }
 
+func handleServerLifecycle(ctx context.Context, serverControl chan bool) {
+	var server *mdns.MDNSServer
+	var serverMutex sync.Mutex
+
+	for {
+		select {
+		case start := <-serverControl:
+			serverMutex.Lock()
+			if start {
+				if server == nil {
+					// Start the server
+					server = mdns.StartServer(ctx, 8080) // Adjust port as necessary
+					log.Info("mDNS server started")
+				}
+			} else {
+				if server != nil {
+					// Stop the server
+					server.Shutdown()
+					server = nil
+					log.Info("mDNS server stopped")
+				}
+			}
+			serverMutex.Unlock()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // handleAppState monitors the application state and starts/stops services as needed.
-func handleAppState(ctx context.Context, isConnected bool, stopServer chan struct{}, mdnsServer **mdns.MDNSServer) {
+func handleAppState(ctx context.Context, isConnected bool, stopServer chan struct{}) {
 	log.Info("handleAppState is called")
+	// Load the config once at the start
+	if err := mdns.LoadConfig(); err != nil {
+		log.Fatal("Failed to load mdns configuration.")
+	}
 
 	currentState := atomic.LoadInt32(&currentIsConnected)
 	newState := int32(0)
@@ -243,13 +276,13 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 				log.Info("Access point already enabled on startup")
 			}
 		}
-		if *mdnsServer != nil {
+		/*if *mdnsServer != nil {
 			// Shutdown existing mDNS server before state change
 			(*mdnsServer).Shutdown()
 			*mdnsServer = nil
 		}
 		log.Info("starting mDNS server.")
-		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server
+		*mdnsServer = mdns.StartServer(ctx, 8080) // start the mDNS server*/
 		atomic.StoreInt32(&currentIsConnected, int32(newState))
 	} else {
 		log.Info("handleAppState is called but no action is needed")
@@ -266,7 +299,6 @@ func main() {
 	} else {
 		log.Info("Successfully checked and set version info")
 	}
-	var mdnsServer *mdns.MDNSServer = nil
 
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
@@ -284,18 +316,35 @@ func main() {
 	configExists := checkConfigExists()
 
 	log.Info("Waiting for the system to connect to Wi-Fi")
-	handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+	handleAppState(ctx, isConnected, stopServer)
 	log.Infow("called handleAppState with ", isConnected)
 
-	// Start the server in a separate goroutine
+	//Start a periodic mdns server
+	serverControl := make(chan bool)
+	go handleServerLifecycle(ctx, serverControl)
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
 	go func() {
-		mdnsRestartCh := make(chan bool, 1)
+		for range ticker.C {
+			// Toggle server state
+			serverControl <- false      // Stop the server
+			time.Sleep(1 * time.Second) // Wait a bit before restarting
+			serverControl <- true       // Start the server
+		}
+	}()
+	//end of mdns server handling
+
+	// Start the http server in a separate goroutine
+	go func() {
+		connectedCh := make(chan bool, 1)
 		serverMutex.Lock()
 		if currentServer != nil {
 			currentServer.Close()
 			currentServer = nil
 		}
-		closer := server.Serve(blox.BloxCommandInitOnly, "", "", mdnsRestartCh)
+		closer := server.Serve(blox.BloxCommandInitOnly, "", "", connectedCh)
 		currentServer = closer
 		serverMutex.Unlock()
 		serverCloser <- closer
@@ -311,9 +360,9 @@ func main() {
 				isHotspotStarted = false
 				serverMutex.Unlock()
 				return // Exit the goroutine
-			case isConnected = <-mdnsRestartCh:
+			case isConnected = <-connectedCh:
 				log.Infow("called handleAppState in go routine1 with ", isConnected)
-				handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+				handleAppState(ctx, isConnected, stopServer)
 			}
 		}
 	}()
@@ -340,7 +389,7 @@ func main() {
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
 				if wifi.CheckIfIsConnected(ctx, "") == nil {
 					isConnected = true
-					handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+					handleAppState(ctx, isConnected, stopServer)
 					ticker2.Stop()
 					break loop2
 				}
@@ -358,7 +407,7 @@ func main() {
 		} else {
 			log.Info("Not connected to a wifi network")
 			isConnected = false
-			handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+			handleAppState(ctx, isConnected, stopServer)
 		}
 		log.Info("Access point enabled on startup")
 	}
@@ -376,7 +425,7 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	// Before shutting down, make sure to set the appropriate state
-	handleAppState(ctx, isConnected, stopServer, &mdnsServer)
+	handleAppState(ctx, isConnected, stopServer)
 	log.Info("Shutting down wap")
 
 	// Close the server
