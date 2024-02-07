@@ -208,9 +208,7 @@ func handleServerLifecycle(ctx context.Context, serverControl chan bool) {
 func handleAppState(ctx context.Context, isConnected bool, stopServer chan struct{}) {
 	log.Info("handleAppState is called")
 	// Load the config once at the start
-	if err := mdns.LoadConfig(); err != nil {
-		log.Fatal("Failed to load mdns configuration.")
-	}
+	mdns.LoadConfig()
 
 	currentState := atomic.LoadInt32(&currentIsConnected)
 	newState := int32(0)
