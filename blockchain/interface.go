@@ -35,15 +35,16 @@ const (
 	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
 
 	//Hardware
-	actionBloxFreeSpace    = "blox-free-space"
-	actionEraseBlData      = "erase-blockchain-data"
-	actionWifiRemoveall    = "wifi-removeall"
-	actionReboot           = "reboot"
-	actionPartition        = "partition"
-	actionDeleteFulaConfig = "delete-fula-config"
-	actionDeleteWifi       = "delete-wifi"
-	actionDisconnectWifi   = "disconnect-wifi"
-	actionGetAccount       = "get-account"
+	actionBloxFreeSpace      = "blox-free-space"
+	actionEraseBlData        = "erase-blockchain-data"
+	actionWifiRemoveall      = "wifi-removeall"
+	actionReboot             = "reboot"
+	actionPartition          = "partition"
+	actionDeleteFulaConfig   = "delete-fula-config"
+	actionDeleteWifi         = "delete-wifi"
+	actionDisconnectWifi     = "disconnect-wifi"
+	actionGetAccount         = "get-account"
+	actionFetchContainerLogs = "fetch-container-logs"
 )
 
 type LinkWithLimit struct {
@@ -354,6 +355,7 @@ type Blockchain interface {
 	Partition(context.Context, peer.ID) ([]byte, error)
 	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
 	GetAccount(context.Context, peer.ID) ([]byte, error)
+	FetchContainerLogs(context.Context, peer.ID, wifi.FetchContainerLogsRequest) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -381,15 +383,16 @@ var requestTypes = map[string]reflect.Type{
 	actionTransferToMumbai:     reflect.TypeOf(TransferToFulaRequest{}),
 
 	//Hardware
-	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
-	actionEraseBlData:      reflect.TypeOf(wifi.EraseBlDataRequest{}),
-	actionWifiRemoveall:    reflect.TypeOf(wifi.WifiRemoveallRequest{}),
-	actionReboot:           reflect.TypeOf(wifi.RebootRequest{}),
-	actionPartition:        reflect.TypeOf(wifi.PartitionRequest{}),
-	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
-	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiRequest{}),
-	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiRequest{}),
-	actionGetAccount:       reflect.TypeOf(GetAccountRequest{}),
+	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
+	actionEraseBlData:        reflect.TypeOf(wifi.EraseBlDataRequest{}),
+	actionWifiRemoveall:      reflect.TypeOf(wifi.WifiRemoveallRequest{}),
+	actionReboot:             reflect.TypeOf(wifi.RebootRequest{}),
+	actionPartition:          reflect.TypeOf(wifi.PartitionRequest{}),
+	actionDeleteFulaConfig:   reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
+	actionDeleteWifi:         reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionDisconnectWifi:     reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionGetAccount:         reflect.TypeOf(GetAccountRequest{}),
+	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -417,13 +420,14 @@ var responseTypes = map[string]reflect.Type{
 	actionTransferToMumbai:     reflect.TypeOf(TransferToFulaResponse{}),
 
 	//Hardware
-	actionBloxFreeSpace:    reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
-	actionEraseBlData:      reflect.TypeOf(wifi.EraseBlDataResponse{}),
-	actionWifiRemoveall:    reflect.TypeOf(wifi.WifiRemoveallResponse{}),
-	actionReboot:           reflect.TypeOf(wifi.RebootResponse{}),
-	actionPartition:        reflect.TypeOf(wifi.PartitionResponse{}),
-	actionDeleteFulaConfig: reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
-	actionDeleteWifi:       reflect.TypeOf(wifi.DeleteWifiResponse{}),
-	actionDisconnectWifi:   reflect.TypeOf(wifi.DeleteWifiResponse{}),
-	actionGetAccount:       reflect.TypeOf(GetAccountResponse{}),
+	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
+	actionEraseBlData:        reflect.TypeOf(wifi.EraseBlDataResponse{}),
+	actionWifiRemoveall:      reflect.TypeOf(wifi.WifiRemoveallResponse{}),
+	actionReboot:             reflect.TypeOf(wifi.RebootResponse{}),
+	actionPartition:          reflect.TypeOf(wifi.PartitionResponse{}),
+	actionDeleteFulaConfig:   reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
+	actionDeleteWifi:         reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionDisconnectWifi:     reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionGetAccount:         reflect.TypeOf(GetAccountResponse{}),
+	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsResponse{}),
 }
