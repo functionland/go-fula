@@ -396,6 +396,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionEraseBlData: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleEraseBlData(r.Context(), from, w, r)
 		},
+		actionFetchContainerLogs: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleFetchContainerLogs(r.Context(), from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it

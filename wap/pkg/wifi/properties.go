@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -28,6 +29,15 @@ type BloxFreeSpaceResponse struct {
 	UsedPercentage float32 `json:"used_percentage"`
 }
 
+type FetchContainerLogsResponse struct {
+	Status bool   `json:"status"`
+	Msg    string `json:"msg"`
+}
+type FetchContainerLogsRequest struct {
+	ContainerName string
+	TailCount     string
+}
+
 type DockerInfo struct {
 	Image       string            `json:"image"`
 	Version     string            `json:"version"`
@@ -40,6 +50,13 @@ type DockerInfo struct {
 type Config struct {
 	StoreDir string `yaml:"storeDir"`
 	// other fields
+}
+
+type SyncInfo struct {
+	Best      string
+	Target    string
+	Finalized string
+	Speed     string
 }
 
 const (
@@ -202,4 +219,29 @@ func GetContainerInfo(containerName string) (DockerInfo, error) {
 	}
 
 	return info, nil
+}
+
+func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (string, error) {
+	cli, err := client.NewClientWithOpts(client.WithAPIVersionNegotiation(), client.WithHost("unix:///var/run/docker.sock"))
+	if err != nil {
+		return "", fmt.Errorf("creating Docker client: %w", err)
+	}
+
+	options := types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       req.TailCount, // Adjust the number of lines as needed
+	}
+	logs, err := cli.ContainerLogs(ctx, req.ContainerName, options)
+	if err != nil {
+		return "", fmt.Errorf("getting container logs: %w", err)
+	}
+	defer logs.Close()
+
+	logBytes, err := io.ReadAll(logs)
+	if err != nil {
+		return "", fmt.Errorf("reading container logs: %w", err)
+	}
+
+	return string(logBytes), nil
 }

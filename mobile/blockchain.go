@@ -189,3 +189,10 @@ func (c *Client) GetAccount() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.GetAccount(ctx, c.bloxPid)
 }
+
+// GetAccount requests blox at Config.BloxAddr to get the balance of the account.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) FetchContainerLogs(ContainerName string, TailCount string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.FetchContainerLogs(ctx, c.bloxPid, wifi.FetchContainerLogsRequest{ContainerName: ContainerName, TailCount: TailCount})
+}
