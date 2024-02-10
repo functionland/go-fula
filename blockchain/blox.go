@@ -347,7 +347,7 @@ func (bl *FxBlockchain) handleFetchContainerLogs(ctx context.Context, from peer.
 			Msg:    res,
 		}
 	}
-
+	log.Debugw("handleFetchContainerLogs response", "out", out)
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		log.Error("failed to write response: %v", err)
