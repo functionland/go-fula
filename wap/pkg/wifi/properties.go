@@ -1,6 +1,7 @@
 package wifi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -222,6 +223,15 @@ func GetContainerInfo(containerName string) (DockerInfo, error) {
 }
 
 func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (string, error) {
+	switch req.ContainerName {
+	case "MainService":
+		return fetchLogsFromFile(ctx, req.ContainerName, req.TailCount)
+	default:
+		return fetchLogsFromDocker(ctx, req.ContainerName, req.TailCount)
+	}
+}
+
+func fetchLogsFromDocker(ctx context.Context, containerName string, tailCount string) (string, error) {
 	cli, err := client.NewClientWithOpts(client.WithAPIVersionNegotiation(), client.WithHost("unix:///var/run/docker.sock"))
 	if err != nil {
 		return "", fmt.Errorf("creating Docker client: %w", err)
@@ -230,9 +240,9 @@ func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (str
 	options := types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Tail:       req.TailCount, // Adjust the number of lines as needed
+		Tail:       tailCount, // Adjust the number of lines as needed
 	}
-	logs, err := cli.ContainerLogs(ctx, req.ContainerName, options)
+	logs, err := cli.ContainerLogs(ctx, containerName, options)
 	if err != nil {
 		return "", fmt.Errorf("getting container logs: %w", err)
 	}
@@ -244,4 +254,27 @@ func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (str
 	}
 
 	return string(logBytes), nil
+}
+
+func fetchLogsFromFile(ctx context.Context, name string, tailCount string) (string, error) {
+	fileName := ""
+	switch name {
+	case "MainService":
+		fileName = "/home/pi/fula.sh.log"
+	default:
+		fileName = ""
+	}
+
+	if fileName != "" {
+		cmd := exec.Command("tail", "-n", tailCount, fileName)
+		var out, stderr bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &stderr // Capture stderr for logging errors.
+		err := cmd.Run()
+		if err != nil {
+			return "", fmt.Errorf("reading system logs: %w | stderr: %s", err, stderr.String())
+		}
+		return out.String(), nil
+	}
+	return "", fmt.Errorf("name is undefined")
 }

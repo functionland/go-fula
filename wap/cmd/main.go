@@ -187,14 +187,14 @@ func handleServerLifecycle(ctx context.Context, serverControl chan bool) {
 				if server == nil {
 					// Start the server
 					server = mdns.StartServer(ctx, 8080) // Adjust port as necessary
-					log.Info("mDNS server started")
+					log.Debug("mDNS server started")
 				}
 			} else {
 				if server != nil {
 					// Stop the server
 					server.Shutdown()
 					server = nil
-					log.Info("mDNS server stopped")
+					log.Debug("mDNS server stopped")
 				}
 			}
 			serverMutex.Unlock()
@@ -328,7 +328,7 @@ func main() {
 		for range ticker.C {
 			// Toggle server state
 			serverControl <- false      // Stop the server
-			time.Sleep(1 * time.Second) // Wait a bit before restarting
+			time.Sleep(3 * time.Second) // Wait a bit before restarting
 			serverControl <- true       // Start the server
 		}
 	}()
