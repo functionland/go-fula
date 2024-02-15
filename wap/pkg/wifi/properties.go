@@ -260,7 +260,7 @@ func fetchLogsFromFile(ctx context.Context, name string, tailCount string) (stri
 	fileName := ""
 	switch name {
 	case "MainService":
-		fileName = "/home/pi/fula.sh.log"
+		fileName = "/home/fula.sh.log"
 	default:
 		fileName = ""
 	}
