@@ -196,3 +196,10 @@ func (c *Client) FetchContainerLogs(ContainerName string, TailCount string) ([]b
 	ctx := context.TODO()
 	return c.bl.FetchContainerLogs(ctx, c.bloxPid, wifi.FetchContainerLogsRequest{ContainerName: ContainerName, TailCount: TailCount})
 }
+
+// GetAccount requests blox at Config.BloxAddr to get the balance of the account.
+// the addr must be a valid multiaddr that includes peer ID.
+func (c *Client) GetFolderSize(folderPath string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetFolderSize(ctx, c.bloxPid, wifi.GetFolderSizeRequest{FolderPath: folderPath})
+}

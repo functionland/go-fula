@@ -30,6 +30,15 @@ type BloxFreeSpaceResponse struct {
 	UsedPercentage float32 `json:"used_percentage"`
 }
 
+type GetFolderSizeRequest struct {
+	FolderPath string `json:"folder_path"`
+}
+
+type GetFolderSizeResponse struct {
+	FolderPath  string `json:"folder_path"`
+	SizeInBytes string `json:"size"`
+}
+
 type FetchContainerLogsResponse struct {
 	Status bool   `json:"status"`
 	Msg    string `json:"msg"`
@@ -109,6 +118,24 @@ func GenerateRandomString(length int) (string, error) {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func GetFolderSize(ctx context.Context, req GetFolderSizeRequest) (GetFolderSizeResponse, error) {
+	cmd := fmt.Sprintf(`du -sb %s | cut -f1`, req.FolderPath)
+	out, err := exec.CommandContext(ctx, "sh", "-c", cmd).Output()
+	if err != nil {
+		return GetFolderSizeResponse{}, fmt.Errorf("error executing shell command: %v", err)
+	}
+
+	sizeInBytes, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+	if err != nil {
+		return GetFolderSizeResponse{}, fmt.Errorf("error parsing folder size: %v", err)
+	}
+
+	return GetFolderSizeResponse{
+		FolderPath:  req.FolderPath,
+		SizeInBytes: fmt.Sprint(sizeInBytes),
+	}, nil
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {

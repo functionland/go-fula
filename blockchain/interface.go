@@ -45,6 +45,7 @@ const (
 	actionDisconnectWifi     = "disconnect-wifi"
 	actionGetAccount         = "get-account"
 	actionFetchContainerLogs = "fetch-container-logs"
+	actionGetFolderSize      = "get-folder-size"
 )
 
 type LinkWithLimit struct {
@@ -356,6 +357,7 @@ type Blockchain interface {
 	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
 	GetAccount(context.Context, peer.ID) ([]byte, error)
 	FetchContainerLogs(context.Context, peer.ID, wifi.FetchContainerLogsRequest) ([]byte, error)
+	GetFolderSize(context.Context, peer.ID, wifi.GetFolderSizeRequest) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -393,6 +395,7 @@ var requestTypes = map[string]reflect.Type{
 	actionDisconnectWifi:     reflect.TypeOf(wifi.DeleteWifiRequest{}),
 	actionGetAccount:         reflect.TypeOf(GetAccountRequest{}),
 	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsRequest{}),
+	actionGetFolderSize:      reflect.TypeOf(wifi.GetFolderSizeRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -430,4 +433,5 @@ var responseTypes = map[string]reflect.Type{
 	actionDisconnectWifi:     reflect.TypeOf(wifi.DeleteWifiResponse{}),
 	actionGetAccount:         reflect.TypeOf(GetAccountResponse{}),
 	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsResponse{}),
+	actionGetFolderSize:      reflect.TypeOf(wifi.GetFolderSizeResponse{}),
 }
