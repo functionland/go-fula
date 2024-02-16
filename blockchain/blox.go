@@ -407,14 +407,14 @@ func (bl *FxBlockchain) handleGetFolderSize(ctx context.Context, from peer.ID, w
 	log.Debugw("handleGetFolderSize received", "req", req)
 
 	out := wifi.GetFolderSizeResponse{
-		FolderPath: "",
+		FolderPath:  "",
 		SizeInBytes: "",
 	}
 	res, err := wifi.GetFolderSize(ctx, req)
 	if err != nil {
 		out = wifi.GetFolderSizeResponse{
-			FolderPath: '',
-			SizeInBytes: 0,
+			FolderPath:  "",
+			SizeInBytes: "",
 		}
 	} else {
 		out = res
