@@ -395,7 +395,7 @@ func (bl *FxBlockchain) handleFetchContainerLogs(ctx context.Context, from peer.
 }
 
 func (bl *FxBlockchain) handleGetFolderSize(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
-	log := log.With("action", actionGetFoldersize, "from", from)
+	log := log.With("action", actionGetFolderSize, "from", from)
 
 	// Parse the JSON body of the request into the DeleteWifiRequest struct
 	var req wifi.GetFolderSizeRequest
@@ -407,8 +407,8 @@ func (bl *FxBlockchain) handleGetFolderSize(ctx context.Context, from peer.ID, w
 	log.Debugw("handleGetFolderSize received", "req", req)
 
 	out := wifi.GetFolderSizeResponse{
-		FolderPath: '',
-		SizeInBytes: 0,
+		FolderPath: "",
+		SizeInBytes: "",
 	}
 	res, err := wifi.GetFolderSize(ctx, req)
 	if err != nil {
