@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -43,6 +44,7 @@ import (
 	"github.com/mdp/qrterminal"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	bip39 "github.com/tyler-smith/go-bip39"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
 	"gopkg.in/yaml.v3"
@@ -72,13 +74,14 @@ var (
 	logger = logging.Logger("fula/cmd/blox")
 	app    struct {
 		cli.App
-		initOnly           bool
-		blockchainEndpoint string
-		secretsPath        string
-		generateNodeKey    bool
-		wireless           bool
-		configPath         string
-		config             struct {
+		initOnly             bool
+		blockchainEndpoint   string
+		secretsPath          string
+		generateNodeKey      bool
+		generateSecretPhrase bool
+		wireless             bool
+		configPath           string
+		config               struct {
 			Identity                  string        `yaml:"identity"`
 			StoreDir                  string        `yaml:"storeDir"`
 			PoolName                  string        `yaml:"poolName"`
@@ -377,6 +380,11 @@ func init() {
 				Usage:       "Generate node key from identity",
 				Destination: &app.generateNodeKey,
 			},
+			&cli.BoolFlag{
+				Name:        "generateSecretPhrase",
+				Usage:       "Generate 12-word Secret Phrase from identity",
+				Destination: &app.generateSecretPhrase,
+			},
 			&cli.StringFlag{
 				Name:        "blockchainEndpoint",
 				Usage:       "Change the blockchain APIs endpoint",
@@ -609,6 +617,22 @@ func action(ctx *cli.Context) error {
 			return fmt.Errorf("error converting node key: %v", err)
 		}
 		fmt.Print(nodeKey)
+		return nil // Exit after generating the node key
+	}
+	if app.generateSecretPhrase {
+		// Execute ConvertBase64PrivateKeyToHexNodeKey with the identity as input
+		hash := sha256.Sum256([]byte(app.config.Identity))
+
+		// Convert the first 128 bits of the hash to entropy for a 12-word mnemonic.
+		// BIP39 expects entropy to be a multiple of 32 bits, so we use the first 16 bytes of the hash.
+		entropy := hash[:16]
+
+		// Generate the mnemonic from the entropy
+		mnemonic, err := bip39.NewMnemonic(entropy)
+		if err != nil {
+			return fmt.Errorf("error NewMnemonic: %v", err)
+		}
+		fmt.Print(mnemonic)
 		return nil // Exit after generating the node key
 	}
 	authorizer, err := peer.Decode(app.config.Authorizer)
