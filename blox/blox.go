@@ -50,6 +50,9 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
+	if opts.ls != nil {
+		p.ls = *opts.ls
+	}
 	p.ex, err = exchange.NewFxExchange(p.h, p.ls, p.exchangeOpts...)
 	if err != nil {
 		return nil, err

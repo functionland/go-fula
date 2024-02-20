@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -20,6 +22,9 @@ import (
 
 	"github.com/functionland/go-fula/blox"
 	"github.com/functionland/go-fula/exchange"
+	ipfsPath "github.com/ipfs/boxo/path"
+	blockformat "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
@@ -27,10 +32,14 @@ import (
 	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
 	coreapi "github.com/ipfs/kubo/core/coreapi"
+	iface "github.com/ipfs/kubo/core/coreiface"
 	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
 	"github.com/ipfs/kubo/plugin/loader"
 	"github.com/ipfs/kubo/repo"
 	"github.com/ipfs/kubo/repo/fsrepo"
+	ipld "github.com/ipld/go-ipld-prime"
+	linking "github.com/ipld/go-ipld-prime/linking"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -605,6 +614,58 @@ func CustomHostOption(h host.Host) kubolibp2p.HostOption {
 	}
 }
 
+// CustomStorageWriteOpener creates a StorageWriteOpener using the IPFS blockstore
+func CustomStorageWriteOpener(ipfsNode *core.IpfsNode) linking.BlockWriteOpener {
+	return func(lnkCtx linking.LinkContext) (io.Writer, linking.BlockWriteCommitter, error) {
+		// The returned io.Writer is where the data will be written.
+		// The BlockWriteCommitter function will be called to "commit" the data once writing is done.
+		var buffer bytes.Buffer
+		committer := func(lnk ipld.Link) error {
+			// Convert the IPLD link to a CID.
+			c, err := cid.Parse(lnk.String())
+			if err != nil {
+				return err
+			}
+
+			// Create an IPFS block with the data from the buffer and the CID.
+			block, err := blockformat.NewBlockWithCid(buffer.Bytes(), c)
+			if err != nil {
+				return err
+			}
+			logger.Debugw("block was created with cid", "block", block, "cid", c)
+
+			// Store the block using the IPFS node's blockstore.
+			err = ipfsNode.Blockstore.Put(context.Background(), block)
+			if err != nil {
+				logger.Errorw("Error in ipfs store", "block", block, "cid", c)
+			}
+			return err
+		}
+
+		return &buffer, committer, nil
+	}
+}
+
+func CustomStorageReadOpener(ipfsApi iface.CoreAPI) ipld.BlockReadOpener {
+	return func(lnkCtx ipld.LinkContext, lnk ipld.Link) (io.Reader, error) {
+		cidLink, ok := lnk.(cidlink.Link)
+		if !ok {
+			return nil, fmt.Errorf("link is not a cid link")
+		}
+		// Convert the CID link to a path
+		p, err := ipfsPath.NewPath("/ipfs/" + cidLink.Cid.String())
+		if err != nil {
+			return nil, err
+		}
+		// Use the Block API's Get method to obtain a reader for the block's data
+		reader, err := ipfsApi.Block().Get(context.Background(), p)
+		if err != nil {
+			return nil, err
+		}
+		return reader, nil
+	}
+}
+
 func action(ctx *cli.Context) error {
 	var wg sync.WaitGroup
 	ctx2, cancel := context.WithCancel(context.Background())
@@ -806,10 +867,15 @@ func action(ctx *cli.Context) error {
 	}()*/
 
 	ds := ipfsNode.Repo.Datastore()
+	linkSystem := cidlink.DefaultLinkSystem()
+	linkSystem.StorageReadOpener = CustomStorageReadOpener(ipfsAPI)
+	linkSystem.StorageWriteOpener = CustomStorageWriteOpener(ipfsNode)
+
 	bb, err := blox.New(
 		blox.WithHost(h),
 		blox.WithWg(&wg),
 		blox.WithDatastore(ds),
+		blox.WithLinkSystem(&linkSystem),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithTopicName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
@@ -821,7 +887,7 @@ func action(ctx *cli.Context) error {
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithWg(&wg),
-			exchange.WithIPFS(ipfsAPI),
+			exchange.WithIPFSApi(ipfsAPI),
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
@@ -853,7 +919,7 @@ func action(ctx *cli.Context) error {
 	}
 
 	logger.Info("Started blox", "addrs", h.Addrs())
-	printMultiaddrAsQR(h)
+	////printMultiaddrAsQR(h)
 
 	// Setup signal handling
 	sig := make(chan os.Signal, 1)

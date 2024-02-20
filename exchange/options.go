@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ipfs/kubo/core"
 	iface "github.com/ipfs/kubo/core/coreiface"
 	"github.com/ipni/index-provider/engine"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -29,6 +30,7 @@ type (
 		wg                       *sync.WaitGroup
 		ipfsApi                  iface.CoreAPI
 		pushRateLimiter          ratelimit.Limiter
+		ipfsNode                 *core.IpfsNode
 	}
 )
 
@@ -142,9 +144,16 @@ func WithWg(wg *sync.WaitGroup) Option {
 	}
 }
 
-func WithIPFS(ipfsApi iface.CoreAPI) Option {
+func WithIPFSApi(ipfsApi iface.CoreAPI) Option {
 	return func(o *options) error {
 		o.ipfsApi = ipfsApi
+		return nil
+	}
+}
+
+func WithIPFSNode(ipfsNode *core.IpfsNode) Option {
+	return func(o *options) error {
+		o.ipfsNode = ipfsNode
 		return nil
 	}
 }
