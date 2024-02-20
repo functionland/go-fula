@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -29,18 +31,20 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	oldcmds "github.com/ipfs/kubo/commands"
 	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
 	coreapi "github.com/ipfs/kubo/core/coreapi"
+	"github.com/ipfs/kubo/core/corehttp"
 	iface "github.com/ipfs/kubo/core/coreiface"
 	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
-	"github.com/ipfs/kubo/plugin/loader"
 	"github.com/ipfs/kubo/repo"
 	"github.com/ipfs/kubo/repo/fsrepo"
 	ipld "github.com/ipld/go-ipld-prime"
 	linking "github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipni/index-provider/engine"
+	goprocess "github.com/jbenet/goprocess"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -50,8 +54,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
+	sockets "github.com/libp2p/go-socket-activation"
 	"github.com/mdp/qrterminal"
 	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	bip39 "github.com/tyler-smith/go-bip39"
 	"github.com/urfave/cli/v2"
@@ -98,6 +104,7 @@ var (
 			ListenAddrs               []string      `yaml:"listenAddrs"`
 			Authorizer                string        `yaml:"authorizer"`
 			AuthorizedPeers           []string      `yaml:"authorizedPeers"`
+			IpfsBootstrapNodes        []string      `yaml:"ipfsBootstrapNodes"`
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
@@ -108,9 +115,10 @@ var (
 			IpniPublishDirectAnnounce []string      `yaml:"IpniPublishDirectAnnounce"`
 			IpniPublisherIdentity     string        `yaml:"ipniPublisherIdentity"`
 
-			listenAddrs    cli.StringSlice
-			staticRelays   cli.StringSlice
-			directAnnounce cli.StringSlice
+			listenAddrs        cli.StringSlice
+			staticRelays       cli.StringSlice
+			ipfsBootstrapNodes cli.StringSlice
+			directAnnounce     cli.StringSlice
 		}
 	}
 )
@@ -233,7 +241,8 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 		}
 
 		// Set the custom configuration
-		conf.Bootstrap = append(conf.Bootstrap, app.config.StaticRelays...)
+		conf.Bootstrap = append(conf.Bootstrap, app.config.IpfsBootstrapNodes...)
+		logger.Debugw("IPFS Bootstrap nodes added", "bootstrap nodes", conf.Bootstrap)
 
 		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
 
@@ -245,25 +254,15 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 
 		// Initialize the repo with the configuration
 		if err := fsrepo.Init(repoPath, &conf); err != nil {
+			logger.Error("Error happened in fsrepo.Init")
 			return nil, err
 		}
-	}
-	plugins, err := loader.NewPluginLoader(repoPath)
-	if err != nil {
-		panic(fmt.Errorf("error loading plugins: %s", err))
-	}
-
-	if err := plugins.Initialize(); err != nil {
-		panic(fmt.Errorf("error initializing plugins: %s", err))
-	}
-
-	if err := plugins.Inject(); err != nil {
-		panic(fmt.Errorf("error initializing plugins: %s", err))
 	}
 
 	// Open the repo
 	repo, err := fsrepo.Open(repoPath)
 	if err != nil {
+		logger.Error("Error happened in fsrepo.Open")
 		return nil, err
 	}
 
@@ -326,6 +325,16 @@ func init() {
 					//"/dns/charlie-relay.dev.fx.land/tcp/4001/p2p/12D3KooWKaK6xRJwjhq6u6yy4Mw2YizyVnKxptoT9yXMn3twgYns",
 					//"/dns/delta-relay.dev.fx.land/tcp/4001/p2p/12D3KooWDtA7kecHAGEB8XYEKHBUTt8GsRfMen1yMs7V85vrpMzC",
 					//"/dns/echo-relay.dev.fx.land/tcp/4001/p2p/12D3KooWQBigsW1tvGmZQet8t5MLMaQnDJKXAP2JNh7d1shk2fb2",
+				),
+			}),
+			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
+				Name:        "ipfsBootstrapNodes",
+				Destination: &app.config.ipfsBootstrapNodes,
+				Value: cli.NewStringSlice(
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
 				),
 			}),
 			altsrc.NewBoolFlag(&cli.BoolFlag{
@@ -521,6 +530,7 @@ func before(ctx *cli.Context) error {
 	}
 	app.config.ListenAddrs = app.config.listenAddrs.Value()
 	app.config.StaticRelays = app.config.staticRelays.Value()
+	app.config.IpfsBootstrapNodes = app.config.ipfsBootstrapNodes.Value()
 	app.config.IpniPublishDirectAnnounce = app.config.directAnnounce.Value()
 	yc, err := yaml.Marshal(app.config)
 	if err != nil {
@@ -664,6 +674,146 @@ func CustomStorageReadOpener(ipfsApi iface.CoreAPI) ipld.BlockReadOpener {
 		}
 		return reader, nil
 	}
+}
+
+// defaultMux tells mux to serve path using the default muxer. This is
+// mostly useful to hook up things that register in the default muxer,
+// and don't provide a convenient http.Handler entry point, such as
+// expvar and http/pprof.
+func defaultMux(path string) corehttp.ServeOption {
+	return func(node *core.IpfsNode, _ net.Listener, mux *http.ServeMux) (*http.ServeMux, error) {
+		mux.Handle(path, http.DefaultServeMux)
+		return mux, nil
+	}
+} // serveHTTPApi collects options, creates listener, prints status message and starts serving requests.
+func rewriteMaddrToUseLocalhostIfItsAny(maddr ma.Multiaddr) ma.Multiaddr {
+	first, rest := ma.SplitFirst(maddr)
+
+	switch {
+	case first.Equal(manet.IP4Unspecified):
+		return manet.IP4Loopback.Encapsulate(rest)
+	case first.Equal(manet.IP6Unspecified):
+		return manet.IP6Loopback.Encapsulate(rest)
+	default:
+		return maddr // not ip
+	}
+}
+func serveHTTPApi(cctx *oldcmds.Context) (<-chan error, error) {
+	cfg, err := cctx.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("serveHTTPApi: GetConfig() failed: %s", err)
+	}
+
+	listeners, err := sockets.TakeListeners("io.ipfs.api")
+	if err != nil {
+		return nil, fmt.Errorf("serveHTTPApi: socket activation failed: %s", err)
+	}
+
+	apiAddrs := make([]string, 0, 2)
+	apiAddr := ""
+	if apiAddr == "" {
+		apiAddrs = cfg.Addresses.API
+	} else {
+		apiAddrs = append(apiAddrs, apiAddr)
+	}
+
+	listenerAddrs := make(map[string]bool, len(listeners))
+	for _, listener := range listeners {
+		listenerAddrs[string(listener.Multiaddr().Bytes())] = true
+	}
+
+	for _, addr := range apiAddrs {
+		apiMaddr, err := ma.NewMultiaddr(addr)
+		if err != nil {
+			return nil, fmt.Errorf("serveHTTPApi: invalid API address: %q (err: %s)", addr, err)
+		}
+		if listenerAddrs[string(apiMaddr.Bytes())] {
+			continue
+		}
+
+		apiLis, err := manet.Listen(apiMaddr)
+		if err != nil {
+			return nil, fmt.Errorf("serveHTTPApi: manet.Listen(%s) failed: %s", apiMaddr, err)
+		}
+
+		listenerAddrs[string(apiMaddr.Bytes())] = true
+		listeners = append(listeners, apiLis)
+	}
+
+	if len(cfg.API.Authorizations) > 0 && len(listeners) > 0 {
+		fmt.Printf("RPC API access is limited by the rules defined in API.Authorizations\n")
+	}
+
+	for _, listener := range listeners {
+		// we might have listened to /tcp/0 - let's see what we are listing on
+		fmt.Printf("RPC API server listening on %s\n", listener.Multiaddr())
+		// Browsers require TCP.
+		switch listener.Addr().Network() {
+		case "tcp", "tcp4", "tcp6":
+			fmt.Printf("WebUI: http://%s/webui\n", listener.Addr())
+		}
+	}
+
+	// by default, we don't let you load arbitrary ipfs objects through the api,
+	// because this would open up the api to scripting vulnerabilities.
+	// only the webui objects are allowed.
+	// if you know what you're doing, go ahead and pass --unrestricted-api.
+	unrestricted := false
+	gatewayOpt := corehttp.GatewayOption(corehttp.WebUIPaths...)
+	if unrestricted {
+		gatewayOpt = corehttp.GatewayOption("/ipfs", "/ipns")
+	}
+
+	opts := []corehttp.ServeOption{
+		corehttp.MetricsCollectionOption("api"),
+		corehttp.MetricsOpenCensusCollectionOption(),
+		corehttp.MetricsOpenCensusDefaultPrometheusRegistry(),
+		corehttp.CheckVersionOption(),
+		corehttp.CommandsOption(*cctx),
+		corehttp.WebUIOption,
+		gatewayOpt,
+		corehttp.VersionOption(),
+		defaultMux("/debug/vars"),
+		defaultMux("/debug/pprof/"),
+		defaultMux("/debug/stack"),
+		corehttp.MutexFractionOption("/debug/pprof-mutex/"),
+		corehttp.BlockProfileRateOption("/debug/pprof-block/"),
+		corehttp.MetricsScrapingOption("/debug/metrics/prometheus"),
+		corehttp.LogOption(),
+	}
+
+	if len(cfg.Gateway.RootRedirect) > 0 {
+		opts = append(opts, corehttp.RedirectOption("", cfg.Gateway.RootRedirect))
+	}
+
+	node, err := cctx.ConstructNode()
+	if err != nil {
+		return nil, fmt.Errorf("serveHTTPApi: ConstructNode() failed: %s", err)
+	}
+
+	if len(listeners) > 0 {
+		// Only add an api file if the API is running.
+		if err := node.Repo.SetAPIAddr(rewriteMaddrToUseLocalhostIfItsAny(listeners[0].Multiaddr())); err != nil {
+			return nil, fmt.Errorf("serveHTTPApi: SetAPIAddr() failed: %w", err)
+		}
+	}
+
+	errc := make(chan error)
+	var wg sync.WaitGroup
+	for _, apiLis := range listeners {
+		wg.Add(1)
+		go func(lis manet.Listener) {
+			defer wg.Done()
+			errc <- corehttp.Serve(node, manet.NetListener(lis), opts...)
+		}(apiLis)
+	}
+
+	go func() {
+		wg.Wait()
+		close(errc)
+	}()
+
+	return errc, nil
 }
 
 func action(ctx *cli.Context) error {
@@ -840,31 +990,62 @@ func action(ctx *cli.Context) error {
 		logger.Info("ipfscoreapi successfully instantiated")
 	}
 
-	/*logger.Debug("called wg.Add in blox start")
-	opts := []corehttp.ServeOption{
-		// Add necessary handlers, CORS, etc.
-		corehttp.GatewayOption("127.0.0.1:5001"),
-		corehttp.CheckVersionOption(),
-		corehttp.HostnameOption(),
-		corehttp.RoutingOption(),
-		corehttp.LogOption(),
-		corehttp.Libp2pGatewayOption(),
-	}
+	const useDefaultIPFSServer = false
 
-	wg.Add(1)
-	go func() {
-		logger.Debug("called wg.Done in Start")
-		defer wg.Done()
-		defer logger.Debug("Start go routine is ending")
-		if ipfsNode.IsOnline {
-			logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
-			err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
-			if err != nil {
-				fmt.Println("Error setting up HTTP API server:", err)
-			}
+	if !useDefaultIPFSServer {
+		ipfsNode.IsDaemon = true
+		logger.Debug("called wg.Add in blox start")
+		logger.Debugw("ipfs started", "condifg path", dirPath)
+
+		cctx := oldcmds.Context{
+			ConfigRoot:    dirPath,
+			ConstructNode: func() (*core.IpfsNode, error) { return ipfsNode, nil },
+			Gateway:       false,
+			// Other necessary fields...
 		}
-		select {}
-	}()*/
+
+		err = cctx.Plugins.Start(ipfsNode)
+		if err != nil {
+			return err
+		}
+		ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
+
+		wg.Add(1)
+		go func() {
+			logger.Debug("called wg.Done in Start")
+			defer wg.Done()
+			defer logger.Debug("Start go routine is ending")
+			defer func() {
+				// We wait for the node to close first, as the node has children
+				// that it will wait for before closing, such as the API server.
+				ipfsNode.Close()
+
+				select {
+				case <-ctx2.Done():
+					logger.Info("Gracefully shut down daemon")
+				default:
+				}
+			}()
+			if ipfsNode.IsOnline {
+				logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
+
+				/*err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
+				if err != nil {
+					fmt.Println("Error setting up HTTP API server:", err)
+				}*/
+				err = cctx.Plugins.Start(ipfsNode)
+				if err != nil {
+					logger.Errorw("Error in Plugins Start", "err", err)
+				}
+				ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
+				_, err := serveHTTPApi(&cctx)
+				if err != nil {
+					fmt.Println("Error setting up HTTP API server:", err)
+				}
+			}
+			select {}
+		}()
+	}
 
 	ds := ipfsNode.Repo.Datastore()
 	linkSystem := cidlink.DefaultLinkSystem()
@@ -884,6 +1065,7 @@ func action(ctx *cli.Context) error {
 		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
 		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),
+		blox.WithDefaultIPFShttpServer(useDefaultIPFSServer),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithWg(&wg),

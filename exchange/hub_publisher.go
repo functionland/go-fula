@@ -148,5 +148,6 @@ func (p *hubPublisher) publish(mhs []multihash.Multihash) error {
 func (p *hubPublisher) shutdown() error {
 	p.cancel()
 	p.ipniPublishTicker.Stop()
+	log.Info("ipniPublishTicker stopped")
 	return nil
 }

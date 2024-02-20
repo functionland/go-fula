@@ -23,25 +23,26 @@ type (
 	Option          func(*options) error
 	PoolNameUpdater func(string) error
 	options         struct {
-		h                  host.Host
-		name               string
-		topicName          string
-		storeDir           string
-		announceInterval   time.Duration
-		ds                 datastore.Batching
-		ls                 *ipld.LinkSystem
-		authorizer         peer.ID
-		authorizedPeers    []peer.ID
-		exchangeOpts       []exchange.Option
-		relays             []string
-		updatePoolName     PoolNameUpdater
-		pingCount          int
-		maxPingTime        int
-		minSuccessRate     int
-		blockchainEndpoint string
-		secretsPath        string
-		IPFShttpServer     *http.Server
-		wg                 *sync.WaitGroup
+		h                     host.Host
+		name                  string
+		topicName             string
+		storeDir              string
+		announceInterval      time.Duration
+		ds                    datastore.Batching
+		ls                    *ipld.LinkSystem
+		authorizer            peer.ID
+		authorizedPeers       []peer.ID
+		exchangeOpts          []exchange.Option
+		relays                []string
+		updatePoolName        PoolNameUpdater
+		pingCount             int
+		maxPingTime           int
+		minSuccessRate        int
+		blockchainEndpoint    string
+		secretsPath           string
+		IPFShttpServer        *http.Server
+		DefaultIPFShttpServer bool
+		wg                    *sync.WaitGroup
 	}
 )
 
@@ -152,6 +153,13 @@ func WithAnnounceInterval(i time.Duration) Option {
 func WithDatastore(ds datastore.Batching) Option {
 	return func(o *options) error {
 		o.ds = ds
+		return nil
+	}
+}
+
+func WithDefaultIPFShttpServer(n bool) Option {
+	return func(o *options) error {
+		o.DefaultIPFShttpServer = n
 		return nil
 	}
 }
