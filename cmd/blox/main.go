@@ -623,25 +623,23 @@ func CustomStorageReadOpener(ctx ipld.LinkContext, lnk ipld.Link) (io.Reader, er
 	cidStr := lnk.String()
 	url := fmt.Sprintf("%s/api/v0/block/get?arg=%s", baseURL, cidStr)
 
-	// Create a new request with POST method
-	req, err := http.NewRequest("POST", url, nil)
+	// Making a POST request, assuming the IPFS node accepts POST for this endpoint.
+	// Adjust if your node's configuration or version requires otherwise.
+	req, err := http.NewRequestWithContext(ctx.Ctx, "POST", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating request failed: %v", err)
 	}
 
-	// Execute the request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("executing request failed: %v", err)
 	}
 
-	// Check for HTTP error status codes
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close() // Ensure to close the body to prevent resource leaks
+		resp.Body.Close() // Ensure we don't leak resources
 		return nil, fmt.Errorf("failed to get block: CID %s, HTTP status %d", cidStr, resp.StatusCode)
 	}
 
-	// The response body contains the block data
 	return resp.Body, nil
 }
 
