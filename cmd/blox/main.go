@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -8,7 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -20,30 +25,34 @@ import (
 
 	"github.com/functionland/go-fula/blox"
 	"github.com/functionland/go-fula/exchange"
-	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	oldcmds "github.com/ipfs/kubo/commands"
 	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
 	coreapi "github.com/ipfs/kubo/core/coreapi"
+	"github.com/ipfs/kubo/core/corehttp"
 	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
-	"github.com/ipfs/kubo/plugin/loader"
 	"github.com/ipfs/kubo/repo"
 	"github.com/ipfs/kubo/repo/fsrepo"
+	ipld "github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/linking"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipni/index-provider/engine"
+	goprocess "github.com/jbenet/goprocess"
 	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
+	sockets "github.com/libp2p/go-socket-activation"
 	"github.com/mdp/qrterminal"
 	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/multiformats/go-multicodec"
 	bip39 "github.com/tyler-smith/go-bip39"
 	"github.com/urfave/cli/v2"
 	"github.com/urfave/cli/v2/altsrc"
@@ -71,8 +80,9 @@ type Child struct {
 }
 
 var (
-	logger = logging.Logger("fula/cmd/blox")
-	app    struct {
+	logger  = logging.Logger("fula/cmd/blox")
+	baseURL = "http://localhost:5002"
+	app     struct {
 		cli.App
 		initOnly             bool
 		blockchainEndpoint   string
@@ -89,6 +99,7 @@ var (
 			ListenAddrs               []string      `yaml:"listenAddrs"`
 			Authorizer                string        `yaml:"authorizer"`
 			AuthorizedPeers           []string      `yaml:"authorizedPeers"`
+			IpfsBootstrapNodes        []string      `yaml:"ipfsBootstrapNodes"`
 			StaticRelays              []string      `yaml:"staticRelays"`
 			ForceReachabilityPrivate  bool          `yaml:"forceReachabilityPrivate"`
 			AllowTransientConnection  bool          `yaml:"allowTransientConnection"`
@@ -99,9 +110,10 @@ var (
 			IpniPublishDirectAnnounce []string      `yaml:"IpniPublishDirectAnnounce"`
 			IpniPublisherIdentity     string        `yaml:"ipniPublisherIdentity"`
 
-			listenAddrs    cli.StringSlice
-			staticRelays   cli.StringSlice
-			directAnnounce cli.StringSlice
+			listenAddrs        cli.StringSlice
+			staticRelays       cli.StringSlice
+			ipfsBootstrapNodes cli.StringSlice
+			directAnnounce     cli.StringSlice
 		}
 	}
 )
@@ -224,7 +236,8 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 		}
 
 		// Set the custom configuration
-		conf.Bootstrap = append(conf.Bootstrap, app.config.StaticRelays...)
+		conf.Bootstrap = append(conf.Bootstrap, app.config.IpfsBootstrapNodes...)
+		logger.Debugw("IPFS Bootstrap nodes added", "bootstrap nodes", conf.Bootstrap)
 
 		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
 
@@ -236,25 +249,15 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 
 		// Initialize the repo with the configuration
 		if err := fsrepo.Init(repoPath, &conf); err != nil {
+			logger.Error("Error happened in fsrepo.Init")
 			return nil, err
 		}
-	}
-	plugins, err := loader.NewPluginLoader(repoPath)
-	if err != nil {
-		panic(fmt.Errorf("error loading plugins: %s", err))
-	}
-
-	if err := plugins.Initialize(); err != nil {
-		panic(fmt.Errorf("error initializing plugins: %s", err))
-	}
-
-	if err := plugins.Inject(); err != nil {
-		panic(fmt.Errorf("error initializing plugins: %s", err))
 	}
 
 	// Open the repo
 	repo, err := fsrepo.Open(repoPath)
 	if err != nil {
+		logger.Error("Error happened in fsrepo.Open")
 		return nil, err
 	}
 
@@ -319,6 +322,16 @@ func init() {
 					//"/dns/echo-relay.dev.fx.land/tcp/4001/p2p/12D3KooWQBigsW1tvGmZQet8t5MLMaQnDJKXAP2JNh7d1shk2fb2",
 				),
 			}),
+			altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
+				Name:        "ipfsBootstrapNodes",
+				Destination: &app.config.ipfsBootstrapNodes,
+				Value: cli.NewStringSlice(
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+					"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+				),
+			}),
 			altsrc.NewBoolFlag(&cli.BoolFlag{
 				Name:        "forceReachabilityPrivate",
 				Aliases:     []string{"frp"},
@@ -345,7 +358,7 @@ func init() {
 				Aliases:     []string{"mcidpr"},
 				Usage:       "Maximum number of CIDs pushed per second.",
 				Destination: &app.config.MaxCIDPushRate,
-				Value:       100,
+				Value:       20,
 			}),
 			altsrc.NewBoolFlag(&cli.BoolFlag{
 				Name:        "ipniPublisherDisabled",
@@ -512,6 +525,7 @@ func before(ctx *cli.Context) error {
 	}
 	app.config.ListenAddrs = app.config.listenAddrs.Value()
 	app.config.StaticRelays = app.config.staticRelays.Value()
+	app.config.IpfsBootstrapNodes = app.config.ipfsBootstrapNodes.Value()
 	app.config.IpniPublishDirectAnnounce = app.config.directAnnounce.Value()
 	yc, err := yaml.Marshal(app.config)
 	if err != nil {
@@ -603,6 +617,261 @@ func CustomHostOption(h host.Host) kubolibp2p.HostOption {
 	return func(id peer.ID, ps peerstore.Peerstore, options ...libp2p.Option) (host.Host, error) {
 		return h, nil
 	}
+}
+
+func CustomStorageReadOpener(ctx ipld.LinkContext, lnk ipld.Link) (io.Reader, error) {
+	cidStr := lnk.String()
+	url := fmt.Sprintf("%s/api/v0/block/get?arg=%s", baseURL, cidStr)
+
+	// Making a POST request, assuming the IPFS node accepts POST for this endpoint.
+	// Adjust if your node's configuration or version requires otherwise.
+	req, err := http.NewRequestWithContext(ctx.Ctx, "POST", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request failed: %v", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing request failed: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close() // Ensure we don't leak resources
+		return nil, fmt.Errorf("failed to get block: CID %s, HTTP status %d", cidStr, resp.StatusCode)
+	}
+
+	return resp.Body, nil
+}
+
+// CustomWriter captures written data and allows it to be retrieved.
+type CustomWriter struct {
+	Buffer *bytes.Buffer
+}
+
+// NewCustomWriter creates a new CustomWriter instance.
+func NewCustomWriter() *CustomWriter {
+	return &CustomWriter{
+		Buffer: new(bytes.Buffer),
+	}
+}
+
+// Write captures data written to the writer.
+func (cw *CustomWriter) Write(p []byte) (n int, err error) {
+	return cw.Buffer.Write(p)
+}
+
+// CustomStorageWriteOpener opens a block for writing to an external IPFS node via HTTP API.
+func CustomStorageWriteOpener(lctx linking.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
+	cw := NewCustomWriter()
+
+	committer := func(lnk ipld.Link) error {
+		cidLink, ok := lnk.(cidlink.Link)
+		if !ok {
+			logger.Errorf("link is not a CID link")
+			return fmt.Errorf("link is not a CID link")
+		}
+
+		c := cidLink.Cid
+		cidCodec := c.Type()
+		mhType := c.Prefix().MhType
+
+		// Dynamically construct the URL with the cid-codec and mhtype
+		url := fmt.Sprintf("%s/api/v0/block/put?cid-codec=%s&mhtype=%s&mhlen=-1&pin=true&allow-big-block=false", baseURL, multicodec.Code(cidCodec), multicodec.Code(mhType))
+
+		formData := &bytes.Buffer{}
+		writer := multipart.NewWriter(formData)
+		part, err := writer.CreateFormFile("file", "block.data")
+		if err != nil {
+			return err
+		}
+
+		if _, err := part.Write(cw.Buffer.Bytes()); err != nil {
+			return err
+		}
+
+		if err := writer.Close(); err != nil {
+			return err
+		}
+
+		req, reqErr := http.NewRequestWithContext(lctx.Ctx, "POST", url, formData)
+		if reqErr != nil {
+			logger.Errorf("Failed to NewRequestWithContext: %s", reqErr)
+			return reqErr
+		}
+
+		// Set the Content-Type header to multipart/form-data with the boundary parameter
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("HTTP request failed: status %d", resp.StatusCode)
+		}
+
+		// Optionally read response to get the CID from the response if necessary
+		var respData struct {
+			Key  string `json:"Key"`
+			Size int    `json:"Size"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+			logger.Errorf("Failed to NewDecoder: %s", err)
+			return err
+		}
+
+		// Verify the CID matches if necessary
+		if respData.Key != c.String() {
+			return fmt.Errorf("mismatched CIDs: expected %s, got %s", c.String(), respData.Key)
+		}
+		logger.Debugw("Write cid finished", "cid", c)
+		return nil
+	}
+
+	return cw, committer, nil
+}
+
+// defaultMux tells mux to serve path using the default muxer. This is
+// mostly useful to hook up things that register in the default muxer,
+// and don't provide a convenient http.Handler entry point, such as
+// expvar and http/pprof.
+func defaultMux(path string) corehttp.ServeOption {
+	return func(node *core.IpfsNode, _ net.Listener, mux *http.ServeMux) (*http.ServeMux, error) {
+		mux.Handle(path, http.DefaultServeMux)
+		return mux, nil
+	}
+} // serveHTTPApi collects options, creates listener, prints status message and starts serving requests.
+func rewriteMaddrToUseLocalhostIfItsAny(maddr ma.Multiaddr) ma.Multiaddr {
+	first, rest := ma.SplitFirst(maddr)
+
+	switch {
+	case first.Equal(manet.IP4Unspecified):
+		return manet.IP4Loopback.Encapsulate(rest)
+	case first.Equal(manet.IP6Unspecified):
+		return manet.IP6Loopback.Encapsulate(rest)
+	default:
+		return maddr // not ip
+	}
+}
+func serveHTTPApi(cctx *oldcmds.Context) (<-chan error, error) {
+	cfg, err := cctx.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("serveHTTPApi: GetConfig() failed: %s", err)
+	}
+
+	listeners, err := sockets.TakeListeners("io.ipfs.api")
+	if err != nil {
+		return nil, fmt.Errorf("serveHTTPApi: socket activation failed: %s", err)
+	}
+
+	apiAddrs := make([]string, 0, 2)
+	apiAddr := ""
+	if apiAddr == "" {
+		apiAddrs = cfg.Addresses.API
+	} else {
+		apiAddrs = append(apiAddrs, apiAddr)
+	}
+
+	listenerAddrs := make(map[string]bool, len(listeners))
+	for _, listener := range listeners {
+		listenerAddrs[string(listener.Multiaddr().Bytes())] = true
+	}
+
+	for _, addr := range apiAddrs {
+		apiMaddr, err := ma.NewMultiaddr(addr)
+		if err != nil {
+			return nil, fmt.Errorf("serveHTTPApi: invalid API address: %q (err: %s)", addr, err)
+		}
+		if listenerAddrs[string(apiMaddr.Bytes())] {
+			continue
+		}
+
+		apiLis, err := manet.Listen(apiMaddr)
+		if err != nil {
+			return nil, fmt.Errorf("serveHTTPApi: manet.Listen(%s) failed: %s", apiMaddr, err)
+		}
+
+		listenerAddrs[string(apiMaddr.Bytes())] = true
+		listeners = append(listeners, apiLis)
+	}
+
+	if len(cfg.API.Authorizations) > 0 && len(listeners) > 0 {
+		fmt.Printf("RPC API access is limited by the rules defined in API.Authorizations\n")
+	}
+
+	for _, listener := range listeners {
+		// we might have listened to /tcp/0 - let's see what we are listing on
+		fmt.Printf("RPC API server listening on %s\n", listener.Multiaddr())
+		// Browsers require TCP.
+		switch listener.Addr().Network() {
+		case "tcp", "tcp4", "tcp6":
+			fmt.Printf("WebUI: http://%s/webui\n", listener.Addr())
+		}
+	}
+
+	// by default, we don't let you load arbitrary ipfs objects through the api,
+	// because this would open up the api to scripting vulnerabilities.
+	// only the webui objects are allowed.
+	// if you know what you're doing, go ahead and pass --unrestricted-api.
+	unrestricted := false
+	gatewayOpt := corehttp.GatewayOption(corehttp.WebUIPaths...)
+	if unrestricted {
+		gatewayOpt = corehttp.GatewayOption("/ipfs", "/ipns")
+	}
+
+	opts := []corehttp.ServeOption{
+		corehttp.MetricsCollectionOption("api"),
+		corehttp.MetricsOpenCensusCollectionOption(),
+		corehttp.MetricsOpenCensusDefaultPrometheusRegistry(),
+		corehttp.CheckVersionOption(),
+		corehttp.CommandsOption(*cctx),
+		corehttp.WebUIOption,
+		gatewayOpt,
+		corehttp.VersionOption(),
+		defaultMux("/debug/vars"),
+		defaultMux("/debug/pprof/"),
+		defaultMux("/debug/stack"),
+		corehttp.MutexFractionOption("/debug/pprof-mutex/"),
+		corehttp.BlockProfileRateOption("/debug/pprof-block/"),
+		corehttp.MetricsScrapingOption("/debug/metrics/prometheus"),
+		corehttp.LogOption(),
+	}
+
+	if len(cfg.Gateway.RootRedirect) > 0 {
+		opts = append(opts, corehttp.RedirectOption("", cfg.Gateway.RootRedirect))
+	}
+
+	node, err := cctx.ConstructNode()
+	if err != nil {
+		return nil, fmt.Errorf("serveHTTPApi: ConstructNode() failed: %s", err)
+	}
+
+	if len(listeners) > 0 {
+		// Only add an api file if the API is running.
+		if err := node.Repo.SetAPIAddr(rewriteMaddrToUseLocalhostIfItsAny(listeners[0].Multiaddr())); err != nil {
+			return nil, fmt.Errorf("serveHTTPApi: SetAPIAddr() failed: %w", err)
+		}
+	}
+
+	errc := make(chan error)
+	var wg sync.WaitGroup
+	for _, apiLis := range listeners {
+		wg.Add(1)
+		go func(lis manet.Listener) {
+			defer wg.Done()
+			errc <- corehttp.Serve(node, manet.NetListener(lis), opts...)
+		}(apiLis)
+	}
+
+	go func() {
+		wg.Wait()
+		close(errc)
+	}()
+
+	return errc, nil
 }
 
 func action(ctx *cli.Context) error {
@@ -749,67 +1018,102 @@ func action(ctx *cli.Context) error {
 	}*/
 
 	dirPath := filepath.Dir(app.configPath)
-	repo, err := CreateCustomRepo(ctx2, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
-	if err != nil {
-		logger.Fatal(err)
-		return err
-	}
-
-	ipfsConfig := &core.BuildCfg{
-		Online:    true,
-		Permanent: true,
-		Host:      CustomHostOption(h),
-		Routing:   kubolibp2p.DHTOption,
-		Repo:      repo,
-	}
-
-	ipfsNode, err := core.NewNode(ctx2, ipfsConfig)
-	if err != nil {
-		logger.Fatal(err)
-		return err
-	}
-	ipfsHostId := ipfsNode.PeerHost.ID()
-	ipfsId := ipfsNode.Identity.String()
-	logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
-	ipfsAPI, err := coreapi.NewCoreAPI(ipfsNode)
-	if err != nil {
-		panic(fmt.Errorf("failed to create IPFS API: %w", err))
-	}
-	if ipfsAPI != nil {
-		logger.Info("ipfscoreapi successfully instantiated")
-	}
-
-	/*logger.Debug("called wg.Add in blox start")
-	opts := []corehttp.ServeOption{
-		// Add necessary handlers, CORS, etc.
-		corehttp.GatewayOption("127.0.0.1:5001"),
-		corehttp.CheckVersionOption(),
-		corehttp.HostnameOption(),
-		corehttp.RoutingOption(),
-		corehttp.LogOption(),
-		corehttp.Libp2pGatewayOption(),
-	}
-
-	wg.Add(1)
-	go func() {
-		logger.Debug("called wg.Done in Start")
-		defer wg.Done()
-		defer logger.Debug("Start go routine is ending")
-		if ipfsNode.IsOnline {
-			logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
-			err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
-			if err != nil {
-				fmt.Println("Error setting up HTTP API server:", err)
-			}
+	const useDefaultIPFSServer = true
+	if !useDefaultIPFSServer {
+		repo, err := CreateCustomRepo(ctx2, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
+		if err != nil {
+			logger.Fatal(err)
+			return err
 		}
-		select {}
-	}()*/
 
-	ds := ipfsNode.Repo.Datastore()
+		ipfsConfig := &core.BuildCfg{
+			Online:    true,
+			Permanent: true,
+			Host:      CustomHostOption(h),
+			Routing:   kubolibp2p.DHTOption,
+			Repo:      repo,
+		}
+
+		ipfsNode, err := core.NewNode(ctx2, ipfsConfig)
+		if err != nil {
+			logger.Fatal(err)
+			return err
+		}
+		ipfsHostId := ipfsNode.PeerHost.ID()
+		ipfsId := ipfsNode.Identity.String()
+		logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
+		ipfsAPI, err := coreapi.NewCoreAPI(ipfsNode)
+		if err != nil {
+			panic(fmt.Errorf("failed to create IPFS API: %w", err))
+		}
+		if ipfsAPI != nil {
+			logger.Info("ipfscoreapi successfully instantiated")
+		}
+
+		ipfsNode.IsDaemon = true
+		logger.Debug("called wg.Add in blox start")
+		logger.Debugw("ipfs started", "condifg path", dirPath)
+
+		cctx := oldcmds.Context{
+			ConfigRoot:    dirPath,
+			ConstructNode: func() (*core.IpfsNode, error) { return ipfsNode, nil },
+			Gateway:       false,
+			// Other necessary fields...
+		}
+
+		err = cctx.Plugins.Start(ipfsNode)
+		if err != nil {
+			return err
+		}
+		ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
+
+		wg.Add(1)
+		go func() {
+			logger.Debug("called wg.Done in Start")
+			defer wg.Done()
+			defer logger.Debug("Start go routine is ending")
+			defer func() {
+				// We wait for the node to close first, as the node has children
+				// that it will wait for before closing, such as the API server.
+				ipfsNode.Close()
+
+				select {
+				case <-ctx2.Done():
+					logger.Info("Gracefully shut down daemon")
+				default:
+				}
+			}()
+			if ipfsNode.IsOnline {
+				logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
+
+				/*err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
+				if err != nil {
+					fmt.Println("Error setting up HTTP API server:", err)
+				}*/
+				err = cctx.Plugins.Start(ipfsNode)
+				if err != nil {
+					logger.Errorw("Error in Plugins Start", "err", err)
+				}
+				ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
+				_, err := serveHTTPApi(&cctx)
+				if err != nil {
+					fmt.Println("Error setting up HTTP API server:", err)
+				}
+			}
+			select {}
+		}()
+	}
+
+	//ds := ipfsNode.Repo.Datastore()
+	linkSystem := cidlink.DefaultLinkSystem()
+	linkSystem.StorageReadOpener = CustomStorageReadOpener
+	linkSystem.StorageWriteOpener = CustomStorageWriteOpener
+
 	bb, err := blox.New(
 		blox.WithHost(h),
 		blox.WithWg(&wg),
-		blox.WithDatastore(ds),
+		//blox.WithDatastore(ds),
+		blox.WithLinkSystem(&linkSystem),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithTopicName(app.config.PoolName),
 		blox.WithStoreDir(app.config.StoreDir),
@@ -818,10 +1122,11 @@ func action(ctx *cli.Context) error {
 		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
 		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),
+		blox.WithDefaultIPFShttpServer(useDefaultIPFSServer),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithWg(&wg),
-			exchange.WithIPFS(ipfsAPI),
+			//exchange.WithIPFSApi(ipfsAPI),
 			exchange.WithAuthorizer(authorizer),
 			exchange.WithAuthorizedPeers(authorizedPeers),
 			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
@@ -831,17 +1136,17 @@ func action(ctx *cli.Context) error {
 			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
 			exchange.WithIpniProviderEngineOptions(
 				engine.WithHost(ipnih),
-				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
+				//engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
 				engine.WithPublisherKind(engine.DataTransferPublisher),
 				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
 			),
-			exchange.WithDhtProviderOptions(
-				dht.Datastore(namespace.Wrap(ds, datastore.NewKey("dht"))),
+			/*exchange.WithDhtProviderOptions(
+				//dht.Datastore(namespace.Wrap(ds, datastore.NewKey("dht"))),
 				dht.ProtocolExtension(protocol.ID("/"+app.config.PoolName)),
 				dht.ProtocolPrefix("/fula"),
 				dht.Resiliency(1),
 				dht.Mode(dht.ModeAutoServer),
-			),
+			),*/
 		),
 	)
 	if err != nil {
@@ -853,7 +1158,7 @@ func action(ctx *cli.Context) error {
 	}
 
 	logger.Info("Started blox", "addrs", h.Addrs())
-	printMultiaddrAsQR(h)
+	////printMultiaddrAsQR(h)
 
 	// Setup signal handling
 	sig := make(chan os.Signal, 1)

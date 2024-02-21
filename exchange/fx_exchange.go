@@ -762,13 +762,17 @@ func (e *FxExchange) cleanupTempAuths() {
 }
 
 func (e *FxExchange) Shutdown(ctx context.Context) error {
+	log.Info("Started shutdown IPNI publisher")
 	//if !e.ipniPublishDisabled {
 	if err := e.pub.shutdown(); err != nil {
 		log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
 	}
+	log.Info("Completed shutdown IPNI publisher")
 	e.dht.dh.Close()
 	e.dht.Shutdown()
+	log.Info("Completed shutdown dht")
 	//}
 	e.c.CloseIdleConnections()
+	log.Info("Completed CloseIdleConnections")
 	return e.s.Shutdown(ctx)
 }

@@ -228,7 +228,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 				log.Errorw("Failed to publish iexist announcement", "err", err)
 				continue
 			}
-			log.Infow("Announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
+			log.Debugw("Announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
 		}
 	}
 }

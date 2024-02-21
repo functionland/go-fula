@@ -50,6 +50,9 @@ func New(o ...Option) (*Blox, error) {
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
+	if opts.ls != nil {
+		p.ls = *opts.ls
+	}
 	p.ex, err = exchange.NewFxExchange(p.h, p.ls, p.exchangeOpts...)
 	if err != nil {
 		return nil, err
@@ -262,24 +265,26 @@ func (p *Blox) Start(ctx context.Context) error {
 	}
 
 	// Create an HTTP server instance
-	p.IPFShttpServer = &http.Server{
-		Addr:    "127.0.0.1:5001",
-		Handler: p.ServeIpfsRpc(),
-	}
-
-	log.Debug("called wg.Add in blox start")
-	p.wg.Add(1)
-	go func() {
-		log.Debug("called wg.Done in Start blox")
-		defer p.wg.Done()
-		defer log.Debug("Start blox go routine is ending")
-		log.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
-		if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
-			log.Errorw("IPFS RPC server stopped erroneously", "err", err)
-		} else {
-			log.Infow("IPFS RPC server stopped")
+	if p.DefaultIPFShttpServer {
+		p.IPFShttpServer = &http.Server{
+			Addr:    "127.0.0.1:5001",
+			Handler: p.ServeIpfsRpc(),
 		}
-	}()
+
+		log.Debug("called wg.Add in blox start")
+		p.wg.Add(1)
+		go func() {
+			log.Debug("called wg.Done in Start blox")
+			defer p.wg.Done()
+			defer log.Debug("Start blox go routine is ending")
+			log.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
+			if err := p.IPFShttpServer.ListenAndServe(); err != http.ErrServerClosed {
+				log.Errorw("IPFS RPC server stopped erroneously", "err", err)
+			} else {
+				log.Infow("IPFS RPC server stopped")
+			}
+		}()
+	}
 
 	if anErr == nil {
 		log.Debug("called wg.Add in AnnounceIExistPeriodically")
@@ -447,6 +452,10 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	// Cancel the context to signal all operations to stop
 	p.cancel()
 
+	// Use a separate context for shutdown with a timeout
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancelShutdown()
+
 	// Shutdown the various components
 	if bErr := p.bl.Shutdown(ctx); bErr != nil {
 		log.Errorw("Error occurred in blockchain shutdown", "bErr", bErr)
@@ -497,9 +506,17 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 		// Handle remaining errors after all goroutines have finished
 		log.Debug("Shutdown done")
 		return nil
-	case <-ctx.Done():
-		err := ctx.Err()
+	case <-shutdownCtx.Done():
+		err := shutdownCtx.Err()
 		log.Infow("Shutdown completed with timeout", "err", err)
+	}
+
+	// Check for errors from shutdownCtx
+	if err := shutdownCtx.Err(); err == context.DeadlineExceeded {
+		// Handle the case where shutdown did not complete in time
+		log.Warn("Shutdown did not complete in the allotted time")
 		return err
 	}
+
+	return nil
 }
