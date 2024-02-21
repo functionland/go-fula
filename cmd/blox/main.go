@@ -676,7 +676,7 @@ func CustomStorageWriteOpener(lctx linking.LinkContext) (io.Writer, ipld.BlockWr
 		mhType := c.Prefix().MhType
 
 		// Dynamically construct the URL with the cid-codec and mhtype
-		url := fmt.Sprintf("%s/api/v0/block/put?cid-codec=%s&mhtype=%s&mhlen=-1&pin=false&allow-big-block=false", baseURL, multicodec.Code(cidCodec), multicodec.Code(mhType))
+		url := fmt.Sprintf("%s/api/v0/block/put?cid-codec=%s&mhtype=%s&mhlen=-1&pin=true&allow-big-block=false", baseURL, multicodec.Code(cidCodec), multicodec.Code(mhType))
 
 		formData := &bytes.Buffer{}
 		writer := multipart.NewWriter(formData)
