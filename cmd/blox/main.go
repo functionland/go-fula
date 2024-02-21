@@ -32,6 +32,7 @@ import (
 	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipfs/kubo/client/rpc"
 	oldcmds "github.com/ipfs/kubo/commands"
 	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
@@ -55,7 +56,6 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	sockets "github.com/libp2p/go-socket-activation"
 	"github.com/mdp/qrterminal"
-	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/multiformats/go-multicodec"
@@ -1012,17 +1012,17 @@ func action(ctx *cli.Context) error {
 		return nil
 	}
 
-	listenAddrs := make([]multiaddr.Multiaddr, 0, len(app.config.ListenAddrs)+1)
+	listenAddrs := make([]ma.Multiaddr, 0, len(app.config.ListenAddrs)+1)
 	// Convert string addresses to multiaddr and append to listenAddrs
 	for _, addrString := range app.config.ListenAddrs {
-		addr, err := multiaddr.NewMultiaddr(addrString)
+		addr, err := ma.NewMultiaddr(addrString)
 		if err != nil {
 			panic(fmt.Errorf("invalid multiaddress: %w", err))
 		}
 		listenAddrs = append(listenAddrs, addr)
 	}
 	// Add the relay multiaddress
-	relayAddr2, err := multiaddr.NewMultiaddr("/p2p-circuit")
+	relayAddr2, err := ma.NewMultiaddr("/p2p-circuit")
 	if err != nil {
 		panic(fmt.Errorf("error creating relay multiaddress: %w", err))
 	}
@@ -1045,7 +1045,7 @@ func action(ctx *cli.Context) error {
 
 	sr := make([]peer.AddrInfo, 0, len(app.config.StaticRelays))
 	for _, relay := range app.config.StaticRelays {
-		rma, err := multiaddr.NewMultiaddr(relay)
+		rma, err := ma.NewMultiaddr(relay)
 		if err != nil {
 			return err
 		}
@@ -1083,6 +1083,11 @@ func action(ctx *cli.Context) error {
 	linkSystem := cidlink.DefaultLinkSystem()
 	linkSystem.StorageReadOpener = CustomStorageReadOpenerNone
 	linkSystem.StorageWriteOpener = CustomStorageWriteOpenerNone
+	nodeMultiAddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/5001")
+	if err != nil {
+		panic(fmt.Errorf("invalid multiaddress: %w", err))
+	}
+	node, err := rpc.NewApi(nodeMultiAddr)
 
 	const useIPFSServer = "none" //internal: runs local ipfs instance, none requires an external one and fula runs the mock server on 5001
 	if useIPFSServer == "internal" {
@@ -1188,6 +1193,7 @@ func action(ctx *cli.Context) error {
 		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),
 		blox.WithDefaultIPFShttpServer(useIPFSServer),
+		blox.WithIpfsClient(node),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithWg(&wg),
@@ -1243,7 +1249,7 @@ func action(ctx *cli.Context) error {
 }
 
 func printMultiaddrAsQR(h host.Host) {
-	var addr multiaddr.Multiaddr
+	var addr ma.Multiaddr
 	addrs := h.Addrs()
 
 	switch len(addrs) {

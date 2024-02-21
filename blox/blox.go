@@ -13,6 +13,7 @@ import (
 	"github.com/functionland/go-fula/exchange"
 	"github.com/functionland/go-fula/ping"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
+	"github.com/ipfs/boxo/path"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -98,6 +99,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithUpdatePoolName(p.updatePoolName),
 		blockchain.WithRelays(p.relays),
 		blockchain.WithMaxPingTime(p.maxPingTime),
+		blockchain.WithIpfsClient(p.rpc),
 		blockchain.WithMinSuccessPingCount(p.minSuccessRate*p.pingCount/100),
 	)
 	if err != nil {
@@ -137,7 +139,7 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 
 			replicas := len(providers)
 			log.Debugw("Checking replicas vs limit", "replicas", replicas, "limit", limit)
-			if replicas < limit {
+			if replicas <= limit {
 				addrStr := "/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835/p2p-circuit/p2p/" + provider.ID.String()
 				addr, err := multiaddr.NewMultiaddr(addrStr)
 				if err != nil {
@@ -148,10 +150,19 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 				log.Debugw("Started Pull in StoreCid", "from", provider.ID, "l", l)
 				err = p.ex.PullBlock(ctx, provider.ID, l)
 				if err != nil {
-					log.Errorw("Error happened in pulling from provider", "err", err)
+					log.Errorw("Error happened in pulling from provider", "l", l, "err", err)
 					continue
 				}
-				log.Debugw("link might be successfully stored", "l", l, "from", provider.ID)
+				cidLink := l.(cidlink.Link).Cid
+				cidPath := path.FromCid(cidLink)
+				statCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+				defer cancel() // Ensures resources are cleaned up after the Stat call
+				stat, err := p.rpc.Block().Stat(statCtx, cidPath)
+				if err != nil {
+					log.Errorw("It seems that the link is not stored", "l", l, "err", err)
+					continue
+				}
+				log.Debugw("link might be successfully stored", "l", l, "from", provider.ID, "size", stat.Size())
 				return nil
 			} else {
 				return fmt.Errorf("limit of %d is reached for %s", limit, l.String())

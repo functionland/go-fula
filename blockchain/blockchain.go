@@ -856,6 +856,14 @@ func (bl *FxBlockchain) clearPoolPeersFromPeerAddr(ctx context.Context, topic in
 	return nil
 }
 
+func multiaddrsToStrings(addrs []multiaddr.Multiaddr) []string {
+	var addrsStr []string
+	for _, addr := range addrs {
+		addrsStr = append(addrsStr, addr.String())
+	}
+	return addrsStr
+}
+
 func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
 	log.Debugw("FetchUsersAndPopulateSets executed", "initiate", initiate)
 	// Initialize the map if it's nil
@@ -890,8 +898,13 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		bl.membersLock.Lock()
 		defer bl.membersLock.Unlock()
 		bl.members[pid] = status
+		bl.membersLock.Unlock()
 		if len(addrs) > 0 {
 			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
+			addrsString := multiaddrsToStrings(addrs)
+			reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel() // Ensures resources are cleaned up after the Stat call
+			bl.rpc.Request("bootstrap/add", addrsString...).Send(reqCtx)
 		}
 		return nil
 	}

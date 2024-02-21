@@ -12,6 +12,7 @@ import (
 	"github.com/functionland/go-fula/exchange"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
+	"github.com/ipfs/kubo/client/rpc"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
@@ -43,6 +44,7 @@ type (
 		IPFShttpServer        *http.Server
 		DefaultIPFShttpServer string
 		wg                    *sync.WaitGroup
+		rpc                   *rpc.HttpApi
 	}
 )
 
@@ -160,6 +162,13 @@ func WithDatastore(ds datastore.Batching) Option {
 func WithDefaultIPFShttpServer(n string) Option {
 	return func(o *options) error {
 		o.DefaultIPFShttpServer = n
+		return nil
+	}
+}
+
+func WithIpfsClient(n *rpc.HttpApi) Option {
+	return func(o *options) error {
+		o.rpc = n
 		return nil
 	}
 }

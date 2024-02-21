@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ipfs/kubo/client/rpc"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -23,6 +24,7 @@ type (
 		relays                   []string
 		updatePoolName           func(string) error
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
+		rpc                      *rpc.HttpApi
 	}
 )
 
@@ -44,6 +46,7 @@ func newOptions(o ...Option) (*options, error) {
 		relays:                   []string{},            // default to an empty slice
 		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
 		fetchFrequency:           time.Hour * 1,         // default frequency, e.g., 1 hour
+		rpc:                      nil,
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
@@ -115,6 +118,13 @@ func WithMinSuccessPingCount(sr int) Option {
 func WithMaxPingTime(t int) Option {
 	return func(o *options) error {
 		o.maxPingTime = t
+		return nil
+	}
+}
+
+func WithIpfsClient(n *rpc.HttpApi) Option {
+	return func(o *options) error {
+		o.rpc = n
 		return nil
 	}
 }
