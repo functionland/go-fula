@@ -41,7 +41,7 @@ type (
 		blockchainEndpoint    string
 		secretsPath           string
 		IPFShttpServer        *http.Server
-		DefaultIPFShttpServer bool
+		DefaultIPFShttpServer string
 		wg                    *sync.WaitGroup
 	}
 )
@@ -157,7 +157,7 @@ func WithDatastore(ds datastore.Batching) Option {
 	}
 }
 
-func WithDefaultIPFShttpServer(n bool) Option {
+func WithDefaultIPFShttpServer(n string) Option {
 	return func(o *options) error {
 		o.DefaultIPFShttpServer = n
 		return nil

@@ -265,7 +265,7 @@ func (p *Blox) Start(ctx context.Context) error {
 	}
 
 	// Create an HTTP server instance
-	if p.DefaultIPFShttpServer {
+	if p.DefaultIPFShttpServer == "fula" {
 		p.IPFShttpServer = &http.Server{
 			Addr:    "127.0.0.1:5001",
 			Handler: p.ServeIpfsRpc(),
@@ -483,8 +483,10 @@ func (p *Blox) Shutdown(ctx context.Context) error {
 	}
 
 	// Shutdown the HTTP server
-	if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
-		log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
+	if p.IPFShttpServer != nil {
+		if IPFSErr := p.IPFShttpServer.Shutdown(ctx); IPFSErr != nil {
+			log.Errorw("Error shutting down IPFS HTTP server", "IPFSErr", IPFSErr)
+		}
 	}
 
 	if dsErr := p.ds.Close(); dsErr != nil {
