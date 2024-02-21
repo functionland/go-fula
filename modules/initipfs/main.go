@@ -41,12 +41,27 @@ type ApiResponse struct {
 func main() {
 	configPath := "/internal/config.yaml"
 	ipfsConfigPath := "/internal/ipfs_data/config"
+	ipfsCfg := IPFSConfig{} // Initialize to empty
 
 	// Check directories and create if necessary
 	ensureDirectories("/internal", "/internal/ipfs_data")
 
 	config := readConfigYAML(configPath)
-	ipfsCfg := readIPFSConfig(ipfsConfigPath)
+	// Read or create IPFS config
+	var err error
+	ipfsCfg, err = readIPFSConfig(ipfsConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, create it in main
+			if err := createEmptyFile(ipfsConfigPath); err != nil {
+				panic(fmt.Sprintf("Failed to create empty config file: %v", err))
+			}
+		} else {
+			// Unexpected error, handle appropriately (e.g., logging, retrying)
+			// For now, panic for demonstration:
+			panic(fmt.Sprintf("Failed to read or create IPFS config: %v", err))
+		}
+	}
 
 	// Fetch users that are in the same pool
 	users := []string{}
@@ -61,6 +76,16 @@ func main() {
 	writePredefinedFiles()
 
 	fmt.Println("Setup completed.")
+}
+
+// Function to create an empty file
+func createEmptyFile(path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return nil
 }
 
 func ensureDirectories(paths ...string) {
@@ -85,8 +110,28 @@ func readConfigYAML(path string) ConfigYAML {
 	return cfg
 }
 
-func readIPFSConfig(path string) IPFSConfig {
+func readIPFSConfig(path string) (IPFSConfig, error) {
 	var cfg IPFSConfig
+
+	// Check if the file exists
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return an error to handle in main
+			return cfg, err
+		} else {
+			// Unexpected error, panic
+			panic(fmt.Sprintf("Failed to check IPFS config file: %v", err))
+		}
+	}
+
+	// Check if the target is a directory
+	if fileInfo.IsDir() {
+		// Target is a directory, return an error to handle in main
+		return cfg, fmt.Errorf("target at %s is a directory", path)
+	}
+
+	// Read the existing file
 	data, err := os.ReadFile(path)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read IPFS config: %v", err))
@@ -94,7 +139,7 @@ func readIPFSConfig(path string) IPFSConfig {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		panic(fmt.Sprintf("Failed to unmarshal IPFS config: %v", err))
 	}
-	return cfg
+	return cfg, nil
 }
 
 func fetchPoolUsers(poolName string) []string {
