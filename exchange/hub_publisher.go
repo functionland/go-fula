@@ -67,14 +67,14 @@ func (p *hubPublisher) Start(_ context.Context) error {
 		maybePublish := func() {
 			remaining := len(unpublished)
 			if remaining == 0 {
-				log.Debug("No remaining entries to publish")
+				log.Debug("hubPublisher: No remaining entries to publish")
 				return
 			}
 			if publishing.Load() {
-				log.Debugw("IPNI publishing in progress", "remaining", remaining)
+				log.Debugw("hubPublisher: IPNI publishing in progress", "remaining", remaining)
 				return
 			}
-			log.Debugw("Attempting to publish links to IPNI", "count", remaining)
+			log.Debugw("hubPublisher: Attempting to publish links to IPNI", "count", remaining)
 			mhs := make([]multihash.Multihash, 0, remaining)
 			for c := range unpublished {
 				mhs = append(mhs, c.Hash())
@@ -82,20 +82,20 @@ func (p *hubPublisher) Start(_ context.Context) error {
 			}
 			publishing.Store(true)
 			go func(entries []multihash.Multihash) {
-				log.Debug("IPNI publish attempt in progress...")
+				log.Debug("hubPublisher: IPNI publish attempt in progress...")
 				defer func() {
 					publishing.Store(false)
-					log.Debug("Finished attempt to publish to IPNI.")
+					log.Debug("hubPublisher: Finished attempt to publish to IPNI.")
 				}()
 				if err := p.publish(entries); err != nil {
-					log.Errorw("Failed to publish to IPNI", "entriesCount", len(mhs), "err", err)
+					log.Errorw("hubPublisher: Failed to publish to IPNI", "entriesCount", len(mhs), "err", err)
 				}
 			}(mhs)
 		}
 		for {
 			select {
 			case <-p.ctx.Done():
-				log.Infow("IPNI publisher stopped", "remainingLinks", len(unpublished))
+				log.Infow("hubPublisher: IPNI publisher stopped", "remainingLinks", len(unpublished))
 				return
 			case <-p.ipniPublishTicker.C:
 				maybePublish()

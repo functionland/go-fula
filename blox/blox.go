@@ -116,6 +116,24 @@ func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Mess
 	return p.an.ValidateAnnouncement(ctx, id, msg, status, exists)
 }
 
+func (p *Blox) storeCidIPFS(ctx context.Context, c path.Path) error {
+	getCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err := p.rpc.Block().Get(getCtx, c)
+	if err != nil {
+		log.Errorw("It seems that the link is not found", "c", c, "err", err)
+		return err
+	}
+	pinCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	err = p.rpc.Pin().Add(pinCtx, c)
+	if err != nil {
+		log.Errorw("It seems that the link is found but not pinned", "c", c, "err", err)
+		return err
+	}
+	return nil
+}
+
 func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 	exists, err := p.Has(ctx, l)
 	if err != nil {
@@ -130,6 +148,8 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 		log.Errorw("And Error happened in StoreCid", "err", err)
 		return err
 	}
+	cidLink := l.(cidlink.Link).Cid
+	cidPath := path.FromCid(cidLink)
 	// Iterate over the providers and ping
 	for _, provider := range providers {
 		if provider.ID != p.h.ID() {
@@ -151,10 +171,11 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 				err = p.ex.PullBlock(ctx, provider.ID, l)
 				if err != nil {
 					log.Errorw("Error happened in pulling from provider", "l", l, "err", err)
-					continue
+					err := p.storeCidIPFS(ctx, cidPath)
+					if err != nil {
+						continue
+					}
 				}
-				cidLink := l.(cidlink.Link).Cid
-				cidPath := path.FromCid(cidLink)
 				statCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel() // Ensures resources are cleaned up after the Stat call
 				stat, err := p.rpc.Block().Stat(statCtx, cidPath)
@@ -162,6 +183,7 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 					log.Errorw("It seems that the link is not stored", "l", l, "err", err)
 					continue
 				}
+				p.ex.IpniNotifyLink(l)
 				log.Debugw("link might be successfully stored", "l", l, "from", provider.ID, "size", stat.Size())
 				return nil
 			} else {
