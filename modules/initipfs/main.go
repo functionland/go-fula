@@ -210,6 +210,9 @@ func updateIPFSConfigBootstrap(ipfsCfg *IPFSConfig, predefinedBootstraps, bootst
 }
 
 func writeIPFSConfig(path string, cfg IPFSConfig) {
+	if cfg.Bootstrap == nil {
+		cfg.Bootstrap = []string{}
+	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		panic(fmt.Sprintf("Failed to marshal IPFS config: %v", err))
