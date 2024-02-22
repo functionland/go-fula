@@ -46,6 +46,7 @@ const (
 	actionGetAccount         = "get-account"
 	actionFetchContainerLogs = "fetch-container-logs"
 	actionGetFolderSize      = "get-folder-size"
+	actionGetDatastoreSize   = "get-datastore-size"
 )
 
 type LinkWithLimit struct {
@@ -358,6 +359,7 @@ type Blockchain interface {
 	GetAccount(context.Context, peer.ID) ([]byte, error)
 	FetchContainerLogs(context.Context, peer.ID, wifi.FetchContainerLogsRequest) ([]byte, error)
 	GetFolderSize(context.Context, peer.ID, wifi.GetFolderSizeRequest) ([]byte, error)
+	GetDatastoreSize(context.Context, peer.ID, wifi.GetDatastoreSizeRequest) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -396,6 +398,7 @@ var requestTypes = map[string]reflect.Type{
 	actionGetAccount:         reflect.TypeOf(GetAccountRequest{}),
 	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsRequest{}),
 	actionGetFolderSize:      reflect.TypeOf(wifi.GetFolderSizeRequest{}),
+	actionGetDatastoreSize:   reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -434,4 +437,5 @@ var responseTypes = map[string]reflect.Type{
 	actionGetAccount:         reflect.TypeOf(GetAccountResponse{}),
 	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsResponse{}),
 	actionGetFolderSize:      reflect.TypeOf(wifi.GetFolderSizeResponse{}),
+	actionGetDatastoreSize:   reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
 }

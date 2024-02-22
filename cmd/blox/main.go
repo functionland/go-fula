@@ -87,7 +87,7 @@ type Child struct {
 
 var (
 	logger  = logging.Logger("fula/cmd/blox")
-	baseURL = "http://localhost:5002"
+	baseURL = "http://localhost:5001"
 	app     struct {
 		cli.App
 		initOnly             bool

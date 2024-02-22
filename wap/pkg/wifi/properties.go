@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
@@ -14,7 +15,9 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/ipfs/kubo/client/rpc"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -37,6 +40,25 @@ type GetFolderSizeRequest struct {
 type GetFolderSizeResponse struct {
 	FolderPath  string `json:"folder_path"`
 	SizeInBytes string `json:"size"`
+}
+
+type GetDatastoreSizeRequest struct {
+}
+
+type GetDatastoreSizeResponse struct {
+	RepoSize   string `json:"size"`
+	StorageMax string `json:"storage_max"`
+	NumObjects string `json:"count"`
+	RepoPath   string `json:"folder_path"`
+	Version    string `json:"version"`
+}
+
+type getDatastoreSizeResponseLocal struct {
+	RepoSize   int64
+	StorageMax int64
+	NumObjects int
+	RepoPath   string
+	Version    string
 }
 
 type FetchContainerLogsResponse struct {
@@ -136,6 +158,51 @@ func GetFolderSize(ctx context.Context, req GetFolderSizeRequest) (GetFolderSize
 		FolderPath:  req.FolderPath,
 		SizeInBytes: fmt.Sprint(sizeInBytes),
 	}, nil
+}
+
+func GetDatastoreSize(ctx context.Context, req GetDatastoreSizeRequest) (GetDatastoreSizeResponse, error) {
+	nodeMultiAddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/5001")
+	if err != nil {
+		return GetDatastoreSizeResponse{}, fmt.Errorf("invalid multiaddress: %w", err)
+	}
+	node, err := rpc.NewApi(nodeMultiAddr)
+	if err != nil {
+		return GetDatastoreSizeResponse{}, fmt.Errorf("error creating API client: %v", err)
+	}
+
+	stat, err := node.Request("repo/stat").Send(ctx)
+	if err != nil {
+		return GetDatastoreSizeResponse{}, fmt.Errorf("error executing api command: %v", err)
+	}
+
+	if stat.Output != nil {
+		defer stat.Output.Close() // Ensure the output is closed after reading
+
+		data, err := io.ReadAll(stat.Output)
+		if err != nil {
+			return GetDatastoreSizeResponse{}, fmt.Errorf("error reading response output: %v", err)
+		}
+		log.Debugw("GetDatastoreSize response received", "data", string(data))
+		var response getDatastoreSizeResponseLocal
+		err = json.Unmarshal(data, &response)
+		if err != nil {
+			return GetDatastoreSizeResponse{}, fmt.Errorf("error unmarshaling response data: %v", err)
+		}
+		responseString := GetDatastoreSizeResponse{
+			RepoSize:   fmt.Sprint(response.RepoSize),
+			StorageMax: fmt.Sprint(response.StorageMax),
+			NumObjects: fmt.Sprint(response.NumObjects),
+			RepoPath:   response.RepoPath,
+			Version:    response.Version,
+		}
+
+		// Optionally, print the response data for debugging
+		fmt.Println("Response data:", response)
+
+		return responseString, nil
+	} else {
+		return GetDatastoreSizeResponse{}, fmt.Errorf("no output received")
+	}
 }
 
 func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {

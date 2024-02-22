@@ -402,6 +402,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionGetFolderSize: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleGetFolderSize(r.Context(), from, w, r)
 		},
+		actionGetDatastoreSize: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleGetDatastoreSize(r.Context(), from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -677,7 +680,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionAccountFund, actionAssetsBalance, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionAccountFund, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

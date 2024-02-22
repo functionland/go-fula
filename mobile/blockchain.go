@@ -203,3 +203,8 @@ func (c *Client) GetFolderSize(folderPath string) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.GetFolderSize(ctx, c.bloxPid, wifi.GetFolderSizeRequest{FolderPath: folderPath})
 }
+
+func (c *Client) GetDatastoreSize() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetDatastoreSize(ctx, c.bloxPid, wifi.GetDatastoreSizeRequest{})
+}
