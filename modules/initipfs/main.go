@@ -141,7 +141,11 @@ func readIPFSConfig(path string) (IPFSConfig, error) {
 	} else {
 		// Unmarshal only if the file has content
 		if err := json.Unmarshal(data, &cfg); err != nil {
-			panic(fmt.Sprintf("Failed to unmarshal IPFS config: %v", err))
+			// Unmarshaling failed, replace file with empty one and return empty cfg
+			if err := createEmptyFile(path); err != nil {
+				return cfg, err
+			}
+			return cfg, nil
 		}
 	}
 	return cfg, nil
