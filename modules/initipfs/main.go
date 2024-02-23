@@ -147,11 +147,11 @@ type ApiResponse struct {
 
 func main() {
 	configPath := "/internal/config.yaml"
-	ipfsConfigPath := "/internal/ipfs_data/config"
+	ipfsConfigPath := "/data/ipfs/config"
 	ipfsCfg := IPFSConfig{} // Initialize to empty
 
 	// Check directories and create if necessary
-	ensureDirectories("/internal", "/internal/ipfs_data")
+	ensureDirectories("/internal", "/data/ipfs")
 
 	config := readConfigYAML(configPath)
 	// Read or create IPFS config
@@ -160,7 +160,7 @@ func main() {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, create it in main
-			if err := createEmptyFile(ipfsConfigPath); err != nil {
+			if err := copyDefaultIPFSConfig(ipfsConfigPath); err != nil {
 				panic(fmt.Sprintf("Failed to create empty config file: %v", err))
 			}
 		} else {
@@ -193,6 +193,32 @@ func createEmptyFile(path string) error {
 	}
 	defer file.Close()
 	return nil
+}
+
+func copyDefaultIPFSConfig(path string) error {
+	// Define the source path of the default config file
+	sourcePath := "/internal/ipfs_config"
+
+	// Open the source file
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return err // Handle errors opening the source file
+	}
+	defer sourceFile.Close()
+
+	// Create the destination file at 'path'
+	destFile, err := os.Create(path)
+	if err != nil {
+		return err // Handle errors creating the destination file
+	}
+	defer destFile.Close()
+
+	// Copy the contents from source to destination
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		return err // Handle errors during the copy process
+	}
+
+	return nil // Return nil if the copy is successful
 }
 
 func ensureDirectories(paths ...string) {
@@ -234,8 +260,15 @@ func readIPFSConfig(path string) (IPFSConfig, error) {
 
 	// Check if the target is a directory
 	if fileInfo.IsDir() {
-		// Target is a directory, return an error to handle in main
-		return cfg, fmt.Errorf("target at %s is a directory", path)
+		// Target is a directory, attempt to delete it
+		err := os.RemoveAll(path)
+		if err != nil {
+			// Failed to delete directory, return an error
+			return cfg, fmt.Errorf("failed to delete directory at %s: %v", path, err)
+		}
+		if err := copyDefaultIPFSConfig(path); err != nil {
+			panic(fmt.Sprintf("Failed to create empty config file: %v", err))
+		}
 	}
 
 	// Read the existing file
