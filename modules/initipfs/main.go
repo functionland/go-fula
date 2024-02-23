@@ -147,11 +147,11 @@ type ApiResponse struct {
 
 func main() {
 	configPath := "/internal/config.yaml"
-	ipfsConfigPath := "/data/ipfs/config"
+	ipfsConfigPath := "/internal/ipfs_data/config"
 	ipfsCfg := IPFSConfig{} // Initialize to empty
 
 	// Check directories and create if necessary
-	ensureDirectories("/internal", "/data/ipfs")
+	ensureDirectories("/internal", "/internal/ipfs_data")
 
 	config := readConfigYAML(configPath)
 	// Read or create IPFS config
@@ -370,7 +370,7 @@ func writePredefinedFiles() {
 	}
 
 	// Write datastore_spec file
-	dsSpec := `{"path":"badgerds","type":"badgerds"}`
+	dsSpec := `{"path":"/uniondrive/badgerds","type":"badgerds"}`
 	if err := os.WriteFile("/internal/ipfs_data/datastore_spec", []byte(dsSpec), 0644); err != nil {
 		fmt.Printf("Failed to write datastore_spec file: %v\n", err)
 		os.Exit(1)
