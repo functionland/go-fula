@@ -178,6 +178,7 @@ func main() {
 
 	updateIPFSConfigIdentity(&ipfsCfg, config)
 	updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users)
+	updateDatastorePath(&ipfsCfg, "/internal/badgerds")
 
 	writeIPFSConfig(ipfsConfigPath, ipfsCfg)
 	writePredefinedFiles()
@@ -322,6 +323,14 @@ func fetchPoolUsers(poolName string) []string {
 func updateIPFSConfigIdentity(ipfsCfg *IPFSConfig, cfg ConfigYAML) {
 	ipfsCfg.Identity.PrivKey = cfg.Identity
 	ipfsCfg.Identity.PeerID = generatePeerIDFromIdentity(cfg.Identity)
+}
+
+func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string) {
+	// Check if the Datastore.Spec.child is not nil and the path exists
+	if ipfsCfg.Datastore.Spec.Child.Path != "" {
+		// Update the path to the new specified path
+		ipfsCfg.Datastore.Spec.Child.Path = newPath
+	}
 }
 
 func generatePeerIDFromIdentity(identity string) string {
