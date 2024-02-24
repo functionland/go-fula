@@ -330,6 +330,7 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string) {
 	if ipfsCfg.Datastore.Spec.Child.Path != "" {
 		// Update the path to the new specified path
 		ipfsCfg.Datastore.Spec.Child.Path = newPath
+		ipfsCfg.Datastore.Spec.Child.SyncWrites = true
 	}
 }
 
