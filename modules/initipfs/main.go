@@ -178,7 +178,7 @@ func main() {
 
 	updateIPFSConfigIdentity(&ipfsCfg, config)
 	updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users)
-	updateDatastorePath(&ipfsCfg, "/internal/badgerds")
+	updateDatastorePath(&ipfsCfg, "/uniondrive/badgerds")
 
 	writeIPFSConfig(ipfsConfigPath, ipfsCfg)
 	writePredefinedFiles()
