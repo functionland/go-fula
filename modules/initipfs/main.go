@@ -336,6 +336,10 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string) {
 		// Update the path to the new specified path
 		ipfsCfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/8081"
 	}
+	if ipfsCfg.Addresses.Gateway != "" {
+		// Update the path to the new specified path
+		ipfsCfg.Addresses.API = "/ip4/0.0.0.0/tcp/5001"
+	}
 }
 
 func generatePeerIDFromIdentity(identity string) string {
