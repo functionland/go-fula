@@ -1389,28 +1389,9 @@ func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action st
 		}
 		return
 	} else {
-		// Call ipfs-cluster of the pool with replication request
-		clusterEndPoint, err := bl.getClusterEndpoint(ctx, req.PoolID)
-		if err != nil {
-			w.WriteHeader(http.StatusFailedDependency)
-			errMsg := map[string]interface{}{
-				"message":     "Error",
-				"description": string(err.Error()),
-			}
-			json.NewEncoder(w).Encode(errMsg)
-			return
-		}
-		if clusterEndPoint != "" {
-			// Construct the request for the cluster endpoint
-			replicationRequest := struct {
-				PoolID int      `json:"pool_id"`
-				Cids   []string `json:"cids"`
-			}{
-				PoolID: req.PoolID,
-				Cids:   req.Cid,
-			}
-
-			reqBody, err := json.Marshal(replicationRequest)
+		if req.PoolID != 0 {
+			// Call ipfs-cluster of the pool with replication request
+			clusterEndPoint, err := bl.getClusterEndpoint(ctx, req.PoolID)
 			if err != nil {
 				w.WriteHeader(http.StatusFailedDependency)
 				errMsg := map[string]interface{}{
@@ -1420,42 +1401,63 @@ func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action st
 				json.NewEncoder(w).Encode(errMsg)
 				return
 			}
+			if clusterEndPoint != "" {
+				// Construct the request for the cluster endpoint
+				replicationRequest := struct {
+					PoolID int      `json:"pool_id"`
+					Cids   []string `json:"cids"`
+				}{
+					PoolID: req.PoolID,
+					Cids:   req.Cid,
+				}
 
-			// Make the HTTP request to the cluster endpoint
-			clusterURL := fmt.Sprintf("%s/pins", clusterEndPoint)
-			resp, err := http.Post(clusterURL, "application/json", bytes.NewBuffer(reqBody))
-			if err != nil {
+				reqBody, err := json.Marshal(replicationRequest)
+				if err != nil {
+					w.WriteHeader(http.StatusFailedDependency)
+					errMsg := map[string]interface{}{
+						"message":     "Error",
+						"description": string(err.Error()),
+					}
+					json.NewEncoder(w).Encode(errMsg)
+					return
+				}
+
+				// Make the HTTP request to the cluster endpoint
+				clusterURL := fmt.Sprintf("%s/pins", clusterEndPoint)
+				resp, err := http.Post(clusterURL, "application/json", bytes.NewBuffer(reqBody))
+				if err != nil {
+					w.WriteHeader(http.StatusFailedDependency)
+					errMsg := map[string]interface{}{
+						"message":     "Error",
+						"description": string(err.Error()),
+					}
+					json.NewEncoder(w).Encode(errMsg)
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusAccepted {
+					// Replication request was not accepted
+					w.WriteHeader(resp.StatusCode) // Set the appropriate status code
+					responseBody, _ := io.ReadAll(resp.Body)
+					errMsg := map[string]interface{}{
+						"message":     "Replication Error",
+						"description": string(responseBody),
+					}
+					json.NewEncoder(w).Encode(errMsg)
+					return
+				}
+
+				// Replication request was accepted - continue with existing response handling
+			} else {
 				w.WriteHeader(http.StatusFailedDependency)
 				errMsg := map[string]interface{}{
 					"message":     "Error",
-					"description": string(err.Error()),
+					"description": "Wrong cluster endpoint",
 				}
 				json.NewEncoder(w).Encode(errMsg)
 				return
 			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusAccepted {
-				// Replication request was not accepted
-				w.WriteHeader(resp.StatusCode) // Set the appropriate status code
-				responseBody, _ := io.ReadAll(resp.Body)
-				errMsg := map[string]interface{}{
-					"message":     "Replication Error",
-					"description": string(responseBody),
-				}
-				json.NewEncoder(w).Encode(errMsg)
-				return
-			}
-
-			// Replication request was accepted - continue with existing response handling
-		} else {
-			w.WriteHeader(http.StatusFailedDependency)
-			errMsg := map[string]interface{}{
-				"message":     "Error",
-				"description": "Wrong cluster endpoint",
-			}
-			json.NewEncoder(w).Encode(errMsg)
-			return
 		}
 	}
 	w.WriteHeader(http.StatusAccepted)
