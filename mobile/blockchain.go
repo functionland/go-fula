@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/functionland/go-fula/blockchain"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
@@ -123,8 +124,9 @@ func (c *Client) ManifestAvailable(poolID int) ([]byte, error) {
 	return c.bl.ManifestAvailable(ctx, c.bloxPid, blockchain.ManifestAvailableRequest{PoolID: poolID})
 }
 
-func (c *Client) BatchUploadManifest(cidArray []string, poolID int, replicationFactor int) ([]byte, error) {
+func (c *Client) BatchUploadManifest(cidsBytes []byte, poolID int, replicationFactor int) ([]byte, error) {
 	ctx := context.TODO()
+	cidArray := strings.Split(string(cidsBytes), "|")
 	return c.bl.ManifestBatchUpload(ctx, c.bloxPid, blockchain.ManifestBatchUploadMobileRequest{Cid: cidArray, PoolID: poolID, ReplicationFactor: replicationFactor})
 }
 
