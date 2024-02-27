@@ -244,7 +244,7 @@ func (bl *FxBlockchain) ManifestBatchStore(ctx context.Context, to peer.ID, r Ma
 	}
 }
 
-func (bl *FxBlockchain) ManifestBatchUpload(ctx context.Context, to peer.ID, r ManifestBatchUploadRequest) ([]byte, error) {
+func (bl *FxBlockchain) ManifestBatchUpload(ctx context.Context, to peer.ID, r ManifestBatchUploadMobileRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")
