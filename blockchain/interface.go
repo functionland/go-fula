@@ -170,6 +170,10 @@ type PoolRequestsResponse struct {
 type PoolListRequest struct {
 }
 
+type PoolListRequestWithPoolId struct {
+	PoolID int `json:"pool_id"`
+}
+
 type PoolUserListRequest struct {
 	PoolID        int `json:"pool_id"`
 	RequestPoolID int `json:"request_pool_id"`
