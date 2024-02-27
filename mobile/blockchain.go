@@ -123,6 +123,11 @@ func (c *Client) ManifestAvailable(poolID int) ([]byte, error) {
 	return c.bl.ManifestAvailable(ctx, c.bloxPid, blockchain.ManifestAvailableRequest{PoolID: poolID})
 }
 
+func (c *Client) BatchUploadManifest(cidArray []string, poolID int, replicationFactor int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ManifestBatchUpload(ctx, c.bloxPid, blockchain.ManifestBatchUploadMobileRequest{Cid: cidArray, PoolID: poolID, ReplicationFactor: replicationFactor})
+}
+
 //////////////////////////////////////////////////
 /////////////////////HARDWARE/////////////////////
 //////////////////////////////////////////////////

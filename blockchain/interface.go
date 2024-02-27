@@ -29,6 +29,7 @@ const (
 	actionManifestUpload       = "fula-manifest-upload"
 	actionManifestStore        = "fula-manifest-storage"
 	actionManifestBatchStore   = "fula-manifest-batch_storage"
+	actionManifestBatchUpload  = "fula-manifest-batch_upload"
 	actionManifestAvailable    = "fula-manifest-available"
 	actionManifestRemove       = "fula-manifest-remove"
 	actionManifestRemoveStorer = "fula-manifest-remove_storer"
@@ -267,6 +268,25 @@ type ManifestBatchStoreResponse struct {
 	Cid    []string `json:"cid"`
 }
 
+type ManifestBatchUploadRequest struct {
+	Cid               []string           `json:"cid"`
+	PoolID            int                `json:"pool_id"`
+	ReplicationFactor []int              `json:"replication_factor"`
+	ManifestMetadata  []ManifestMetadata `json:"manifest_metadata"`
+}
+
+type ManifestBatchUploadMobileRequest struct {
+	Cid               []string `json:"cid"`
+	PoolID            int      `json:"pool_id"`
+	ReplicationFactor int      `json:"replication_factor"`
+}
+
+type ManifestBatchUploadResponse struct {
+	PoolID int      `json:"pool_id"`
+	Storer string   `json:"storer"`
+	Cid    []string `json:"cid"`
+}
+
 type ManifestAvailableRequest struct {
 	PoolID int `json:"pool_id"`
 }
@@ -340,6 +360,8 @@ type Blockchain interface {
 	PoolVote(context.Context, peer.ID, PoolVoteRequest) ([]byte, error)
 	PoolLeave(context.Context, peer.ID, PoolLeaveRequest) ([]byte, error)
 	ManifestUpload(context.Context, peer.ID, ManifestUploadRequest) ([]byte, error)
+	ManifestBatchStore(context.Context, peer.ID, ManifestBatchStoreRequest) ([]byte, error)
+	ManifestBatchUpload(context.Context, peer.ID, ManifestBatchUploadMobileRequest) ([]byte, error)
 	ManifestStore(context.Context, peer.ID, ManifestStoreRequest) ([]byte, error)
 	ManifestAvailable(context.Context, peer.ID, ManifestAvailableRequest) ([]byte, error)
 	ManifestRemove(context.Context, peer.ID, ManifestRemoveRequest) ([]byte, error)
@@ -378,6 +400,7 @@ var requestTypes = map[string]reflect.Type{
 	actionManifestUpload:       reflect.TypeOf(ManifestUploadRequest{}),
 	actionManifestStore:        reflect.TypeOf(ManifestStoreRequest{}),
 	actionManifestBatchStore:   reflect.TypeOf(ManifestBatchStoreRequest{}),
+	actionManifestBatchUpload:  reflect.TypeOf(ManifestBatchUploadRequest{}),
 	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableRequest{}),
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveRequest{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerRequest{}),
@@ -417,6 +440,7 @@ var responseTypes = map[string]reflect.Type{
 	actionManifestUpload:       reflect.TypeOf(ManifestUploadResponse{}),
 	actionManifestStore:        reflect.TypeOf(ManifestStoreResponse{}),
 	actionManifestBatchStore:   reflect.TypeOf(ManifestBatchStoreResponse{}),
+	actionManifestBatchUpload:  reflect.TypeOf(ManifestBatchUploadResponse{}),
 	actionManifestAvailable:    reflect.TypeOf(ManifestAvailableResponse{}),
 	actionManifestRemove:       reflect.TypeOf(ManifestRemoveResponse{}),
 	actionManifestRemoveStorer: reflect.TypeOf(ManifestRemoveStorerResponse{}),

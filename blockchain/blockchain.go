@@ -247,7 +247,7 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
-	case actionSeeded, actionAccountExists, actionAccountFund, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionManifestBatchStore:
+	case actionSeeded, actionAccountExists, actionAccountFund, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionManifestBatchUpload, actionManifestBatchStore:
 		seed, err := bl.keyStorer.LoadKey(ctx)
 		if err != nil {
 			log.Errorw("seed is empty", "err", err)
@@ -292,6 +292,31 @@ func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req
 
 	default:
 		return req
+	}
+}
+
+func convertMobileRequestToFullRequest(mobileReq *ManifestBatchUploadMobileRequest) ManifestBatchUploadRequest {
+	manifestMetadata := make([]ManifestMetadata, len(mobileReq.Cid))
+	for i, cid := range mobileReq.Cid {
+		manifestMetadata[i] = ManifestMetadata{
+			Job: ManifestJob{
+				Work:   "Storage",
+				Engine: "IPFS",
+				Uri:    cid,
+			},
+		}
+	}
+
+	replicationFactor := make([]int, len(mobileReq.Cid))
+	for i := range replicationFactor {
+		replicationFactor[i] = mobileReq.ReplicationFactor
+	}
+
+	return ManifestBatchUploadRequest{
+		Cid:               mobileReq.Cid,
+		PoolID:            mobileReq.PoolID,
+		ReplicationFactor: replicationFactor,
+		ManifestMetadata:  manifestMetadata,
 	}
 }
 
@@ -356,6 +381,41 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		},
 		actionManifestAvailable: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionManifestAvailable, from, w, r)
+		},
+		actionManifestBatchStore: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(http.MethodPost, actionManifestBatchStore, from, w, r)
+		},
+		actionManifestBatchUpload: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			// Decode the original mobile request
+			var mobileReq ManifestBatchUploadMobileRequest
+			if err := json.NewDecoder(r.Body).Decode(&mobileReq); err != nil {
+				log.Debug("cannot parse request body: %v", err)
+				http.Error(w, "", http.StatusBadRequest)
+				return
+			}
+
+			// Convert to the full request format
+			fullReq := convertMobileRequestToFullRequest(&mobileReq)
+
+			// Re-encode the converted request (marshaling it to JSON)
+			newBody, err := json.Marshal(fullReq)
+			if err != nil {
+				log.Error("failed to marshal converted request: %v", err)
+				http.Error(w, "", http.StatusInternalServerError)
+				return
+			}
+
+			// Create a new HTTP request using the converted body
+			newRequest, err := http.NewRequest(r.Method, r.URL.String(), bytes.NewReader(newBody))
+			if err != nil {
+				log.Error("failed to create new request: %v", err)
+				http.Error(w, "", http.StatusInternalServerError)
+				return
+			}
+
+			// Copy headers from the original request
+			newRequest.Header = r.Header
+			bl.handleAction(http.MethodPost, actionManifestBatchUpload, from, w, r)
 		},
 		actionManifestRemove: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionManifestRemove, from, w, r)
@@ -680,7 +740,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionAccountFund, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
