@@ -296,7 +296,7 @@ func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req
 	}
 }
 
-func convertMobileRequestToFullRequest(mobileReq *ManifestBatchUploadMobileRequest) ManifestBatchUploadRequest {
+func convertMobileRequestToFullRequest(mobileReq *ManifestBatchUploadMobileRequest) *ManifestBatchUploadRequest {
 	manifestMetadata := make([]ManifestMetadata, len(mobileReq.Cid))
 	for i, cid := range mobileReq.Cid {
 		manifestMetadata[i] = ManifestMetadata{
@@ -313,7 +313,7 @@ func convertMobileRequestToFullRequest(mobileReq *ManifestBatchUploadMobileReque
 		replicationFactor[i] = mobileReq.ReplicationFactor
 	}
 
-	return ManifestBatchUploadRequest{
+	return &ManifestBatchUploadRequest{
 		Cid:               mobileReq.Cid,
 		PoolID:            mobileReq.PoolID,
 		ReplicationFactor: replicationFactor,
@@ -1349,7 +1349,7 @@ func findPeerID(creatorClusterPeerID string, userDetails *PoolUserListResponse) 
 	return ""
 }
 
-func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request, req ManifestBatchUploadRequest) {
+func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request, req *ManifestBatchUploadRequest) {
 	log := log.With("action", action, "from", from)
 	res := reflect.New(responseTypes[action]).Interface()
 	defer r.Body.Close()
@@ -1359,6 +1359,9 @@ func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action st
 	response, statusCode, err := bl.callBlockchain(ctx, method, action, req)
 	if err != nil {
 		log.Error("failed to call blockchain: %v", err)
+		if statusCode == 0 {
+			statusCode = http.StatusBadGateway
+		}
 		w.WriteHeader(statusCode)
 		// Try to parse the error and format it as JSON
 		var errMsg map[string]interface{}
