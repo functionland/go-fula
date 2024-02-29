@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var apiError struct {
@@ -1053,6 +1055,32 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	if initiate {
+		clusterEndpoint, err := bl.getClusterEndpoint(ctx, topic)
+		if err == nil {
+			// Create a regular expression to match everything before the first period
+			re := regexp.MustCompile(`^(.*?)\.`)
+
+			match := re.FindStringSubmatch(clusterEndpoint)
+
+			if match != nil {
+				poolHostPeerID := match[1] // Capture group 1 contains the peerID
+				reqCtx, cancelReqCtx := context.WithTimeout(ctx, 2*time.Second)
+				defer cancelReqCtx() // Ensures resources are cleaned up after the Stat call
+				poolHostAddrString := "/dns4/" + clusterEndpoint + "/tcp/4001/p2p/" + poolHostPeerID
+				bl.rpc.Request("bootstrap/add", poolHostAddrString).Send(reqCtx)
+				poolHostAddr, err := ma.NewMultiaddr(poolHostAddrString)
+				if err == nil {
+					poolHostAddrInfos, err := peer.AddrInfosFromP2pAddrs(poolHostAddr)
+					if err == nil {
+						bl.rpc.Swarm().Connect(reqCtx, poolHostAddrInfos[0])
+					}
+				}
+
+			} else {
+				// Handle the error: Endpoint didn't match the pattern
+				fmt.Println("Error: Could not extract peerID from endpoint")
+			}
+		}
 		//If members list is empty we should check what peerIDs we already voted on and update to avoid re-voting
 		isMembersEmpty := bl.IsMembersEmpty()
 		if isMembersEmpty {
