@@ -699,9 +699,11 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 
 func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
 	log.Debugw("checking authorization", "pid", pid, "action", action, "cid", cid)
-	if e.authorizer == "" {
+	if e.authorizer == "" && action != actionAuth {
 		// If no authorizer is set allow all.
 		return true
+	} else if e.authorizer == "" && action == actionAuth {
+		return false
 	}
 	switch action {
 	case actionPush:

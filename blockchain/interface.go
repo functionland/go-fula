@@ -10,30 +10,31 @@ import (
 )
 
 const (
-	actionSeeded               = "account-seeded"
-	actionAccountExists        = "account-exists"
-	actionAccountCreate        = "account-create"
-	actionAccountFund          = "account-fund"
-	actionAccountBalance       = "account-balance"
-	actionAssetsBalance        = "asset-balance"
-	actionTransferToMumbai     = "fula-mumbai-convert_tokens"
-	actionTransferToGoerli     = "fula-goerli-convert_tokens"
-	actionPoolCreate           = "fula-pool-create"
-	actionPoolJoin             = "fula-pool-join"
-	actionPoolCancelJoin       = "fula-pool-cancel_join"
-	actionPoolRequests         = "fula-pool-poolrequests"
-	actionPoolList             = "fula-pool"
-	actionPoolUserList         = "fula-pool-users"
-	actionPoolVote             = "fula-pool-vote"
-	actionPoolLeave            = "fula-pool-leave"
-	actionManifestUpload       = "fula-manifest-upload"
-	actionManifestStore        = "fula-manifest-storage"
-	actionManifestBatchStore   = "fula-manifest-batch_storage"
-	actionManifestBatchUpload  = "fula-manifest-batch_upload"
-	actionManifestAvailable    = "fula-manifest-available"
-	actionManifestRemove       = "fula-manifest-remove"
-	actionManifestRemoveStorer = "fula-manifest-remove_storer"
-	actionManifestRemoveStored = "fula-manifest-remove_storing_manifest"
+	actionSeeded                 = "account-seeded"
+	actionAccountExists          = "account-exists"
+	actionAccountCreate          = "account-create"
+	actionAccountFund            = "account-fund"
+	actionAccountBalance         = "account-balance"
+	actionAssetsBalance          = "asset-balance"
+	actionTransferToMumbai       = "fula-mumbai-convert_tokens"
+	actionTransferToGoerli       = "fula-goerli-convert_tokens"
+	actionPoolCreate             = "fula-pool-create"
+	actionPoolJoin               = "fula-pool-join"
+	actionPoolCancelJoin         = "fula-pool-cancel_join"
+	actionPoolRequests           = "fula-pool-poolrequests"
+	actionPoolList               = "fula-pool"
+	actionPoolUserList           = "fula-pool-users"
+	actionPoolVote               = "fula-pool-vote"
+	actionPoolLeave              = "fula-pool-leave"
+	actionManifestUpload         = "fula-manifest-upload"
+	actionManifestStore          = "fula-manifest-storage"
+	actionManifestBatchStore     = "fula-manifest-batch_storage"
+	actionManifestBatchUpload    = "fula-manifest-batch_upload"
+	actionManifestAvailable      = "fula-manifest-available"
+	actionManifestRemove         = "fula-manifest-remove"
+	actionManifestRemoveStorer   = "fula-manifest-remove_storer"
+	actionManifestRemoveStored   = "fula-manifest-remove_storing_manifest"
+	actionManifestAvailableBatch = "fula-manifest-available_batch"
 
 	//Hardware
 	actionBloxFreeSpace      = "blox-free-space"
@@ -48,7 +49,25 @@ const (
 	actionFetchContainerLogs = "fetch-container-logs"
 	actionGetFolderSize      = "get-folder-size"
 	actionGetDatastoreSize   = "get-datastore-size"
+
+	// Cluster
+	actionReplicateInPool = "replicate"
 )
+
+type ReplicateRequest struct {
+	Cids    []string `json:"cids"`
+	Account string   `json:"uploader"`
+	PoolID  int      `json:"pool_id"`
+}
+
+type ReplicateResponse struct {
+	Manifests []BatchManifest `json:"manifests"`
+}
+
+type BatchManifest struct {
+	Cid                  string `json:"cid"`
+	ReplicationAvailable int    `json:"replication_available"`
+}
 
 type LinkWithLimit struct {
 	Link  ipld.Link

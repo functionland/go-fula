@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	ipfsCluster "github.com/ipfs-cluster/ipfs-cluster/api/rest/client"
 	"github.com/ipfs/kubo/client/rpc"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -25,6 +26,7 @@ type (
 		updatePoolName           func(string) error
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 		rpc                      *rpc.HttpApi
+		ipfsClusterApi           ipfsCluster.Client
 	}
 )
 
@@ -47,6 +49,7 @@ func newOptions(o ...Option) (*options, error) {
 		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
 		fetchFrequency:           time.Hour * 1,         // default frequency, e.g., 1 hour
 		rpc:                      nil,
+		ipfsClusterApi:           nil,
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
@@ -111,6 +114,13 @@ func WithWg(wg *sync.WaitGroup) Option {
 func WithMinSuccessPingCount(sr int) Option {
 	return func(o *options) error {
 		o.minPingSuccessCount = sr
+		return nil
+	}
+}
+
+func WithIpfsClusterAPI(n ipfsCluster.Client) Option {
+	return func(o *options) error {
+		o.ipfsClusterApi = n
 		return nil
 	}
 }

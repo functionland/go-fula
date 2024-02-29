@@ -106,6 +106,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithMaxPingTime(p.maxPingTime),
 		blockchain.WithIpfsClient(p.rpc),
 		blockchain.WithMinSuccessPingCount(p.minSuccessRate*p.pingCount/100),
+		blockchain.WithIpfsClusterAPI(p.ipfsClusterApi),
 	)
 	if err != nil {
 		return nil, err
