@@ -165,7 +165,6 @@ func (bl *FxBlockchain) AccountBalance(ctx context.Context, to peer.ID, r Accoun
 }
 
 func (bl *FxBlockchain) HandleSeeded(ctx context.Context, req *SeededRequest) (string, error) {
-	// Call manifestBatchStore method
 	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionSeeded, req)
 	if err != nil {
 		// If there's an error, return it directly without processing the response body

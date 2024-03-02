@@ -8,8 +8,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,13 +21,15 @@ import (
 	"github.com/functionland/go-fula/common"
 	"github.com/functionland/go-fula/ping"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
+	ipfsClusterClientApi "github.com/ipfs-cluster/ipfs-cluster/api"
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	gostream "github.com/libp2p/go-libp2p-gostream"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var apiError struct {
@@ -247,7 +251,7 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
-	case actionSeeded, actionAccountExists, actionAccountFund, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionManifestBatchStore:
+	case actionSeeded, actionAccountExists, actionAccountFund, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionManifestBatchUpload, actionManifestBatchStore:
 		seed, err := bl.keyStorer.LoadKey(ctx)
 		if err != nil {
 			log.Errorw("seed is empty", "err", err)
@@ -292,6 +296,31 @@ func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req
 
 	default:
 		return req
+	}
+}
+
+func convertMobileRequestToFullRequest(mobileReq *ManifestBatchUploadMobileRequest) *ManifestBatchUploadRequest {
+	manifestMetadata := make([]ManifestMetadata, len(mobileReq.Cid))
+	for i, cid := range mobileReq.Cid {
+		manifestMetadata[i] = ManifestMetadata{
+			Job: ManifestJob{
+				Work:   "Storage",
+				Engine: "IPFS",
+				Uri:    cid,
+			},
+		}
+	}
+
+	replicationFactor := make([]int, len(mobileReq.Cid))
+	for i := range replicationFactor {
+		replicationFactor[i] = mobileReq.ReplicationFactor
+	}
+
+	return &ManifestBatchUploadRequest{
+		Cid:               mobileReq.Cid,
+		PoolID:            mobileReq.PoolID,
+		ReplicationFactor: replicationFactor,
+		ManifestMetadata:  manifestMetadata,
 	}
 }
 
@@ -357,6 +386,22 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionManifestAvailable: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionManifestAvailable, from, w, r)
 		},
+		actionManifestBatchStore: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAction(http.MethodPost, actionManifestBatchStore, from, w, r)
+		},
+		actionManifestBatchUpload: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			// Decode the original mobile request
+			var mobileReq ManifestBatchUploadMobileRequest
+			if err := json.NewDecoder(r.Body).Decode(&mobileReq); err != nil {
+				log.Debug("cannot parse request body: %v", err)
+				http.Error(w, "", http.StatusBadRequest)
+				return
+			}
+
+			// Convert to the full request format
+			fullReq := convertMobileRequestToFullRequest(&mobileReq)
+			bl.handleActionManifestBatchUpload(http.MethodPost, actionManifestBatchUpload, from, w, r, fullReq)
+		},
 		actionManifestRemove: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionManifestRemove, from, w, r)
 		},
@@ -365,6 +410,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		},
 		actionManifestRemoveStored: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAction(http.MethodPost, actionManifestRemoveStored, from, w, r)
+		},
+		actionReplicateInPool: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleReplicateInPool(http.MethodPost, actionReplicateInPool, from, w, r)
 		},
 		actionAuth: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAuthorization(from, w, r)
@@ -472,6 +520,99 @@ func (bl *FxBlockchain) handleAction(method string, action string, from peer.ID,
 	}
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.Error("failed to write response: %v", err)
+	}
+}
+
+func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", action, "from", from)
+	var req ReplicateRequest
+	var res ReplicateResponse
+	var poolRes []string
+
+	defer r.Body.Close()
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Debug("cannot parse request body: %v", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	//TODO: Ensure it is optimized for long-running calls
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
+	defer cancel()
+	response, statusCode, err := bl.callBlockchain(ctx, method, actionManifestAvailableBatch, req)
+	if err != nil {
+		log.Error("failed to call blockchain: %v", err)
+		w.WriteHeader(statusCode)
+		// Try to parse the error and format it as JSON
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr != nil {
+			// If the response isn't JSON or can't be parsed, use a generic message
+			errMsg = map[string]interface{}{
+				"message":     "An error occurred",
+				"description": err.Error(),
+			}
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+	// If status code is not 200, attempt to format the response as JSON
+	if statusCode != http.StatusOK {
+		w.WriteHeader(statusCode)
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr == nil {
+			// If it's already a JSON, write it as is
+			w.Write(response)
+		} else {
+			// If it's not JSON, wrap the response in the expected format
+			errMsg = map[string]interface{}{
+				"message":     "Error",
+				"description": string(response),
+			}
+			json.NewEncoder(w).Encode(errMsg)
+		}
+		return
+	}
+
+	if jsonErr := json.Unmarshal(response, &res); jsonErr != nil {
+		// If the response isn't JSON or can't be parsed, use a generic message
+		w.WriteHeader(http.StatusFailedDependency)
+		errMsg := map[string]interface{}{
+			"message":     "An error occurred",
+			"description": jsonErr.Error(),
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
+	if bl.ipfsClusterApi == nil {
+		w.WriteHeader(http.StatusFailedDependency)
+		errMsg := map[string]interface{}{
+			"message":     "An error occurred",
+			"description": "iipfs cluster API is nil",
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+	pCtx, pCancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
+	defer pCancel()
+	for i := 0; i < len(res.Manifests); i++ {
+		c, err := cid.Decode(res.Manifests[i].Cid)
+		if err != nil {
+			log.Errorw("Error decoding CID:", "err", err)
+			continue // Or handle the error appropriately
+		}
+		replicationRes, err := bl.ipfsClusterApi.Pin(pCtx, ipfsClusterClientApi.NewCid(c), ipfsClusterClientApi.PinOptions{})
+		if err != nil {
+			log.Errorw("Error pinning CID:", "err", err)
+			continue
+		}
+		poolRes = append(poolRes, replicationRes.Cid.Cid.String())
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	if err := json.NewEncoder(w).Encode(poolRes); err != nil {
 		log.Error("failed to write response: %v", err)
 	}
 }
@@ -680,7 +821,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		return true
 	}
 	switch action {
-	case actionBloxFreeSpace, actionAccountFund, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
+	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
@@ -902,17 +1043,46 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		defer bl.membersLock.Unlock()
 		bl.members[pid] = status
 		bl.membersLock.Unlock()
-		if len(addrs) > 0 {
-			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
-			addrsString := multiaddrsToStrings(addrs)
-			reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			defer cancel() // Ensures resources are cleaned up after the Stat call
-			bl.rpc.Request("bootstrap/add", addrsString...).Send(reqCtx)
-		}
+		/*
+			// Removed because we do not know hte ipfs address of thee nodes and they should be found through the ipfs-cluster
+			if len(addrs) > 0 {
+				bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
+				addrsString := multiaddrsToStrings(addrs)
+				reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				defer cancel() // Ensures resources are cleaned up after the Stat call
+				bl.rpc.Request("bootstrap/add", addrsString...).Send(reqCtx)
+			}
+		*/
 		return nil
 	}
 
 	if initiate {
+		clusterEndpoint, err := bl.getClusterEndpoint(ctx, topic)
+		if err == nil {
+			// Create a regular expression to match everything before the first period
+			re := regexp.MustCompile(`^(.*?)\.`)
+
+			match := re.FindStringSubmatch(clusterEndpoint)
+
+			if match != nil {
+				poolHostPeerID := match[1] // Capture group 1 contains the peerID
+				reqCtx, cancelReqCtx := context.WithTimeout(ctx, 2*time.Second)
+				defer cancelReqCtx() // Ensures resources are cleaned up after the Stat call
+				poolHostAddrString := "/dns4/" + clusterEndpoint + "/tcp/4001/p2p/" + poolHostPeerID
+				bl.rpc.Request("bootstrap/add", poolHostAddrString).Send(reqCtx)
+				poolHostAddr, err := ma.NewMultiaddr(poolHostAddrString)
+				if err == nil {
+					poolHostAddrInfos, err := peer.AddrInfosFromP2pAddrs(poolHostAddr)
+					if err == nil {
+						bl.rpc.Swarm().Connect(reqCtx, poolHostAddrInfos[0])
+					}
+				}
+
+			} else {
+				// Handle the error: Endpoint didn't match the pattern
+				fmt.Println("Error: Could not extract peerID from endpoint")
+			}
+		}
 		//If members list is empty we should check what peerIDs we already voted on and update to avoid re-voting
 		isMembersEmpty := bl.IsMembersEmpty()
 		if isMembersEmpty {
@@ -1182,4 +1352,251 @@ func (bl *FxBlockchain) GetMembers() map[peer.ID]common.MemberStatus {
 		copy[k] = v
 	}
 	return copy
+}
+
+const creatorPeerIDFilePath = "/internal/.tmp/pool_%d_creator.tmp"
+
+func (bl *FxBlockchain) getClusterEndpoint(ctx context.Context, poolID int) (string, error) {
+	// 1. Check for existing creator peer ID
+	if creatorPeerID, err := loadCreatorPeerID(poolID); err == nil {
+		return creatorPeerID + ".functionyard.fula.network", nil
+	}
+
+	// 2. Fetch pool details
+	poolDetails, err := fetchPoolDetails(ctx, bl, poolID)
+	if err != nil {
+		return "", err
+	}
+
+	// 3. Extract creatorClusterPeerID
+	creatorClusterPeerID := poolDetails.Creator
+
+	// 4. Fetch user details
+	userDetails, err := bl.fetchUserDetails(ctx, poolID)
+	if err != nil {
+		return "", err
+	}
+
+	// 5. Find the peer_id
+	peerID := bl.findPeerID(creatorClusterPeerID, userDetails)
+
+	// 6. Save creator peer ID
+	err = saveCreatorPeerID(poolID, peerID)
+	if err != nil {
+		log.Debugf("Error saving creator peer ID to file: %v", err)
+	}
+
+	return peerID + ".functionyard.fula.network", nil
+}
+func loadCreatorPeerID(poolID int) (string, error) {
+	filename := fmt.Sprintf(creatorPeerIDFilePath, poolID)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil // File doesn't exist, not an error
+		}
+		return "", fmt.Errorf("error reading creator peer ID file: %w", err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func saveCreatorPeerID(poolID int, peerID string) error {
+	filename := fmt.Sprintf(creatorPeerIDFilePath, poolID)
+	return os.WriteFile(filename, []byte(peerID), 0644) // Adjust permissions if needed
+}
+
+func fetchPoolDetails(ctx context.Context, bl *FxBlockchain, poolID int) (*Pool, error) {
+	req := PoolListRequestWithPoolId{PoolID: poolID}
+	action := "actionPoolList"
+
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", action, req)
+	if err != nil {
+		return nil, fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
+	}
+
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			return nil, fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			return nil, fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
+	}
+
+	var response PoolListResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return nil, err
+	}
+
+	for _, pool := range response.Pools {
+		if pool.PoolID == poolID {
+			return &pool, nil
+		}
+	}
+
+	return nil, fmt.Errorf("pool with ID %d not found", poolID)
+}
+
+func (bl *FxBlockchain) fetchUserDetails(ctx context.Context, poolID int) (*PoolUserListResponse, error) {
+	req := PoolUserListRequest{
+		PoolID: poolID,
+	}
+	action := "actionPoolUserList"
+
+	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", action, req)
+	if err != nil {
+		return nil, fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
+	}
+
+	if statusCode != http.StatusOK {
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
+			return nil, fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
+				statusCode, errMsg["message"], errMsg["description"])
+		} else {
+			return nil, fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
+		}
+	}
+
+	var response PoolUserListResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
+func (bl *FxBlockchain) findPeerID(creatorClusterPeerID string, userDetails *PoolUserListResponse) string {
+	for _, user := range userDetails.Users {
+		if user.Account == creatorClusterPeerID {
+			return user.PeerID
+		}
+	}
+	return ""
+}
+
+func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request, req *ManifestBatchUploadRequest) {
+	log := log.With("action", action, "from", from)
+	res := reflect.New(responseTypes[action]).Interface()
+	defer r.Body.Close()
+	//TODO: Ensure it is optimized for long-running calls
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
+	defer cancel()
+	response, statusCode, err := bl.callBlockchain(ctx, method, action, req)
+	if err != nil {
+		log.Error("failed to call blockchain: %v", err)
+		if statusCode == 0 {
+			statusCode = http.StatusBadGateway
+		}
+		w.WriteHeader(statusCode)
+		// Try to parse the error and format it as JSON
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr != nil {
+			// If the response isn't JSON or can't be parsed, use a generic message
+			errMsg = map[string]interface{}{
+				"message":     "An error occurred",
+				"description": err.Error(),
+			}
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+	// If status code is not 200, attempt to format the response as JSON
+	if statusCode != http.StatusOK {
+		w.WriteHeader(statusCode)
+		var errMsg map[string]interface{}
+		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr == nil {
+			// If it's already a JSON, write it as is
+			w.Write(response)
+		} else {
+			// If it's not JSON, wrap the response in the expected format
+			errMsg = map[string]interface{}{
+				"message":     "Error",
+				"description": string(response),
+			}
+			json.NewEncoder(w).Encode(errMsg)
+		}
+		return
+	} else {
+		if req.PoolID != 0 {
+			// Call ipfs-cluster of the pool with replication request
+			clusterEndPoint, err := bl.getClusterEndpoint(ctx, req.PoolID)
+			if err != nil {
+				w.WriteHeader(http.StatusFailedDependency)
+				errMsg := map[string]interface{}{
+					"message":     "Error",
+					"description": string(err.Error()),
+				}
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			}
+			if clusterEndPoint != "" {
+				// Construct the request for the cluster endpoint
+				replicationRequest := struct {
+					PoolID int      `json:"pool_id"`
+					Cids   []string `json:"cids"`
+				}{
+					PoolID: req.PoolID,
+					Cids:   req.Cid,
+				}
+
+				reqBody, err := json.Marshal(replicationRequest)
+				if err != nil {
+					w.WriteHeader(http.StatusFailedDependency)
+					errMsg := map[string]interface{}{
+						"message":     "Error",
+						"description": string(err.Error()),
+					}
+					json.NewEncoder(w).Encode(errMsg)
+					return
+				}
+
+				// Make the HTTP request to the cluster endpoint
+				clusterURL := fmt.Sprintf("%s/pins", clusterEndPoint)
+				resp, err := http.Post(clusterURL, "application/json", bytes.NewBuffer(reqBody))
+				if err != nil {
+					w.WriteHeader(http.StatusFailedDependency)
+					errMsg := map[string]interface{}{
+						"message":     "Error",
+						"description": string(err.Error()),
+					}
+					json.NewEncoder(w).Encode(errMsg)
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusAccepted {
+					// Replication request was not accepted
+					w.WriteHeader(resp.StatusCode) // Set the appropriate status code
+					responseBody, _ := io.ReadAll(resp.Body)
+					errMsg := map[string]interface{}{
+						"message":     "Replication Error",
+						"description": string(responseBody),
+					}
+					json.NewEncoder(w).Encode(errMsg)
+					return
+				}
+
+				// Replication request was accepted - continue with existing response handling
+			} else {
+				w.WriteHeader(http.StatusFailedDependency)
+				errMsg := map[string]interface{}{
+					"message":     "Error",
+					"description": "Wrong cluster endpoint",
+				}
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			}
+		}
+	}
+	w.WriteHeader(http.StatusAccepted)
+	err1 := json.Unmarshal(response, &res)
+	if err1 != nil {
+		log.Error("failed to format response: %v", err1)
+	}
+
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.Error("failed to write response: %v", err)
+	}
 }

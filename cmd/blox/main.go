@@ -25,6 +25,7 @@ import (
 
 	"github.com/functionland/go-fula/blox"
 	"github.com/functionland/go-fula/exchange"
+	ipfsCluster "github.com/ipfs-cluster/ipfs-cluster/api/rest/client"
 	ipfsPath "github.com/ipfs/boxo/path"
 	blockformat "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
@@ -91,6 +92,7 @@ var (
 	app     struct {
 		cli.App
 		initOnly             bool
+		poolHost             bool
 		blockchainEndpoint   string
 		secretsPath          string
 		generateNodeKey      bool
@@ -392,6 +394,12 @@ func init() {
 				Name:        "initOnly",
 				Usage:       "Weather to only initialise config and quit.",
 				Destination: &app.initOnly,
+				Value:       false,
+			},
+			&cli.BoolFlag{
+				Name:        "poolHost",
+				Usage:       "Weather to run the blox as a pool host (needs public IP)",
+				Destination: &app.poolHost,
 				Value:       false,
 			},
 			&cli.BoolFlag{
@@ -737,8 +745,11 @@ func CustomStorageWriteOpenerNone(lctx linking.LinkContext) (io.Writer, ipld.Blo
 		cidCodec := c.Type()
 		mhType := c.Prefix().MhType
 
+		pin := !app.poolHost
+		pinValue := strconv.FormatBool(pin)
+
 		// Dynamically construct the URL with the cid-codec and mhtype
-		url := fmt.Sprintf("%s/api/v0/block/put?cid-codec=%s&mhtype=%s&mhlen=-1&pin=true&allow-big-block=false", baseURL, multicodec.Code(cidCodec), multicodec.Code(mhType))
+		url := fmt.Sprintf("%s/api/v0/block/put?cid-codec=%s&mhtype=%s&mhlen=-1&pin=%s&allow-big-block=false", baseURL, multicodec.Code(cidCodec), multicodec.Code(mhType), pinValue)
 
 		formData := &bytes.Buffer{}
 		writer := multipart.NewWriter(formData)
@@ -970,6 +981,9 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	if app.poolHost {
+		authorizer = ""
+	}
 	// Decode the authorized peers from strings to peer.IDs
 	authorizedPeers := make([]peer.ID, len(app.config.AuthorizedPeers))
 	for i, authorizedPeer := range app.config.AuthorizedPeers {
@@ -1168,7 +1182,7 @@ func action(ctx *cli.Context) error {
 				ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
 				_, err := serveHTTPApi(&cctx)
 				if err != nil {
-					fmt.Println("Error setting up HTTP API server:", err)
+					logger.Errorw("Error setting up HTTP API server:", "err", err)
 				}
 			}
 			select {}
@@ -1177,6 +1191,12 @@ func action(ctx *cli.Context) error {
 		//ds = ipfsNode.Repo.Datastore()
 		// linkSystem.StorageReadOpener = CustomStorageReadOpenerInternal
 		// linkSystem.StorageWriteOpener = CustomStorageWriteOpenerInternal
+	}
+
+	ipfsClusterConfig := ipfsCluster.Config{}
+	ipfsClusterApi, err := ipfsCluster.NewDefaultClient(&ipfsClusterConfig)
+	if err != nil {
+		logger.Errorw("Error in setting ipfs cluster api", "err", err)
 	}
 
 	bb, err := blox.New(
@@ -1194,6 +1214,8 @@ func action(ctx *cli.Context) error {
 		blox.WithPingCount(5),
 		blox.WithDefaultIPFShttpServer(useIPFSServer),
 		blox.WithIpfsClient(node),
+		blox.WithPoolHostMode(app.poolHost),
+		blox.WithIpfsClusterAPI(ipfsClusterApi),
 		blox.WithExchangeOpts(
 			exchange.WithUpdateConfig(updateConfig),
 			exchange.WithWg(&wg),
@@ -1205,6 +1227,7 @@ func action(ctx *cli.Context) error {
 			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
 			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
 			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
+			exchange.WithPoolHostMode(app.poolHost),
 			exchange.WithIpniProviderEngineOptions(
 				engine.WithHost(ipnih),
 				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),

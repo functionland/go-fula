@@ -20,6 +20,7 @@ type (
 		authorizedPeers          []peer.ID
 		allowTransientConnection bool
 		ipniPublishDisabled      bool
+		poolHostMode             bool
 		ipniPublishTicker        *time.Ticker
 		ipniPublishChanBuffer    int
 		ipniPublishMaxBatchSize  int
@@ -105,6 +106,13 @@ func WithIpniPublishInterval(t time.Duration) Option {
 func WithIpniGetEndPoint(l string) Option {
 	return func(o *options) error {
 		o.ipniGetEndpoint = l
+		return nil
+	}
+}
+
+func WithPoolHostMode(n bool) Option {
+	return func(o *options) error {
+		o.poolHostMode = n
 		return nil
 	}
 }

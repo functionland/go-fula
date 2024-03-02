@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/functionland/go-fula/exchange"
+	ipfsCluster "github.com/ipfs-cluster/ipfs-cluster/api/rest/client"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/ipfs/kubo/client/rpc"
@@ -41,10 +42,12 @@ type (
 		minSuccessRate        int
 		blockchainEndpoint    string
 		secretsPath           string
+		poolHostMode          bool
 		IPFShttpServer        *http.Server
 		DefaultIPFShttpServer string
 		wg                    *sync.WaitGroup
 		rpc                   *rpc.HttpApi
+		ipfsClusterApi        ipfsCluster.Client
 	}
 )
 
@@ -169,6 +172,20 @@ func WithDefaultIPFShttpServer(n string) Option {
 func WithIpfsClient(n *rpc.HttpApi) Option {
 	return func(o *options) error {
 		o.rpc = n
+		return nil
+	}
+}
+
+func WithPoolHostMode(n bool) Option {
+	return func(o *options) error {
+		o.poolHostMode = n
+		return nil
+	}
+}
+
+func WithIpfsClusterAPI(n ipfsCluster.Client) Option {
+	return func(o *options) error {
+		o.ipfsClusterApi = n
 		return nil
 	}
 }
