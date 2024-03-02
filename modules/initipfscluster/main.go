@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -12,56 +13,64 @@ import (
 )
 
 type Config struct {
-    Identity string `yaml:"identity"`
+	Identity string `yaml:"identity"`
 }
 
 func main() {
-    var cfg Config
-    // Assuming config.yaml is in the current directory
-    configFile, err := os.ReadFile("./config.yaml")
-    if err != nil {
-        panic(fmt.Errorf("reading config.yaml: %v", err))
-    }
+	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
+	flag.Parse()
 
-    if err := yaml.Unmarshal(configFile, &cfg); err != nil {
-        panic(fmt.Errorf("parsing config.yaml: %v", err))
-    }
+	// Use the flag values (replace hardcoded paths)
+	internalPath := *internalPathPtr
 
-    // Decode the base64 encoded identity to get the private key bytes
-    privKeyBytes, err := base64.StdEncoding.DecodeString(cfg.Identity)
-    if err != nil {
-        panic(fmt.Errorf("decoding private key: %v", err))
-    }
+	fulaConfigPath := internalPath + "/config.yaml"
 
-    // Assuming the private key is in a format understood by the libp2p crypto package
-    priv, err := crypto.UnmarshalPrivateKey(privKeyBytes)
-    if err != nil {
-        panic(fmt.Errorf("unmarshaling private key: %v", err))
-    }
+	var cfg Config
+	// Assuming config.yaml is in the current directory
+	configFile, err := os.ReadFile(fulaConfigPath)
+	if err != nil {
+		panic(fmt.Errorf("reading config.yaml: %v", err))
+	}
 
-    // Generate the PeerID from the public key
-    peerID, err := peer.IDFromPublicKey(priv.GetPublic())
-    if err != nil {
-        panic(fmt.Errorf("generating PeerID from public key: %v", err))
-    }
+	if err := yaml.Unmarshal(configFile, &cfg); err != nil {
+		panic(fmt.Errorf("parsing config.yaml: %v", err))
+	}
 
-    identity := map[string]string{
-        "id":          peerID.String(),
-        "private_key": cfg.Identity,
-    }
+	// Decode the base64 encoded identity to get the private key bytes
+	privKeyBytes, err := base64.StdEncoding.DecodeString(cfg.Identity)
+	if err != nil {
+		panic(fmt.Errorf("decoding private key: %v", err))
+	}
 
-    identityJSON, err := json.MarshalIndent(identity, "", "    ")
-    if err != nil {
-        panic(fmt.Errorf("marshaling identity to JSON: %v", err))
-    }
+	// Assuming the private key is in a format understood by the libp2p crypto package
+	priv, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		panic(fmt.Errorf("unmarshaling private key: %v", err))
+	}
 
-    // Write the identity.json to the /internal/ipfs-cluster/ directory
-    if err := os.MkdirAll("/internal/ipfs-cluster", 0755); err != nil {
-        panic(fmt.Errorf("creating /internal/ipfs-cluster directory: %v", err))
-    }
-    if err := os.WriteFile("/internal/ipfs-cluster/identity.json", identityJSON, 0644); err != nil {
-        panic(fmt.Errorf("writing identity.json: %v", err))
-    }
+	// Generate the PeerID from the public key
+	peerID, err := peer.IDFromPublicKey(priv.GetPublic())
+	if err != nil {
+		panic(fmt.Errorf("generating PeerID from public key: %v", err))
+	}
 
-    fmt.Println("IPFS Cluster identity.json created successfully.")
+	identity := map[string]string{
+		"id":          peerID.String(),
+		"private_key": cfg.Identity,
+	}
+
+	identityJSON, err := json.MarshalIndent(identity, "", "    ")
+	if err != nil {
+		panic(fmt.Errorf("marshaling identity to JSON: %v", err))
+	}
+
+	// Write the identity.json to the /internal/ipfs-cluster/ directory
+	if err := os.MkdirAll(internalPath+"/ipfs-cluster", 0755); err != nil {
+		panic(fmt.Errorf("creating /internal/ipfs-cluster directory: %v", err))
+	}
+	if err := os.WriteFile(internalPath+"/ipfs-cluster/identity.json", identityJSON, 0644); err != nil {
+		panic(fmt.Errorf("writing identity.json: %v", err))
+	}
+
+	fmt.Println("IPFS Cluster identity.json created successfully.")
 }
