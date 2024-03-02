@@ -149,7 +149,7 @@ type ApiResponse struct {
 func main() {
 	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
 	externalPathPtr := flag.String("external", "/uniondrive", "Path to the external disk")
-	sourceIpfsConfigPtr := flag.String("defaultIpfsConfig", "/internal/ipfs_config", "Path to default ipfs config")
+	defaultIpfsConfigPtr := flag.String("defaultIpfsConfig", "/internal/ipfs_config", "Path to default ipfs config")
 	apiIpAddrPtr := flag.String("apiIp", "0.0.0.0", "Defalut address for listening to api. If running outside of docker change it to 127.0.0.1")
 	// Parse flags
 	flag.Parse()
@@ -157,7 +157,7 @@ func main() {
 	// Use the flag values (replace hardcoded paths)
 	internalPath := *internalPathPtr
 	externalPath := *externalPathPtr
-	sourceIpfsConfig := *sourceIpfsConfigPtr
+	defaultIpfsConfig := *defaultIpfsConfigPtr
 	apiIpAddr := *apiIpAddrPtr
 
 	configPath := internalPath + "/config.yaml"
@@ -172,11 +172,11 @@ func main() {
 	config := readConfigYAML(configPath)
 	// Read or create IPFS config
 	var err error
-	ipfsCfg, err = readIPFSConfig(sourceIpfsConfig, ipfsConfigPath)
+	ipfsCfg, err = readIPFSConfig(defaultIpfsConfig, ipfsConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, create it in main
-			if err := copyDefaultIPFSConfig(sourceIpfsConfig, ipfsConfigPath); err != nil {
+			if err := copyDefaultIPFSConfig(defaultIpfsConfig, ipfsConfigPath); err != nil {
 				panic(fmt.Sprintf("Failed to create empty config file: %v", err))
 			}
 		} else {
