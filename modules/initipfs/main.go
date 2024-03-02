@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -146,21 +147,36 @@ type ApiResponse struct {
 }
 
 func main() {
-	configPath := "/internal/config.yaml"
-	ipfsConfigPath := "/internal/ipfs_data/config"
+	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
+	externalPathPtr := flag.String("external", "/uniondrive", "Path to the external disk")
+	sourceIpfsConfigPtr := flag.String("sourceIpfs", "/internal/ipfs_config", "Path to default ipfs config")
+	apiIpAddrPtr := flag.String("apiIp", "0.0.0.0", "Defalut address for listening to api. If running outside of docker change it to 127.0.0.1")
+	// Parse flags
+	flag.Parse()
+
+	// Use the flag values (replace hardcoded paths)
+	internalPath := *internalPathPtr
+	externalPath := *externalPathPtr
+	sourceIpfsConfig := *sourceIpfsConfigPtr
+	apiIpAddr := *apiIpAddrPtr
+
+	configPath := internalPath + "/config.yaml"
+	ipfsDataPath := internalPath + "/ipfs_data"
+	ipfsConfigPath := ipfsDataPath + "/config"
+	ipfsDatastorePath := externalPath + "/badgerds"
 	ipfsCfg := IPFSConfig{} // Initialize to empty
 
 	// Check directories and create if necessary
-	ensureDirectories("/internal", "/internal/ipfs_data")
+	ensureDirectories(internalPath, ipfsDataPath)
 
 	config := readConfigYAML(configPath)
 	// Read or create IPFS config
 	var err error
-	ipfsCfg, err = readIPFSConfig(ipfsConfigPath)
+	ipfsCfg, err = readIPFSConfig(sourceIpfsConfig, ipfsConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, create it in main
-			if err := copyDefaultIPFSConfig(ipfsConfigPath); err != nil {
+			if err := copyDefaultIPFSConfig(sourceIpfsConfig, ipfsConfigPath); err != nil {
 				panic(fmt.Sprintf("Failed to create empty config file: %v", err))
 			}
 		} else {
@@ -170,18 +186,20 @@ func main() {
 		}
 	}
 
-	// Fetch users that are in the same pool
-	users := []string{}
-	if config.PoolName != "0" && config.PoolName != "" {
-		users = fetchPoolUsers(config.PoolName)
-	}
-
 	updateIPFSConfigIdentity(&ipfsCfg, config)
-	updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users)
-	updateDatastorePath(&ipfsCfg, "/uniondrive/badgerds")
+
+	/*
+		// Fetch users that are in the same pool
+		users := []string{}
+		if config.PoolName != "0" && config.PoolName != "" {
+			users = fetchPoolUsers(config.PoolName)
+		}
+		updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users) // We cannot do this as we dont know the ip of these nodes
+	*/
+	updateDatastorePath(&ipfsCfg, ipfsDatastorePath, apiIpAddr)
 
 	writeIPFSConfig(ipfsConfigPath, ipfsCfg)
-	writePredefinedFiles()
+	writePredefinedFiles(ipfsDataPath, externalPath)
 
 	fmt.Println("Setup completed.")
 }
@@ -196,10 +214,7 @@ func createEmptyFile(path string) error {
 	return nil
 }
 
-func copyDefaultIPFSConfig(path string) error {
-	// Define the source path of the default config file
-	sourcePath := "/internal/ipfs_config"
-
+func copyDefaultIPFSConfig(sourcePath, path string) error {
 	// Open the source file
 	sourceFile, err := os.Open(sourcePath)
 	if err != nil {
@@ -244,7 +259,7 @@ func readConfigYAML(path string) ConfigYAML {
 	return cfg
 }
 
-func readIPFSConfig(path string) (IPFSConfig, error) {
+func readIPFSConfig(sourceIpfsConfig, path string) (IPFSConfig, error) {
 	var cfg IPFSConfig
 
 	// Check if the file exists
@@ -267,7 +282,7 @@ func readIPFSConfig(path string) (IPFSConfig, error) {
 			// Failed to delete directory, return an error
 			return cfg, fmt.Errorf("failed to delete directory at %s: %v", path, err)
 		}
-		if err := copyDefaultIPFSConfig(path); err != nil {
+		if err := copyDefaultIPFSConfig(sourceIpfsConfig, path); err != nil {
 			panic(fmt.Sprintf("Failed to create empty config file: %v", err))
 		}
 	}
@@ -325,21 +340,14 @@ func updateIPFSConfigIdentity(ipfsCfg *IPFSConfig, cfg ConfigYAML) {
 	ipfsCfg.Identity.PeerID = generatePeerIDFromIdentity(cfg.Identity)
 }
 
-func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string) {
-	// Check if the Datastore.Spec.child is not nil and the path exists
-	if ipfsCfg.Datastore.Spec.Child.Path != "" {
-		// Update the path to the new specified path
-		ipfsCfg.Datastore.Spec.Child.Path = newPath
-		ipfsCfg.Datastore.Spec.Child.SyncWrites = true
-	}
-	if ipfsCfg.Addresses.Gateway != "" {
-		// Update the path to the new specified path
-		ipfsCfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/8081"
-	}
-	if ipfsCfg.Addresses.Gateway != "" {
-		// Update the path to the new specified path
-		ipfsCfg.Addresses.API = "/ip4/0.0.0.0/tcp/5001"
-	}
+func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
+	// Update the path to the new specified path
+	ipfsCfg.Datastore.Spec.Child.Path = newPath
+	ipfsCfg.Datastore.Spec.Child.SyncWrites = true
+	// Update the path to the new specified path
+	ipfsCfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/8081"
+	// Update the path to the new specified path
+	ipfsCfg.Addresses.API = "/ip4/" + apiIp + "/tcp/5001"
 }
 
 func generatePeerIDFromIdentity(identity string) string {
@@ -380,16 +388,16 @@ func writeIPFSConfig(path string, cfg IPFSConfig) {
 	}
 }
 
-func writePredefinedFiles() {
+func writePredefinedFiles(ipfsDataPath, externalPath string) {
 	// Write version file
-	if err := os.WriteFile("/internal/ipfs_data/version", []byte("15"), 0644); err != nil {
+	if err := os.WriteFile(ipfsDataPath+"/version", []byte("15"), 0644); err != nil {
 		fmt.Printf("Failed to write version file: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Write datastore_spec file
-	dsSpec := `{"path":"/uniondrive/badgerds","type":"badgerds"}`
-	if err := os.WriteFile("/internal/ipfs_data/datastore_spec", []byte(dsSpec), 0644); err != nil {
+	dsSpec := `{"path":"` + externalPath + `/badgerds","type":"badgerds"}`
+	if err := os.WriteFile(ipfsDataPath+"/datastore_spec", []byte(dsSpec), 0644); err != nil {
 		fmt.Printf("Failed to write datastore_spec file: %v\n", err)
 		os.Exit(1)
 	}

@@ -28,7 +28,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -1044,13 +1043,16 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		defer bl.membersLock.Unlock()
 		bl.members[pid] = status
 		bl.membersLock.Unlock()
-		if len(addrs) > 0 {
-			bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
-			addrsString := multiaddrsToStrings(addrs)
-			reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			defer cancel() // Ensures resources are cleaned up after the Stat call
-			bl.rpc.Request("bootstrap/add", addrsString...).Send(reqCtx)
-		}
+		/*
+			// Removed because we do not know hte ipfs address of thee nodes and they should be found through the ipfs-cluster
+			if len(addrs) > 0 {
+				bl.h.Peerstore().AddAddrs(pid, addrs, peerstore.ConnectedAddrTTL)
+				addrsString := multiaddrsToStrings(addrs)
+				reqCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				defer cancel() // Ensures resources are cleaned up after the Stat call
+				bl.rpc.Request("bootstrap/add", addrsString...).Send(reqCtx)
+			}
+		*/
 		return nil
 	}
 
