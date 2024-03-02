@@ -149,7 +149,7 @@ type ApiResponse struct {
 func main() {
 	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
 	externalPathPtr := flag.String("external", "/uniondrive", "Path to the external disk")
-	sourceIpfsConfigPtr := flag.String("sourceIpfs", "/internal/ipfs_config", "Path to default ipfs config")
+	sourceIpfsConfigPtr := flag.String("defaultIpfsConfig", "/internal/ipfs_config", "Path to default ipfs config")
 	apiIpAddrPtr := flag.String("apiIp", "0.0.0.0", "Defalut address for listening to api. If running outside of docker change it to 127.0.0.1")
 	// Parse flags
 	flag.Parse()
