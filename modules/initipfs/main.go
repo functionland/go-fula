@@ -154,11 +154,9 @@ func main() {
 	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
 	externalPathPtr := flag.String("external", "/uniondrive", "Path to the external disk")
 	defaultIpfsConfigPtr := flag.String("defaultIpfsConfig", "/internal/ipfs_config", "Path to default ipfs config")
-	apiIpAddrPtr := flag.String("apiIp", "0.0.0.0", "Defalut address for listening to api. If running outside of docker change it to 127.0.0.1")
-	// Parse flags
+	apiIpAddrPtr := flag.String("apiIp", "0.0.0.0", "Default address for listening to api. If running outside of docker change it to 127.0.0.1")
 	flag.Parse()
 
-	// Use the flag values (replace hardcoded paths)
 	internalPath := *internalPathPtr
 	externalPath := *externalPathPtr
 	defaultIpfsConfig := *defaultIpfsConfigPtr
@@ -168,40 +166,24 @@ func main() {
 	ipfsDataPath := internalPath + "/ipfs_data"
 	ipfsConfigPath := ipfsDataPath + "/config"
 	ipfsDatastorePath := externalPath + "/badgerds"
-	ipfsCfg := IPFSConfig{} // Initialize to empty
+	ipfsCfg := IPFSConfig{}
 
-	// Check directories and create if necessary
 	ensureDirectories(internalPath, ipfsDataPath)
 
 	config := readConfigYAML(configPath)
-	// Read or create IPFS config
-	var err error
-	ipfsCfg, err = readIPFSConfig(defaultIpfsConfig, ipfsConfigPath)
+	ipfsCfg, err := readIPFSConfig(defaultIpfsConfig, ipfsConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// File doesn't exist, create it in main
 			if err := copyDefaultIPFSConfig(defaultIpfsConfig, ipfsConfigPath); err != nil {
 				panic(fmt.Sprintf("Failed to create empty config file: %v", err))
 			}
 		} else {
-			// Unexpected error, handle appropriately (e.g., logging, retrying)
-			// For now, panic for demonstration:
 			panic(fmt.Sprintf("Failed to read or create IPFS config: %v", err))
 		}
 	}
 
 	updateIPFSConfigIdentity(&ipfsCfg, config)
-
-	/*
-		// Fetch users that are in the same pool
-		users := []string{}
-		if config.PoolName != "0" && config.PoolName != "" {
-			users = fetchPoolUsers(config.PoolName)
-		}
-		updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users) // We cannot do this as we dont know the ip of these nodes
-	*/
 	updateDatastorePath(&ipfsCfg, ipfsDatastorePath, apiIpAddr)
-
 	writeIPFSConfig(ipfsConfigPath, ipfsCfg)
 	writePredefinedFiles(ipfsDataPath, externalPath)
 
@@ -340,12 +322,17 @@ func fetchPoolUsers(poolName string) []string {
 }
 
 func updateIPFSConfigIdentity(ipfsCfg *IPFSConfig, cfg ConfigYAML) {
+	if ipfsCfg.Identity == nil {
+		ipfsCfg.Identity = &struct {
+			PeerID  string `json:"PeerID"`
+			PrivKey string `json:"PrivKey"`
+		}{}
+	}
 	ipfsCfg.Identity.PrivKey = cfg.Identity
 	ipfsCfg.Identity.PeerID = generatePeerIDFromIdentity(cfg.Identity)
 }
 
 func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
-	// Ensure Datastore.Spec is a pointer (if it isn't already)
 	if ipfsCfg.Datastore.Spec == nil {
 		ipfsCfg.Datastore.Spec = &struct {
 			Child *struct {
@@ -359,12 +346,9 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
 		}{}
 	}
 
-	// Directly modify the fields via the pointers
 	ipfsCfg.Datastore.Spec.Child.Path = newPath
 	ipfsCfg.Datastore.Spec.Child.SyncWrites = true
-	// Update the path to the new specified path
 	ipfsCfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/8081"
-	// Update the path to the new specified path
 	ipfsCfg.Addresses.API = "/ip4/" + apiIp + "/tcp/5001"
 }
 
