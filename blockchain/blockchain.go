@@ -1038,7 +1038,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 	}
 
 	// Minimize lock scope, declare a function to handle locked operations
-	updateMembers := func(pid peer.ID, status common.MemberStatus, addrs []multiaddr.Multiaddr) error {
+	updateMembers := func(pid peer.ID, status common.MemberStatus) error {
 		bl.membersLock.Lock()
 		defer bl.membersLock.Unlock()
 		bl.members[pid] = status
@@ -1135,7 +1135,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 					}
 
 					// Add the relay addresses to the peerstore for the peer ID
-					err = updateMembers(pid, common.Unknown, addrs)
+					err = updateMembers(pid, common.Unknown)
 					if err != nil {
 						return err
 					}
@@ -1278,7 +1278,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 			log.Debugw("peer already exists in members", "h.ID", localPeerID, "pid", pid, "existingStatus", existingStatus, "status", status)
 			if existingStatus != status && (existingStatus != common.Approved) {
 				// If the user is already pending and now approved, update to ApprovedOrPending and no need to update the addrs
-				if err := updateMembers(pid, status, []multiaddr.Multiaddr{}); err != nil {
+				if err := updateMembers(pid, status); err != nil {
 					return err
 				}
 			} else {
@@ -1304,7 +1304,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 
 			// Add the relay addresses to the peerstore for the peer ID
 
-			if err := updateMembers(pid, status, addrs); err != nil {
+			if err := updateMembers(pid, status); err != nil {
 				return err
 			}
 			log.Debugw("Added peer to peerstore", "h.ID", localPeerID, "pid", pid, "addrs", addrs)
