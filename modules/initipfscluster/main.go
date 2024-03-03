@@ -18,7 +18,7 @@ type Config struct {
 
 func main() {
 	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
-	externalPathPtr := flag.String("internal", "/uniondrive", "Path to the internal disk")
+	externalPathPtr := flag.String("external", "/uniondrive", "Path to the internal disk")
 	flag.Parse()
 
 	// Use the flag values (replace hardcoded paths)
