@@ -18,10 +18,12 @@ type Config struct {
 
 func main() {
 	internalPathPtr := flag.String("internal", "/internal", "Path to the internal disk")
+	externalPathPtr := flag.String("internal", "/uniondrive", "Path to the internal disk")
 	flag.Parse()
 
 	// Use the flag values (replace hardcoded paths)
 	internalPath := *internalPathPtr
+	externalPath := *externalPathPtr
 
 	fulaConfigPath := internalPath + "/config.yaml"
 
@@ -65,10 +67,10 @@ func main() {
 	}
 
 	// Write the identity.json to the /internal/ipfs-cluster/ directory
-	if err := os.MkdirAll(internalPath+"/ipfs-cluster", 0755); err != nil {
+	if err := os.MkdirAll(externalPath+"/ipfs-cluster", 0755); err != nil {
 		panic(fmt.Errorf("creating /internal/ipfs-cluster directory: %v", err))
 	}
-	if err := os.WriteFile(internalPath+"/ipfs-cluster/identity.json", identityJSON, 0644); err != nil {
+	if err := os.WriteFile(externalPath+"/ipfs-cluster/identity.json", identityJSON, 0644); err != nil {
 		panic(fmt.Errorf("writing identity.json: %v", err))
 	}
 
