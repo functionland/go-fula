@@ -26,10 +26,10 @@ type ConfigYAML struct {
 }
 
 type IPFSConfig struct {
-	API struct {
+	API *struct {
 		HTTPHeaders map[string]interface{} `json:"HTTPHeaders"`
 	} `json:"API"`
-	Addresses struct {
+	Addresses *struct {
 		API            string   `json:"API"`
 		Announce       []string `json:"Announce"`
 		AppendAnnounce []string `json:"AppendAnnounce"`
@@ -37,17 +37,17 @@ type IPFSConfig struct {
 		NoAnnounce     []string `json:"NoAnnounce"`
 		Swarm          []string `json:"Swarm"`
 	} `json:"Addresses"`
-	AutoNAT   struct{} `json:"AutoNAT"`
-	Bootstrap []string `json:"Bootstrap"`
-	DNS       struct {
+	AutoNAT   *struct{} `json:"AutoNAT"`
+	Bootstrap []string  `json:"Bootstrap"`
+	DNS       *struct {
 		Resolvers map[string]interface{} `json:"Resolvers"`
 	} `json:"DNS"`
-	Datastore struct {
+	Datastore *struct {
 		BloomFilterSize int    `json:"BloomFilterSize"`
 		GCPeriod        string `json:"GCPeriod"`
 		HashOnRead      bool   `json:"HashOnRead"`
-		Spec            struct {
-			Child struct {
+		Spec            *struct {
+			Child *struct {
 				Path       string `json:"path"`
 				SyncWrites bool   `json:"syncWrites"`
 				Truncate   bool   `json:"truncate"`
@@ -59,12 +59,12 @@ type IPFSConfig struct {
 		StorageGCWatermark int    `json:"StorageGCWatermark"`
 		StorageMax         string `json:"StorageMax"`
 	} `json:"Datastore"`
-	Discovery struct {
-		MDNS struct {
+	Discovery *struct {
+		MDNS *struct {
 			Enabled bool `json:"Enabled"`
 		} `json:"MDNS"`
 	} `json:"Discovery"`
-	Experimental struct {
+	Experimental *struct {
 		FilestoreEnabled              bool `json:"FilestoreEnabled"`
 		Libp2pStreamMounting          bool `json:"Libp2pStreamMounting"`
 		OptimisticProvide             bool `json:"OptimisticProvide"`
@@ -73,7 +73,7 @@ type IPFSConfig struct {
 		StrategicProviding            bool `json:"StrategicProviding"`
 		UrlstoreEnabled               bool `json:"UrlstoreEnabled"`
 	} `json:"Experimental"`
-	Gateway struct {
+	Gateway *struct {
 		DeserializedResponses interface{}            `json:"DeserializedResponses"`
 		DisableHTMLErrors     interface{}            `json:"DisableHTMLErrors"`
 		ExposeRoutingAPI      interface{}            `json:"ExposeRoutingAPI"`
@@ -83,50 +83,50 @@ type IPFSConfig struct {
 		PublicGateways        interface{}            `json:"PublicGateways"`
 		RootRedirect          string                 `json:"RootRedirect"`
 	} `json:"Gateway"`
-	Identity struct {
+	Identity *struct {
 		PeerID  string `json:"PeerID"`
 		PrivKey string `json:"PrivKey"`
 	} `json:"Identity"`
-	Internal struct{} `json:"Internal"`
-	Ipns     struct {
+	Internal *struct{} `json:"Internal"`
+	Ipns     *struct {
 		RecordLifetime   string `json:"RecordLifetime"`
 		RepublishPeriod  string `json:"RepublishPeriod"`
 		ResolveCacheSize int    `json:"ResolveCacheSize"`
 	} `json:"Ipns"`
-	Migration struct {
+	Migration *struct {
 		DownloadSources []interface{} `json:"DownloadSources"`
 		Keep            string        `json:"Keep"`
 	} `json:"Migration"`
-	Mounts struct {
+	Mounts *struct {
 		FuseAllowOther bool   `json:"FuseAllowOther"`
 		IPFS           string `json:"IPFS"`
 		IPNS           string `json:"IPNS"`
 	} `json:"Mounts"`
-	Peering struct {
+	Peering *struct {
 		Peers interface{} `json:"Peers"`
 	} `json:"Peering"`
-	Pinning struct {
+	Pinning *struct {
 		RemoteServices map[string]interface{} `json:"RemoteServices"`
 	} `json:"Pinning"`
-	Plugins struct {
+	Plugins *struct {
 		Plugins interface{} `json:"Plugins"`
 	} `json:"Plugins"`
 	Provider struct {
 		Strategy string `json:"Strategy"`
 	} `json:"Provider"`
-	Pubsub struct {
+	Pubsub *struct {
 		DisableSigning bool   `json:"DisableSigning"`
 		Router         string `json:"Router"`
 	} `json:"Pubsub"`
-	Reprovider struct{} `json:"Reprovider"`
-	Routing    struct {
+	Reprovider *struct{} `json:"Reprovider"`
+	Routing    *struct {
 		AcceleratedDHTClient bool        `json:"AcceleratedDHTClient"`
 		Methods              interface{} `json:"Methods"`
 		Routers              interface{} `json:"Routers"`
 	} `json:"Routing"`
-	Swarm struct {
+	Swarm *struct {
 		AddrFilters interface{} `json:"AddrFilters"`
-		ConnMgr     struct {
+		ConnMgr     *struct {
 			HighWater   int    `json:"HighWater"`
 			LowWater    int    `json:"LowWater"`
 			GracePeriod string `json:"GracePeriod"`
@@ -136,7 +136,7 @@ type IPFSConfig struct {
 		RelayClient             struct{} `json:"RelayClient"`
 		RelayService            struct{} `json:"RelayService"`
 		ResourceMgr             struct{} `json:"ResourceMgr"`
-		Transports              struct {
+		Transports              *struct {
 			Multiplexers map[string]interface{} `json:"Multiplexers"`
 			Network      map[string]interface{} `json:"Network"`
 			Security     map[string]interface{} `json:"Security"`
