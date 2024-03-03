@@ -1042,7 +1042,6 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 		bl.membersLock.Lock()
 		defer bl.membersLock.Unlock()
 		bl.members[pid] = status
-		bl.membersLock.Unlock()
 		/*
 			// Removed because we do not know hte ipfs address of thee nodes and they should be found through the ipfs-cluster
 			if len(addrs) > 0 {
