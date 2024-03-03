@@ -345,7 +345,21 @@ func updateIPFSConfigIdentity(ipfsCfg *IPFSConfig, cfg ConfigYAML) {
 }
 
 func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
-	// Update the path to the new specified path
+	// Ensure Datastore.Spec is a pointer (if it isn't already)
+	if ipfsCfg.Datastore.Spec == nil {
+		ipfsCfg.Datastore.Spec = &struct {
+			Child *struct {
+				Path       string `json:"path"`
+				SyncWrites bool   `json:"syncWrites"`
+				Truncate   bool   `json:"truncate"`
+				Type       string `json:"type"`
+			} `json:"child"`
+			Prefix string `json:"prefix"`
+			Type   string `json:"type"`
+		}{}
+	}
+
+	// Directly modify the fields via the pointers
 	ipfsCfg.Datastore.Spec.Child.Path = newPath
 	ipfsCfg.Datastore.Spec.Child.SyncWrites = true
 	// Update the path to the new specified path
