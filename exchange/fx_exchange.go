@@ -699,7 +699,7 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 
 func (e *FxExchange) authorized(pid peer.ID, action string, cid string) bool {
 	log.Debugw("checking authorization", "pid", pid, "action", action, "cid", cid)
-	if e.authorizer == e.h.ID() && action != actionAuth { //to cover the cases where in poolHost mode
+	if (e.authorizer == e.h.ID() || e.authorizer == "") && action != actionAuth { //to cover the cases where in poolHost mode
 		// If no authorizer is set allow all.
 		return true
 	} else if e.authorizer == "" && action == actionAuth {
