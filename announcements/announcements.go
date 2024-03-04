@@ -205,7 +205,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 		case <-ctx.Done():
 			log.Info("Context cancelled, stopped making periodic iexist announcements")
 			return
-		case t := <-ticker.C:
+		case _ = <-ticker.C:
 			a := &Announcement{
 				Version: common.Version0,
 				Type:    IExistAnnouncementType,
