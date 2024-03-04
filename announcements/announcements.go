@@ -205,7 +205,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 		case <-ctx.Done():
 			log.Info("Context cancelled, stopped making periodic iexist announcements")
 			return
-		case _ = <-ticker.C:
+		case <-ticker.C:
 			a := &Announcement{
 				Version: common.Version0,
 				Type:    IExistAnnouncementType,
@@ -228,7 +228,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 				log.Errorw("Failed to publish iexist announcement", "err", err)
 				continue
 			}
-			//log.Debugw("Announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
+			//log.Debugw("Announced iexist message", "from", an.h.ID(), "announcement", a, "time ticker.C", t)
 		}
 	}
 }
