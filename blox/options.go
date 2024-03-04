@@ -99,7 +99,7 @@ func newOptions(o ...Option) (*options, error) {
 			return bytes.NewBuffer(val), nil
 		}
 	}
-	if opts.authorizer == "" {
+	if opts.authorizer == "" && !opts.poolHostMode {
 		opts.authorizer = opts.h.ID()
 	}
 	if opts.wg == nil {

@@ -2,6 +2,7 @@ package fulamobile
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -128,6 +129,25 @@ func (c *Client) BatchUploadManifest(cidsBytes []byte, poolID int, replicationFa
 	ctx := context.TODO()
 	cidArray := strings.Split(string(cidsBytes), "|")
 	return c.bl.ManifestBatchUpload(ctx, c.bloxPid, blockchain.ManifestBatchUploadMobileRequest{Cid: cidArray, PoolID: poolID, ReplicationFactor: replicationFactor})
+}
+
+func (c *Client) ReplicateInPool(cidsBytes []byte, account string, poolID int) []byte {
+	ctx := context.TODO()
+	cidArray := strings.Split(string(cidsBytes), "|")
+
+	responseBytes, err := c.bl.ReplicateInPool(ctx, c.bloxPid, blockchain.ReplicateRequest{Cids: cidArray, Account: account, PoolID: poolID})
+	if err != nil {
+		// Convert the error to a JSON object and then to []byte
+		errJSON := map[string]string{"error": err.Error()}
+		errBytes, jsonErr := json.Marshal(errJSON)
+		if jsonErr != nil {
+			// In case JSON marshaling fails, fallback to a simple byte conversion of the error string
+			return []byte("Error marshaling error to JSON: " + jsonErr.Error())
+		}
+		return errBytes
+	}
+
+	return responseBytes
 }
 
 //////////////////////////////////////////////////

@@ -586,11 +586,32 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 		return
 	}
 
+	poolInt, err := strconv.Atoi(bl.topicName)
+	if err != nil {
+		w.WriteHeader(http.StatusFailedDependency)
+		errMsg := map[string]interface{}{
+			"message":     "An error occurred",
+			"description": "endpoint is not a member of valid pool",
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
+	if req.PoolID != poolInt {
+		w.WriteHeader(http.StatusFailedDependency)
+		errMsg := map[string]interface{}{
+			"message":     "An error occurred",
+			"description": "Endpoint is not a member of requested replication pool",
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
 	if bl.ipfsClusterApi == nil {
 		w.WriteHeader(http.StatusFailedDependency)
 		errMsg := map[string]interface{}{
 			"message":     "An error occurred",
-			"description": "iipfs cluster API is nil",
+			"description": "ipfs cluster API is nil",
 		}
 		json.NewEncoder(w).Encode(errMsg)
 		return
@@ -817,8 +838,7 @@ func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID
 
 func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 	if bl.authorizer == "" {
-		// If no authorizer is set allow all.
-		return true
+		return action == actionReplicateInPool
 	}
 	switch action {
 	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:

@@ -385,6 +385,7 @@ type Blockchain interface {
 	ManifestUpload(context.Context, peer.ID, ManifestUploadRequest) ([]byte, error)
 	ManifestBatchStore(context.Context, peer.ID, ManifestBatchStoreRequest) ([]byte, error)
 	ManifestBatchUpload(context.Context, peer.ID, ManifestBatchUploadMobileRequest) ([]byte, error)
+	ReplicateInPool(context.Context, peer.ID, ReplicateRequest) ([]byte, error)
 	ManifestStore(context.Context, peer.ID, ManifestStoreRequest) ([]byte, error)
 	ManifestAvailable(context.Context, peer.ID, ManifestAvailableRequest) ([]byte, error)
 	ManifestRemove(context.Context, peer.ID, ManifestRemoveRequest) ([]byte, error)
@@ -431,6 +432,7 @@ var requestTypes = map[string]reflect.Type{
 	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceRequest{}),
 	actionTransferToGoerli:     reflect.TypeOf(TransferToFulaRequest{}),
 	actionTransferToMumbai:     reflect.TypeOf(TransferToFulaRequest{}),
+	actionReplicateInPool:      reflect.TypeOf(ReplicateRequest{}),
 
 	//Hardware
 	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
@@ -471,6 +473,7 @@ var responseTypes = map[string]reflect.Type{
 	actionAssetsBalance:        reflect.TypeOf(AssetsBalanceResponse{}),
 	actionTransferToGoerli:     reflect.TypeOf(TransferToFulaResponse{}),
 	actionTransferToMumbai:     reflect.TypeOf(TransferToFulaResponse{}),
+	actionReplicateInPool:      reflect.TypeOf(ReplicateResponse{}),
 
 	//Hardware
 	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
