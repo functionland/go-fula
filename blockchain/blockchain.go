@@ -837,7 +837,7 @@ func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID
 }
 
 func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
-	if bl.authorizer == "" {
+	if bl.authorizer == bl.h.ID() { //to cover the cases where in poolHost mode
 		return action == actionReplicateInPool
 	}
 	switch action {
