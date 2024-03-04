@@ -538,6 +538,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 		http.Error(w, "cannot parse request body", http.StatusBadRequest)
 		return
 	}
+	log.Debugw("Decoded replicate request", "req", req)
 
 	//TODO: Ensure it is optimized for long-running calls
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
@@ -589,6 +590,8 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 		return
 	}
 
+	log.Debugw("Received replicate response from chain", "res", res)
+
 	poolInt, err := strconv.Atoi(bl.topicName)
 	if err != nil {
 		log.Errorw("failed to call blockchain poolInt", "err", err)
@@ -600,6 +603,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 		json.NewEncoder(w).Encode(errMsg)
 		return
 	}
+	log.Debugw("Pool in replicate is", "poolInt", poolInt)
 
 	if req.PoolID != poolInt {
 		log.Errorw("Endpoint is not a member of requested replication pool", "req.PoolID", req.PoolID, "poolInt", poolInt)
