@@ -591,6 +591,16 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 	}
 
 	log.Debugw("Received replicate response from chain", "res", res)
+	if len(res.Manifests) == 0 {
+		log.Errorw("no uploadable manifests could be found", "res.Manifests", res.Manifests)
+		w.WriteHeader(http.StatusNoContent)
+		errMsg := map[string]interface{}{
+			"message":     "An error occurred",
+			"description": "no uploadable manifests could be found",
+		}
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
 
 	poolInt, err := strconv.Atoi(bl.topicName)
 	if err != nil {
@@ -626,6 +636,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 		json.NewEncoder(w).Encode(errMsg)
 		return
 	}
+
 	pCtx, pCancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer pCancel()
 	for i := 0; i < len(res.Manifests); i++ {
