@@ -526,6 +526,7 @@ func (bl *FxBlockchain) handleAction(method string, action string, from peer.ID,
 
 func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", action, "from", from)
+	log.Debug("Processing replicate request")
 	var req ReplicateRequest
 	var res ReplicateResponse
 	var poolRes []string
@@ -543,7 +544,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 	defer cancel()
 	response, statusCode, err := bl.callBlockchain(ctx, method, actionManifestAvailableBatch, req)
 	if err != nil {
-		log.Error("failed to call blockchain: %v", err)
+		log.Errorw("failed to call blockchain", "err", err)
 		w.WriteHeader(statusCode)
 		// Try to parse the error and format it as JSON
 		var errMsg map[string]interface{}
@@ -559,6 +560,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 	}
 	// If status code is not 200, attempt to format the response as JSON
 	if statusCode != http.StatusOK {
+		log.Errorw("failed to call blockchain", "statusCode", statusCode)
 		w.WriteHeader(statusCode)
 		var errMsg map[string]interface{}
 		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr == nil {
@@ -576,6 +578,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 	}
 
 	if jsonErr := json.Unmarshal(response, &res); jsonErr != nil {
+		log.Errorw("failed to call blockchain", "jsonErr", jsonErr)
 		// If the response isn't JSON or can't be parsed, use a generic message
 		w.WriteHeader(http.StatusFailedDependency)
 		errMsg := map[string]interface{}{
@@ -588,6 +591,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 
 	poolInt, err := strconv.Atoi(bl.topicName)
 	if err != nil {
+		log.Errorw("failed to call blockchain poolInt", "err", err)
 		w.WriteHeader(http.StatusFailedDependency)
 		errMsg := map[string]interface{}{
 			"message":     "An error occurred",
@@ -598,6 +602,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 	}
 
 	if req.PoolID != poolInt {
+		log.Errorw("Endpoint is not a member of requested replication pool", "req.PoolID", req.PoolID, "poolInt", poolInt)
 		w.WriteHeader(http.StatusFailedDependency)
 		errMsg := map[string]interface{}{
 			"message":     "An error occurred",
@@ -608,6 +613,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 	}
 
 	if bl.ipfsClusterApi == nil {
+		log.Errorw("ipfs cluster API is nil", "bl.ipfsClusterApi", bl.ipfsClusterApi)
 		w.WriteHeader(http.StatusFailedDependency)
 		errMsg := map[string]interface{}{
 			"message":     "An error occurred",
