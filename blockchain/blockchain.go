@@ -1378,7 +1378,8 @@ const creatorPeerIDFilePath = "/internal/.tmp/pool_%d_creator.tmp"
 func (bl *FxBlockchain) getClusterEndpoint(ctx context.Context, poolID int) (string, error) {
 	// 1. Check for existing creator peer ID
 	if creatorPeerID, err := loadCreatorPeerID(poolID); err == nil {
-		return creatorPeerID + ".functionyard.fula.network", nil
+		log.Debugw("Endpoint for pool", "ID", poolID, "Creator", creatorPeerID)
+		return strconv.Itoa(poolID) + ".pools.functionyard.fula.network", nil
 	}
 
 	// 2. Fetch pool details
@@ -1405,7 +1406,7 @@ func (bl *FxBlockchain) getClusterEndpoint(ctx context.Context, poolID int) (str
 		log.Debugf("Error saving creator peer ID to file: %v", err)
 	}
 
-	return peerID + ".functionyard.fula.network", nil
+	return strconv.Itoa(poolID) + ".pools.functionyard.fula.network", nil
 }
 func loadCreatorPeerID(poolID int) (string, error) {
 	filename := fmt.Sprintf(creatorPeerIDFilePath, poolID)
