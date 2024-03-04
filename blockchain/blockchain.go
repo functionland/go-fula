@@ -534,7 +534,7 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Debug("cannot parse request body: %v", err)
-		http.Error(w, "", http.StatusBadRequest)
+		http.Error(w, "cannot parse request body", http.StatusBadRequest)
 		return
 	}
 

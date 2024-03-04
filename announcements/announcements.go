@@ -163,7 +163,7 @@ func (an *FxAnnouncements) HandleAnnouncements(ctx context.Context) {
 					continue
 				}
 				if from == an.h.ID() {
-					log.Debug("Ignoring announcement from self")
+					//log.Debug("Ignoring announcement from self")
 					continue
 				}
 				a := &Announcement{}
@@ -228,7 +228,7 @@ func (an *FxAnnouncements) AnnounceIExistPeriodically(ctx context.Context) {
 				log.Errorw("Failed to publish iexist announcement", "err", err)
 				continue
 			}
-			log.Debugw("Announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
+			//log.Debugw("Announced iexist message", "from", an.h.ID(), "announcement", a, "time", t)
 		}
 	}
 }
@@ -291,13 +291,13 @@ func (an *FxAnnouncements) AnnounceJoinPoolRequestPeriodically(ctx context.Conte
 }
 
 func (an *FxAnnouncements) ValidateAnnouncement(ctx context.Context, id peer.ID, msg *pubsub.Message, status common.MemberStatus, exists bool) bool {
-	log.Debugw("ValidateAnnouncement", "on peer", an.h.ID(), "from peerID", id)
+	//log.Debugw("ValidateAnnouncement", "on peer", an.h.ID(), "from peerID", id)
 	a := &Announcement{}
 	if err := a.UnmarshalBinary(msg.Data); err != nil {
 		log.Errorw("failed to unmarshal announcement data", "err", err)
 		return false
 	}
-	log.Debugw("ValidateAnnouncement", "on peer", an.h.ID(), "from peerID", id, "type", a.Type)
+	//log.Debugw("ValidateAnnouncement", "on peer", an.h.ID(), "from peerID", id, "type", a.Type)
 
 	switch a.Type {
 	case NewManifestAnnouncementType:

@@ -67,7 +67,7 @@ func (p *hubPublisher) Start(_ context.Context) error {
 		maybePublish := func() {
 			remaining := len(unpublished)
 			if remaining == 0 {
-				log.Debug("hubPublisher: No remaining entries to publish")
+				//log.Debug("hubPublisher: No remaining entries to publish")
 				return
 			}
 			if publishing.Load() {
