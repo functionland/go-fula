@@ -4,19 +4,25 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
+	bsfetcher "github.com/ipfs/boxo/fetcher/impl/blockservice"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipld/go-ipld-prime"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 	_ "github.com/ipld/go-ipld-prime/codec/dagjson"
 	_ "github.com/ipld/go-ipld-prime/codec/raw"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	ipldmc "github.com/ipld/go-ipld-prime/multicodec"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
+	"github.com/ipld/go-ipld-prime/traversal"
+	"github.com/ipld/go-ipld-prime/traversal/selector"
+	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/mr-tron/base58"
@@ -35,6 +41,7 @@ import (
 //  * Any struct type, all of whose exported methods have supported function types and all of whose exported fields have supported types.
 
 var rootDatastoreKey = datastore.NewKey("/")
+var exploreAllRecursivelySelector selector.Selector
 
 type Client struct {
 	h       host.Host
@@ -241,6 +248,62 @@ func (c *Client) ListRecentCidsAsString() (*StringIterator, error) {
 		return nil, err
 	}
 	return &StringIterator{links: links}, nil
+}
+
+func (c *Client) ListRecentCidsAsStringWithChildren() (*StringIterator, error) {
+	ctx := context.TODO()
+	recentLinks, err := c.listRecentCids(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ssb := builder.NewSelectorSpecBuilder(basicnode.Prototype.Any)
+	ss := ssb.ExploreRecursive(selector.RecursionLimitNone(), ssb.ExploreUnion(
+		ssb.Matcher(),
+		ssb.ExploreAll(ssb.ExploreRecursiveEdge()),
+	))
+	exploreAllRecursivelySelector, err := ss.Selector()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse IPLD built-in selector: %v", err)
+	}
+
+	cidSet := make(map[string]struct{}) // Use a map to track unique CIDs
+	for _, link := range recentLinks {
+		node, err := c.ls.Load(ipld.LinkContext{Ctx: ctx}, link, basicnode.Prototype.Any)
+		if err != nil {
+			return nil, err
+		}
+
+		progress := traversal.Progress{
+			Cfg: &traversal.Config{
+				Ctx:                            ctx,
+				LinkSystem:                     c.ls,
+				LinkTargetNodePrototypeChooser: bsfetcher.DefaultPrototypeChooser,
+				LinkVisitOnlyOnce:              true,
+			},
+		}
+
+		err = progress.WalkMatching(node, exploreAllRecursivelySelector, func(progress traversal.Progress, visitedNode datamodel.Node) error {
+			link, err := c.ls.ComputeLink(link.Prototype(), visitedNode)
+			if err != nil {
+				return err
+			}
+			cidStr := link.String()
+			cidSet[cidStr] = struct{}{} // Add CID string to the set
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Convert the map keys to a slice
+	var uniqueCidStrings []string
+	for cidStr := range cidSet {
+		uniqueCidStrings = append(uniqueCidStrings, cidStr)
+	}
+
+	return &StringIterator{links: uniqueCidStrings}, nil // Return StringIterator with unique CIDs
 }
 
 func (c *Client) ClearCidsFromRecent(cidsBytes []byte) error {

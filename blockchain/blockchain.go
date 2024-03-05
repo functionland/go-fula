@@ -639,13 +639,16 @@ func (bl *FxBlockchain) handleReplicateInPool(method string, action string, from
 
 	pCtx, pCancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer pCancel()
+	pinOptions := ipfsClusterClientApi.PinOptions{
+		Mode: 0,
+	}
 	for i := 0; i < len(res.Manifests); i++ {
 		c, err := cid.Decode(res.Manifests[i].Cid)
 		if err != nil {
 			log.Errorw("Error decoding CID:", "err", err)
 			continue // Or handle the error appropriately
 		}
-		replicationRes, err := bl.ipfsClusterApi.Pin(pCtx, ipfsClusterClientApi.NewCid(c), ipfsClusterClientApi.PinOptions{})
+		replicationRes, err := bl.ipfsClusterApi.Pin(pCtx, ipfsClusterClientApi.NewCid(c), pinOptions)
 		if err != nil {
 			log.Errorw("Error pinning CID:", "err", err)
 			continue

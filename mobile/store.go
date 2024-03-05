@@ -116,3 +116,32 @@ func (c *Client) listRecentCidsAsString(ctx context.Context) ([]string, error) {
 	}
 	return links, nil
 }
+
+func (c *Client) listRecentCids(ctx context.Context) ([]ipld.Link, error) {
+	q := query.Query{
+		KeysOnly: true,
+		Prefix:   recentCidKeyPrefix.String(),
+	}
+	results, err := c.ds.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer results.Close()
+
+	var links []ipld.Link
+	for r := range results.Next() {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if r.Error != nil {
+			return nil, r.Error
+		}
+		key := datastore.RawKey(r.Key)
+		c, err := cid.Decode(key.BaseNamespace())
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, cidlink.Link{Cid: c})
+	}
+	return links, nil
+}

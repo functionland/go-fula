@@ -396,9 +396,9 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	fmt.Printf("Stored raw data link: %s\n", c.String())
 	log.Infof("Stored raw data link: %s", c.String())
 
-	recentCids, err := c1.ListRecentCidsAsString()
+	recentCids, err := c1.ListRecentCidsAsStringWithChildren()
 	if err != nil {
-		log.Errorw("Error happened in ListRecentCidsAsString", "err", err)
+		log.Errorw("Error happened in ListRecentCidsAsStringWithChildre", "err", err)
 		panic(err)
 	}
 	for recentCids.HasNext() {
@@ -469,6 +469,74 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	// Waiting for 5 seconds
 	// Now fetching the link 01551e20acb05838aae47ed8246fe8736a69d22bc2ea60340fe08ff75100d511d9b23c46
 	// Fetched Val is: some raw data
+}
+
+func Example_listRecentCidsWithChildren() {
+	// Elevate log level to show internal communications.
+	if err := logging.SetLogLevel("*", "debug"); err != nil {
+		log.Error("Error happened in logging.SetLogLevel")
+		panic(err)
+	}
+
+	mcfg := fulamobile.NewConfig()
+	mcfg.AllowTransientConnection = true
+	mcfg.BloxAddr = ""
+	mcfg.PoolName = "1"
+	mcfg.Exchange = "noop"
+	mcfg.BlockchainEndpoint = ""
+
+	c1, err := fulamobile.NewClient(mcfg)
+	if err != nil {
+		log.Errorw("Error happened in fulamobile.NewClient", "err", err)
+		panic(err)
+	}
+	// Authorize exchange between the two nodes
+	mobilePeerIDString := c1.ID()
+	log.Infof("first client created with ID: %s", mobilePeerIDString)
+	mpid, err := peer.Decode(mobilePeerIDString)
+	if err != nil {
+		log.Errorw("Error happened in peer.Decode", "err", err)
+		panic(err)
+	}
+	log.Infof("mpid is %s", mpid)
+
+	rawData := []byte("some raw data")
+	fmt.Printf("Original Val is: %s\n", string(rawData))
+	rawCodec := int64(0x55)
+	linkBytes, err := c1.Put(rawData, rawCodec)
+	if err != nil {
+		fmt.Printf("Error storing the raw data: %v", err)
+		return
+	}
+	c, err := cid.Cast(linkBytes)
+	if err != nil {
+		fmt.Printf("Error casting bytes to CID: %v", err)
+		return
+	}
+	fmt.Printf("Stored raw data link: %s\n", c.String())
+	log.Infof("Stored raw data link: %s", c.String())
+
+	recentCids, err := c1.ListRecentCidsAsStringWithChildren()
+	if err != nil {
+		log.Errorw("Error happened in ListRecentCidsAsStringWithChildren", "err", err)
+		panic(err)
+	}
+	for recentCids.HasNext() {
+		cid, err := recentCids.Next()
+		if err != nil {
+			fmt.Printf("Error retrieving next CID: %v", err)
+			log.Errorf("Error retrieving next CID: %v", err)
+			// Decide if you want to break or continue based on your error handling strategy
+			break
+		}
+		fmt.Printf("recentCid link: %s\n", cid) // Print each CID
+		log.Infof("recentCid link: %s", cid)
+	}
+
+	// Output:
+	// Original Val is: some raw data
+	// Stored raw data link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
+	// recentCid link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy
 }
 
 func Example_poolExchangeLargeDagBetweenClientBlox() {
