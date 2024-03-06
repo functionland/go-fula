@@ -16,6 +16,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
+type PingResponse struct {
+	Success bool   `json:"Success"`
+	Time    int64  `json:"Time"`
+	Text    string `json:"Text"`
+}
+
 func (bl *FxBlockchain) PoolCreate(ctx context.Context, to peer.ID, r PoolCreateRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
@@ -624,27 +630,72 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 			return err
 		}
 	}
+	averageDuration := float64(2000)
+	successCount := 0
 	status, exists := bl.GetMemberStatus(from)
 	if !exists {
 		return fmt.Errorf("peerID does not exist in the list of pool requests or pool members: %s", from)
 	}
 	if status == common.Pending {
 		// Ping
-		log.Debugw("****** Pinging pending node", "from", bl.h.ID(), "to", from)
-		averageDuration, successCount, err := bl.p.Ping(ctx, from)
+		/*
+			// Use IPFS Ping
+			log.Debugw("****** Pinging pending node", "from", bl.h.ID(), "to", from)
+			averageDuration, successCount, err := bl.p.Ping(ctx, from)
+			if err != nil {
+				log.Errorw("An error occurred during ping", "error", err)
+				return err
+			}
+			if bl.maxPingTime == 0 {
+				//TODO: This should not happen but is happening!
+				bl.maxPingTime = 200
+			}
+			if bl.minPingSuccessCount == 0 {
+				//TODO: This should not happen but is happening!
+				bl.minPingSuccessCount = 3
+			}
+		*/
+		// Set up the request with context for timeout
+		ctxPing, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		// Send the ping request
+		res, err := bl.rpc.Request("ping", from.String()).Send(ctxPing)
 		if err != nil {
-			log.Errorw("An error occurred during ping", "error", err)
-			return err
+			return fmt.Errorf("ping was unsuccessful: %s", err)
 		}
-		if bl.maxPingTime == 0 {
-			//TODO: This should not happen but is happening!
-			bl.maxPingTime = 200
+		if res.Error != nil {
+			return fmt.Errorf("ping was unsuccessful: %s", res.Error)
 		}
-		if bl.minPingSuccessCount == 0 {
-			//TODO: This should not happen but is happening!
-			bl.minPingSuccessCount = 3
+
+		// Process multiple responses using a decoder
+		decoder := json.NewDecoder(res.Output)
+
+		var totalTime int64
+		var count int
+
+		for decoder.More() {
+			var pingResp PingResponse
+			err := decoder.Decode(&pingResp)
+			if err != nil {
+				log.Errorf("error decoding JSON response: %s", err)
+				continue
+			}
+
+			if pingResp.Text == "" && pingResp.Time > 0 { // Check for empty Text field and Time
+				totalTime += pingResp.Time
+				count++
+			}
 		}
-		vote := averageDuration <= bl.maxPingTime && successCount >= bl.minPingSuccessCount
+
+		if count > 0 {
+			averageDuration = float64(totalTime) / float64(count) / 1e6 // Convert nanoseconds to milliseconds
+			successCount = count
+		} else {
+			fmt.Println("No valid ping responses received")
+		}
+
+		vote := int(averageDuration) <= bl.maxPingTime && successCount >= bl.minPingSuccessCount
 
 		log.Debugw("Ping result", "averageDuration", averageDuration, "successCount", successCount, "vote", vote, "bl.maxPingTime", bl.maxPingTime, "bl.minPingSuccessCount", bl.minPingSuccessCount)
 

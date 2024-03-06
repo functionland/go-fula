@@ -18,6 +18,7 @@ import (
 	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipfs/kubo/client/rpc"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -531,6 +532,11 @@ func (p *Blox) PingDht(to peer.ID) error {
 func (p *Blox) GetBlMembers() map[peer.ID]common.MemberStatus {
 	//This is for unit testing and no need to call directly
 	return p.bl.GetMembers()
+}
+
+func (p *Blox) GetIPFSRPC() *rpc.HttpApi {
+	//This is for unit testing and no need to call directly
+	return p.rpc
 }
 
 func (p *Blox) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
