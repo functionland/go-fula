@@ -40,7 +40,7 @@ func newOptions(o ...Option) (*options, error) {
 		ipniPublishMaxBatchSize: 16 << 10,
 		ipniPublishChanBuffer:   1,
 		wg:                      nil,
-		pushRateLimiter:         ratelimit.New(100), // Default of 50 per second
+		pushRateLimiter:         ratelimit.New(5), // Default of 5 per second
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
