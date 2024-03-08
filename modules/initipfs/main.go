@@ -292,7 +292,7 @@ func readIPFSConfig(sourceIpfsConfig, path string) (IPFSConfig, error) {
 	}
 
 	// Read the existing file
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(sourceIpfsConfig)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read IPFS config: %v", err))
 	} else if len(data) == 0 {
