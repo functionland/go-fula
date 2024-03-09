@@ -196,6 +196,7 @@ func (cfg *Config) init(mc *Client) error {
 			exchange.WithAuthorizer(mc.h.ID()),
 			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(true),
+			exchange.WithMaxPushRate(5),
 			exchange.WithDhtProviderOptions(
 				dht.Datastore(namespace.Wrap(mc.ds, datastore.NewKey("dht"))),
 				dht.ProtocolExtension(protocol.ID("/"+cfg.PoolName)),

@@ -658,7 +658,9 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		// Set up the request with context for timeout
 		ctxPing, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-
+		if bl.rpc == nil {
+			return fmt.Errorf("IPFS rpc is not defined")
+		}
 		// Send the ping request
 		res, err := bl.rpc.Request("ping", from.String()).Send(ctxPing)
 		if err != nil {

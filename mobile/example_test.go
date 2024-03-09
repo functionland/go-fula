@@ -554,7 +554,7 @@ func Example_poolExchangeLargeDagBetweenClientBlox() {
 	defer cancel()
 
 	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "info"); err != nil {
+	if err := logging.SetLogLevel("*", "debug"); err != nil {
 		log.Error("Error happened in logging.SetLogLevel")
 		panic(err)
 	}

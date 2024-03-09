@@ -862,17 +862,16 @@ func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID
 
 func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 	log.Debugw("Checking authorization", "action", action, "pid", pid, "bl.authorizer", bl.authorizer, "h.ID", bl.h.ID())
-	if bl.authorizer == bl.h.ID() || bl.authorizer == "" { //to cover the cases where in poolHost mode
-		return action == actionReplicateInPool
-	}
 	switch action {
+	case actionReplicateInPool:
+		return (bl.authorizer == bl.h.ID() || bl.authorizer == "")
 	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
 		return ok
 	case actionAuth:
-		return pid == bl.authorizer
+		return pid == bl.authorizer && bl.authorizer != ""
 	default:
 		return false
 	}
@@ -1113,15 +1112,16 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				reqCtx, cancelReqCtx := context.WithTimeout(ctx, 2*time.Second)
 				defer cancelReqCtx() // Ensures resources are cleaned up after the Stat call
 				poolHostAddrString := "/dns4/" + clusterEndpoint + "/tcp/4001/p2p/" + poolHostPeerID
-				bl.rpc.Request("bootstrap/add", poolHostAddrString).Send(reqCtx)
-				poolHostAddr, err := ma.NewMultiaddr(poolHostAddrString)
-				if err == nil {
-					poolHostAddrInfos, err := peer.AddrInfosFromP2pAddrs(poolHostAddr)
+				if bl.rpc != nil {
+					bl.rpc.Request("bootstrap/add", poolHostAddrString).Send(reqCtx)
+					poolHostAddr, err := ma.NewMultiaddr(poolHostAddrString)
 					if err == nil {
-						bl.rpc.Swarm().Connect(reqCtx, poolHostAddrInfos[0])
+						poolHostAddrInfos, err := peer.AddrInfosFromP2pAddrs(poolHostAddr)
+						if err == nil {
+							bl.rpc.Swarm().Connect(reqCtx, poolHostAddrInfos[0])
+						}
 					}
 				}
-
 			} else {
 				// Handle the error: Endpoint didn't match the pattern
 				fmt.Println("Error: Could not extract peerID from endpoint")
