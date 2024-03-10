@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -1043,7 +1044,6 @@ func action(ctx *cli.Context) error {
 	listenAddrs = append(listenAddrs, relayAddr2)
 
 	hopts := []libp2p.Option{
-		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.EnableNATService(),
 		libp2p.NATPortMap(),
 		libp2p.EnableRelay(),
@@ -1078,12 +1078,33 @@ func action(ctx *cli.Context) error {
 		))
 	}
 
-	bopts := append(hopts, libp2p.Identity(k))
+	bopts := append(hopts, libp2p.Identity(k), libp2p.ListenAddrs(listenAddrs...))
 	h, err := libp2p.New(bopts...)
 	if err != nil {
 		return err
 	}
-	iopts := append(hopts, libp2p.Identity(ipnik))
+
+	// Create a new slice for updated listen addresses
+	ipniListenAddrs := make([]ma.Multiaddr, len(listenAddrs))
+	// Update each address in the slice
+	for i, addr := range listenAddrs {
+		// Convert the multiaddr to a string for manipulation
+		addrStr := addr.String()
+
+		// Replace "40001" with "40002" in the string representation
+		updatedAddrStr := strings.Replace(addrStr, "40001", "40002", -1)
+
+		// Parse the updated string back into a multiaddr.Multiaddr
+		updatedAddr, err := ma.NewMultiaddr(updatedAddrStr)
+		if err != nil {
+			log.Fatalf("Failed to parse updated multiaddr '%s': %v", updatedAddrStr, err)
+		}
+
+		// Store the updated multiaddr in the slice
+		ipniListenAddrs[i] = updatedAddr
+	}
+
+	iopts := append(hopts, libp2p.Identity(ipnik), libp2p.ListenAddrs(ipniListenAddrs...))
 	ipnih, err := libp2p.New(iopts...)
 	if err != nil {
 		return err
@@ -1102,6 +1123,10 @@ func action(ctx *cli.Context) error {
 		panic(fmt.Errorf("invalid multiaddress: %w", err))
 	}
 	node, err := rpc.NewApi(nodeMultiAddr)
+	if err != nil {
+		logger.Fatal(err)
+		return err
+	}
 
 	const useIPFSServer = "none" //internal: runs local ipfs instance, none requires an external one and fula runs the mock server on 5001
 	if useIPFSServer == "internal" {
