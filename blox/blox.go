@@ -310,7 +310,7 @@ func (p *Blox) GetLastCheckedTime() (time.Time, error) {
 // ListModifiedStoredBlocks lists only the folders that have been modified after the last check time
 // and returns the filenames of the files created after the last check time in those folders.
 func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]string, error) {
-	blocksDir := "/uniondrive/badgerds/blocks"
+	blocksDir := "/uniondrive/ipfs_datastore/blocks"
 	var modifiedFiles []string
 
 	err := filepath.Walk(blocksDir, func(path string, info os.FileInfo, err error) error {
@@ -450,7 +450,7 @@ func (p *Blox) Start(ctx context.Context) error {
 			case <-ticker.C:
 				// instead of FetchAvailableManifestsAndStore See what are the new manifests from ther last time we checked in blockstore
 				// A method that checks the last time we checked for stored blocks file
-				// then it checks the stored files under /uniondrive/badgerds/blocks/{folders that are not .temp}
+				// then it checks the stored files under /uniondrive/ipfs_datastore/blocks/{folders that are not .temp}
 				// then for those folders that the change date/time is after the time we last checked it reads the files names that are created after the last time we checked
 				// thne it passes each filename to a method called GetCidv1FromBlockFilename(string filename) (string, error) and receives the cidv1 of each file and put all in an array []string
 				// Then it calls the method:_, err := p.bl.HandleManifestBatchStore(ctx, p.topicName, storedCids)

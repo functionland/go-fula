@@ -43,21 +43,12 @@ type IPFSConfig struct {
 		Resolvers map[string]interface{} `json:"Resolvers"`
 	} `json:"DNS"`
 	Datastore struct {
-		BloomFilterSize int    `json:"BloomFilterSize"`
-		GCPeriod        string `json:"GCPeriod"`
-		HashOnRead      bool   `json:"HashOnRead"`
-		Spec            struct {
-			Child struct {
-				Path       string `json:"path"`
-				SyncWrites bool   `json:"syncWrites"`
-				Truncate   bool   `json:"truncate"`
-				Type       string `json:"type"`
-			} `json:"child"`
-			Prefix string `json:"prefix"`
-			Type   string `json:"type"`
-		} `json:"Spec"`
-		StorageGCWatermark int    `json:"StorageGCWatermark"`
-		StorageMax         string `json:"StorageMax"`
+		BloomFilterSize    int           `json:"BloomFilterSize"`
+		GCPeriod           string        `json:"GCPeriod"`
+		HashOnRead         bool          `json:"HashOnRead"`
+		Spec               DatastoreSpec `json:"Spec"`
+		StorageGCWatermark int           `json:"StorageGCWatermark"`
+		StorageMax         string        `json:"StorageMax"`
 	} `json:"Datastore"`
 	Discovery struct {
 		MDNS struct {
@@ -144,10 +135,41 @@ type IPFSConfig struct {
 	} `json:"Swarm"`
 }
 
+type DatastoreSpec struct {
+	Mounts []Mount `json:"mounts"`
+	Type   string  `json:"type"`
+}
+type Mount struct {
+	Child      Child  `json:"child"`
+	Mountpoint string `json:"mountpoint"`
+	Prefix     string `json:"prefix"`
+	Type       string `json:"type"`
+}
+
+// Define Child struct to match the "child" object inside each mount
+type Child struct {
+	Path        string `json:"path"`
+	ShardFunc   string `json:"shardFunc,omitempty"` // Include omitempty to omit the field if empty
+	Sync        bool   `json:"sync,omitempty"`      // Include omitempty for optional fields
+	Type        string `json:"type"`
+	Compression string `json:"compression,omitempty"` // For levelds type child
+}
+
 type ApiResponse struct {
 	Users []struct {
 		PeerID string `json:"peer_id"`
 	} `json:"users"`
+}
+
+type DatastoreConfig struct {
+	Mounts []MountSingle `json:"mounts"`
+	Type   string        `json:"type"`
+}
+type MountSingle struct {
+	Mountpoint string `json:"mountpoint"`
+	Path       string `json:"path"`
+	ShardFunc  string `json:"shardFunc,omitempty"` // Omitempty will omit this field if it's empty
+	Type       string `json:"type"`
 }
 
 func main() {
@@ -167,11 +189,11 @@ func main() {
 	configPath := internalPath + "/config.yaml"
 	ipfsDataPath := internalPath + "/ipfs_data"
 	ipfsConfigPath := ipfsDataPath + "/config"
-	ipfsDatastorePath := externalPath + "/badgerds"
+	ipfsDatastorePath := externalPath + "/ipfs_datastore"
 	ipfsCfg := IPFSConfig{} // Initialize to empty
 
 	// Check directories and create if necessary
-	ensureDirectories(internalPath, ipfsDataPath)
+	ensureDirectories(internalPath, ipfsDataPath, ipfsDatastorePath)
 
 	config := readConfigYAML(configPath)
 	// Read or create IPFS config
@@ -203,7 +225,7 @@ func main() {
 	updateDatastorePath(&ipfsCfg, ipfsDatastorePath, apiIpAddr)
 
 	writeIPFSConfig(ipfsConfigPath, ipfsCfg)
-	writePredefinedFiles(ipfsDataPath, externalPath)
+	writePredefinedFiles(ipfsDataPath, ipfsDatastorePath)
 
 	fmt.Println("Setup completed.")
 }
@@ -346,8 +368,16 @@ func updateIPFSConfigIdentity(ipfsCfg *IPFSConfig, cfg ConfigYAML) {
 
 func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
 	// Update the path to the new specified path
-	ipfsCfg.Datastore.Spec.Child.Path = newPath
-	ipfsCfg.Datastore.Spec.Child.SyncWrites = true
+	for i, mount := range ipfsCfg.Datastore.Spec.Mounts {
+		// Update the path for flatfs
+		if mount.Child.Type == "flatfs" {
+			ipfsCfg.Datastore.Spec.Mounts[i].Child.Path = newPath + "/blocks"
+		}
+		// Update the path for levelds
+		if mount.Child.Type == "levelds" {
+			ipfsCfg.Datastore.Spec.Mounts[i].Child.Path = newPath + "/datastore"
+		}
+	}
 	// Update the path to the new specified path
 	ipfsCfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/8081"
 	// Update the path to the new specified path
@@ -392,7 +422,7 @@ func writeIPFSConfig(path string, cfg IPFSConfig) {
 	}
 }
 
-func writePredefinedFiles(ipfsDataPath, externalPath string) {
+func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
 	// Write version file
 	if err := os.WriteFile(ipfsDataPath+"/version", []byte("15"), 0644); err != nil {
 		fmt.Printf("Failed to write version file: %v\n", err)
@@ -400,8 +430,34 @@ func writePredefinedFiles(ipfsDataPath, externalPath string) {
 	}
 
 	// Write datastore_spec file
-	dsSpec := `{"path":"` + externalPath + `/badgerds","type":"badgerds"}`
-	if err := os.WriteFile(ipfsDataPath+"/datastore_spec", []byte(dsSpec), 0644); err != nil {
+	// Populate the new structure
+
+	dsConfig := DatastoreConfig{
+		Mounts: []MountSingle{
+			{
+				Mountpoint: "/blocks",
+				Path:       ipfsDatastorePath + "/blocks",
+				ShardFunc:  "/repo/flatfs/shard/v1/next-to-last/2",
+				Type:       "flatfs",
+			},
+			{
+				Mountpoint: "/",
+				Path:       ipfsDatastorePath + "/datastore",
+				Type:       "levelds",
+			},
+		},
+		Type: "mount",
+	}
+
+	// Marshal the structure into JSON
+	dsConfigJSON, err := json.MarshalIndent(dsConfig, "", "  ")
+	if err != nil {
+		fmt.Printf("Failed to marshal datastore config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Write the JSON to the datastore_spec file
+	if err := os.WriteFile(ipfsDataPath+"/datastore_spec", dsConfigJSON, 0644); err != nil {
 		fmt.Printf("Failed to write datastore_spec file: %v\n", err)
 		os.Exit(1)
 	}
