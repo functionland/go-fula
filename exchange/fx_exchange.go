@@ -67,7 +67,7 @@ var cbSettings = gobreaker.Settings{
 	MaxRequests: 3,         // Open circuit after 3 consecutive failures
 	Interval:    breakTime, // Remain open for 10 seconds
 	OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
-		log.Infof("Circuit breaker '%s' changed state from '%s' to '%s'", name, from, to)
+		log.Errorf("Circuit breaker '%s' changed state from '%s' to '%s'", name, from, to)
 	},
 }
 var pushCircuitBreaker = gobreaker.NewCircuitBreaker(cbSettings)
@@ -115,7 +115,13 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 	if err != nil {
 		return nil, err
 	}
-	tr := &http.Transport{}
+	tr := &http.Transport{
+		DisableKeepAlives: true, // Ensure connections are not reused
+		MaxIdleConns:      500,
+		MaxConnsPerHost:   2000,
+		IdleConnTimeout:   20 * time.Second,
+		// Include any other necessary transport configuration here
+	}
 	tr.RegisterProtocol("libp2p", p2phttp.NewTransport(h, p2phttp.ProtocolOption(FxExchangeProtocolID)))
 	client := &http.Client{Transport: tr}
 
@@ -422,14 +428,12 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	err = progress.WalkMatching(node, exploreAllRecursivelySelector, func(progress traversal.Progress, node datamodel.Node) error {
 		eg.Go(func() error {
 			// Create a new context for this specific push operation
-			opCtx, cancel := context.WithTimeout(ctx, breakTime) // Adjust the timeout as necessary
-			defer cancel()
 			e.pushRateLimiter.Take()
 			link, err := e.ls.ComputeLink(l.Prototype(), node)
 			if err != nil {
 				return err
 			}
-			return e.pushOneNode(opCtx, node, to, link)
+			return e.pushOneNode(ctx, node, to, link)
 		})
 		return nil
 	})
@@ -441,6 +445,8 @@ func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 }
 
 func (e *FxExchange) pushOneNode(ctx context.Context, node ipld.Node, to peer.ID, link datamodel.Link) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var buf bytes.Buffer
 
 	c := link.(cidlink.Link).Cid
@@ -462,7 +468,8 @@ func (e *FxExchange) pushOneNode(ctx context.Context, node ipld.Node, to peer.ID
 	_, err = pushCircuitBreaker.Execute(func() (interface{}, error) {
 		resp, err := e.c.Do(req)
 		if err != nil {
-			return nil, err // Signal failure to the circuit breaker
+			log.Errorw("Failed to do push request1", "err", err)
+			return nil, err
 		}
 		defer resp.Body.Close()
 
@@ -493,6 +500,7 @@ func (e *FxExchange) pushOneNode(ctx context.Context, node ipld.Node, to peer.ID
 				_, err := pushCircuitBreaker.Execute(func() (interface{}, error) {
 					resp, err := e.c.Do(req)
 					if err != nil {
+						log.Errorw("Failed to do push request on retry", "err", err)
 						return nil, err // Signal failure to the circuit breaker
 					}
 					defer resp.Body.Close()
@@ -586,7 +594,10 @@ func (e *FxExchange) handlePush(from peer.ID, w http.ResponseWriter, r *http.Req
 	}
 	if err := e.decodeAndStoreBlock(r.Context(), r.Body, cidlink.Link{Cid: cidInPath}); err != nil {
 		http.Error(w, "invalid cid", http.StatusBadRequest)
+		return
 	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (e *FxExchange) decodeAndStoreBlock(ctx context.Context, r io.ReadCloser, link ipld.Link) error {

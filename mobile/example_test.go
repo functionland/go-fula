@@ -603,6 +603,9 @@ func Example_poolExchangeLargeDagBetweenClientBlox() {
 	mcfg.BloxAddr = bloxAddrString + "/p2p/" + h1.ID().String()
 	mcfg.PoolName = "1"
 	mcfg.Exchange = bloxAddrString
+	mcfg.AllowTransientConnection = true
+	mcfg.DisableResourceManger = false
+	mcfg.StaticRelays = []string{}
 	mcfg.BlockchainEndpoint = "127.0.0.1:4004"
 	log.Infow("bloxAdd string created", "addr", bloxAddrString+"/p2p/"+h1.ID().String())
 
@@ -662,12 +665,6 @@ func Example_poolExchangeLargeDagBetweenClientBlox() {
 
 		links = append(links, linkBytes)
 		chunkedData = append(chunkedData, chunk)
-		c, err := cid.Cast(linkBytes)
-		if err != nil {
-			log.Errorf("Error casting bytes to CID: %v\n", err)
-			return
-		}
-		log.Debugf("Stored chunk link: %s\n", c.String())
 	}
 
 	fmt.Printf("Stored %d chunks\n", len(links))
@@ -681,14 +678,6 @@ func Example_poolExchangeLargeDagBetweenClientBlox() {
 	var count = 0
 	for recentCids.HasNext() {
 		count = count + 1
-		cid, err := recentCids.Next()
-		if err != nil {
-			fmt.Printf("Error retrieving next CID: %v", err)
-			log.Errorf("Error retrieving next CID: %v", err)
-			// Decide if you want to break or continue based on your error handling strategy
-			break
-		}
-		log.Debugf("recentCid link: %s", cid)
 	}
 	log.Infof("recentCids count: %d", count)
 	fmt.Printf("recentCids count: %d\n", count) // Print each CID
