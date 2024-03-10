@@ -19,6 +19,7 @@ import (
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/kubo/client/rpc"
+	iface "github.com/ipfs/kubo/core/coreiface"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/datamodel"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -126,6 +127,9 @@ func (p *Blox) PubsubValidator(ctx context.Context, id peer.ID, msg *pubsub.Mess
 func (p *Blox) storeCidIPFS(ctx context.Context, c path.Path) error {
 	getCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if p.rpc == nil {
+		return fmt.Errorf("IPFS rpc is undefined")
+	}
 	_, err := p.rpc.Block().Get(getCtx, c)
 	if err != nil {
 		log.Errorw("It seems that the link is not found", "c", c, "err", err)
@@ -185,10 +189,13 @@ func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {
 				}
 				statCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel() // Ensures resources are cleaned up after the Stat call
-				stat, err := p.rpc.Block().Stat(statCtx, cidPath)
-				if err != nil {
-					log.Errorw("It seems that the link is not stored", "l", l, "err", err)
-					continue
+				var stat iface.BlockStat
+				if p.rpc != nil {
+					stat, err = p.rpc.Block().Stat(statCtx, cidPath)
+					if err != nil {
+						log.Errorw("It seems that the link is not stored", "l", l, "err", err)
+						continue
+					}
 				}
 				p.ex.IpniNotifyLink(l)
 				log.Debugw("link might be successfully stored", "l", l, "from", provider.ID, "size", stat.Size())

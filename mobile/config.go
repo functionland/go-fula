@@ -85,6 +85,7 @@ func NewConfig() *Config {
 		AllowTransientConnection: true,
 		PoolName:                 "0",
 		BlockchainEndpoint:       "api.node3.functionyard.fula.network",
+		DisableResourceManger:    true,
 	}
 }
 
@@ -96,6 +97,7 @@ func (cfg *Config) init(mc *Client) error {
 		libp2p.EnableRelay(),
 		libp2p.EnableHolePunching(),
 	}
+	cfg.DisableResourceManger = true
 	if cfg.DisableResourceManger {
 		hopts = append(hopts, libp2p.ResourceManager(&network.NullResourceManager{}))
 	}
@@ -196,6 +198,7 @@ func (cfg *Config) init(mc *Client) error {
 			exchange.WithAuthorizer(mc.h.ID()),
 			exchange.WithAllowTransientConnection(cfg.AllowTransientConnection),
 			exchange.WithIpniPublishDisabled(true),
+			exchange.WithMaxPushRate(50),
 			exchange.WithDhtProviderOptions(
 				dht.Datastore(namespace.Wrap(mc.ds, datastore.NewKey("dht"))),
 				dht.ProtocolExtension(protocol.ID("/"+cfg.PoolName)),
@@ -222,9 +225,6 @@ func (cfg *Config) init(mc *Client) error {
 			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {
 				return err
 			}
-		}
-		if err != nil {
-			return err
 		}
 	}
 	return mc.ex.Start(context.TODO())
