@@ -450,7 +450,7 @@ func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
 	}
 
 	// Marshal the structure into JSON
-	dsConfigJSON, err := json.MarshalIndent(dsConfig, "", "  ")
+	dsConfigJSON, err := json.Marshal(dsConfig)
 	if err != nil {
 		fmt.Printf("Failed to marshal datastore config: %v\n", err)
 		os.Exit(1)
