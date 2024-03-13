@@ -185,7 +185,7 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 
 func (bl *FxBlockchain) processSuccessfulPoolJoinRequest(ctx context.Context, poolIDStr string, to peer.ID) {
 	// Create a ticker that triggers every 10 minutes
-	err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, true)
+	err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, true, 15*time.Second)
 	if err != nil {
 		log.Errorw("Error fetching and populating users", "err", err)
 	}
@@ -208,7 +208,7 @@ func (bl *FxBlockchain) processSuccessfulPoolJoinRequest(ctx context.Context, po
 			select {
 			case <-ticker.C:
 				// Call FetchUsersAndPopulateSets at every tick (10 minutes interval)
-				if err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, false); err != nil {
+				if err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, false, bl.fetchInterval); err != nil {
 					log.Errorw("Error fetching and populating users", "err", err)
 				}
 				status, exists := bl.GetMemberStatus(to)
@@ -625,7 +625,7 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, account string, topicString string, withMemberListUpdate bool) error {
 	// This handles the pending pool requests on a member that is already joined the pool
 	if withMemberListUpdate {
-		err := bl.FetchUsersAndPopulateSets(ctx, topicString, false)
+		err := bl.FetchUsersAndPopulateSets(ctx, topicString, false, 15*time.Second)
 		if err != nil {
 			return err
 		}

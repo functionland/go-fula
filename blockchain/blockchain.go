@@ -82,6 +82,9 @@ type (
 		stopFetchUsersAfterJoinChan chan struct{}
 		cachedAccount               string
 		isAccountCached             bool
+
+		fetchMutex sync.Mutex
+		isFetching bool
 	}
 	authorizationRequest struct {
 		Subject peer.ID `json:"id"`
@@ -143,7 +146,8 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 }
 
 func (bl *FxBlockchain) startFetchCheck() {
-	bl.fetchCheckTicker = time.NewTicker(1 * time.Minute) // check every hour, adjust as needed
+	internal := 1 * time.Minute
+	bl.fetchCheckTicker = time.NewTicker(internal) // check every hour, adjust as needed
 
 	if bl.wg != nil {
 		// Increment the WaitGroup counter before starting the goroutine
@@ -162,7 +166,7 @@ func (bl *FxBlockchain) startFetchCheck() {
 			select {
 			case <-bl.fetchCheckTicker.C:
 				if time.Since(bl.lastFetchTime) >= bl.fetchInterval {
-					bl.FetchUsersAndPopulateSets(context.Background(), bl.topicName, false)
+					bl.FetchUsersAndPopulateSets(context.Background(), bl.topicName, false, internal)
 					bl.lastFetchTime = time.Now() // update last fetch time
 				}
 			case <-bl.fetchCheckStop:
@@ -1052,7 +1056,26 @@ func multiaddrsToStrings(addrs []multiaddr.Multiaddr) []string {
 	return addrsStr
 }
 
-func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool) error {
+func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicString string, initiate bool, timeout time.Duration) error {
+	// Acquire lock to check if another fetch is in progress
+	bl.fetchMutex.Lock()
+	if bl.isFetching {
+		bl.fetchMutex.Unlock() // Important to unlock before returning
+		return fmt.Errorf("FetchUsersAndPopulateSets is already being executed")
+	}
+	// Mark as fetching
+	bl.isFetching = true
+	// Ensure to reset isFetching and unlock mutex when the function exits
+	defer func() {
+		bl.fetchMutex.Lock() // Lock before modifying isFetching
+		bl.isFetching = false
+		bl.fetchMutex.Unlock()
+	}()
+	bl.fetchMutex.Unlock() // Unlock for the potentially long-running operations below
+
+	// Rest of method
+	ctx, cancelCtx := context.WithTimeout(ctx, timeout)
+	defer cancelCtx()
 	log.Debugw("FetchUsersAndPopulateSets executed", "initiate", initiate)
 	// Initialize the map if it's nil
 	if bl.members == nil {
@@ -1109,7 +1132,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 
 			if match != nil {
 				poolHostPeerID := match[1] // Capture group 1 contains the peerID
-				reqCtx, cancelReqCtx := context.WithTimeout(ctx, 2*time.Second)
+				reqCtx, cancelReqCtx := context.WithTimeout(ctx, 4*time.Second)
 				defer cancelReqCtx() // Ensures resources are cleaned up after the Stat call
 				poolHostAddrString := "/dns4/" + clusterEndpoint + "/tcp/4001/p2p/" + poolHostPeerID
 				if bl.rpc != nil {

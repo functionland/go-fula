@@ -386,7 +386,7 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.Start(ctx); err != nil {
 		return err
 	}
-	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true); err != nil {
+	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true, 15*time.Second); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
 	}
 
