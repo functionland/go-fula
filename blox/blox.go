@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/functionland/go-fula/announcements"
@@ -311,37 +312,59 @@ func (p *Blox) GetLastCheckedTime() (time.Time, error) {
 // and returns the filenames of the files created after the last check time in those folders.
 func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]string, error) {
 	blocksDir := "/uniondrive/ipfs_datastore/blocks"
+	var modifiedDirs []string
 	var modifiedFiles []string
+	var err error
 
-	err := filepath.Walk(blocksDir, func(path string, info os.FileInfo, err error) error {
+	// Find directories modified after lastChecked
+	err = filepath.Walk(blocksDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() || strings.HasSuffix(info.Name(), ".temp") {
-			// Ignore non-directories and directories with ".temp" suffix
-			return nil
-		}
-		if info.ModTime().After(lastChecked) {
-			// If the directory was modified after the last check time, walk its contents
-			err := filepath.Walk(path, func(subPath string, subInfo os.FileInfo, subErr error) error {
-				if subErr != nil {
-					return subErr
-				}
-				if !subInfo.IsDir() && subInfo.ModTime().After(lastChecked) {
-					// Include file if it's not a directory and was created after the last check time
-					modifiedFiles = append(modifiedFiles, subPath)
-				}
-				return nil
-			})
-			if err != nil {
-				return err
-			}
+		if path != blocksDir && info.IsDir() && info.ModTime().After(lastChecked) {
+			modifiedDirs = append(modifiedDirs, path)
+			return filepath.SkipDir
 		}
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
+
+	// Use a WaitGroup to wait for all goroutines to finish
+	var wg sync.WaitGroup
+	// Use a channel to safely collect files from multiple goroutines
+	filesChan := make(chan string, 100) // Buffered channel
+
+	// Create a goroutine for each modified directory
+	for _, dir := range modifiedDirs {
+		wg.Add(1) // Increment the WaitGroup counter
+		go func(dir string) {
+			defer wg.Done() // Decrement the counter when the goroutine completes
+			filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() && !strings.HasSuffix(info.Name(), ".temp") && info.ModTime().After(lastChecked) {
+					filesChan <- path
+				}
+				return nil
+			})
+		}(dir)
+	}
+
+	// Start a goroutine to close the channel once all goroutines have finished
+	go func() {
+		wg.Wait()
+		close(filesChan)
+	}()
+
+	// Collect the results from the channel
+	for file := range filesChan {
+		modifiedFiles = append(modifiedFiles, file)
+	}
+
 	return modifiedFiles, nil
 }
 

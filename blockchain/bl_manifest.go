@@ -94,7 +94,7 @@ func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDStri
 		// Handle the error if the conversion fails
 		return nil, fmt.Errorf("invalid poolID, not an integer: %s", err)
 	}
-	manifestBatchStoreRequest := ManifestBatchStoreRequest{
+	manifestBatchStoreRequest := &ManifestBatchStoreRequest{
 		PoolID: poolID,
 		Cid:    linksString,
 	}
