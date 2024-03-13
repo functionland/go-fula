@@ -1166,18 +1166,21 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 					if err != nil {
 						return err
 					}
+					/*
+						//No need as we are using IPFS for connection between bloxes
+						// Create a slice to hold the multiaddresses for the peer
+						var addrs []multiaddr.Multiaddr
 
-					// Create a slice to hold the multiaddresses for the peer
-					var addrs []multiaddr.Multiaddr
 
-					// Loop through the static relays and convert them to multiaddr
-					for _, relay := range bl.relays {
-						ma, err := multiaddr.NewMultiaddr(relay + "/p2p-circuit/p2p/" + pid.String())
-						if err != nil {
-							return err
-						}
-						addrs = append(addrs, ma)
-					}
+							// Loop through the static relays and convert them to multiaddr
+							for _, relay := range bl.relays {
+								ma, err := multiaddr.NewMultiaddr(relay + "/p2p-circuit/p2p/" + pid.String())
+								if err != nil {
+									return err
+								}
+								addrs = append(addrs, ma)
+							}
+					*/
 
 					// Add the relay addresses to the peerstore for the peer ID
 					err = updateMembers(pid, common.Unknown)
@@ -1245,34 +1248,37 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				if user.RequestPoolID != nil {
 					userRequestPoolIDStr := strconv.Itoa(*user.RequestPoolID)
 					bl.updatePoolName(userRequestPoolIDStr)
-					if !bl.p.Status() && userRequestPoolIDStr == topicString {
-						log.Debugw("Found self peerID and running Ping Server now", "peer", user.PeerID)
-						err = bl.p.Start(ctx)
-						if err != nil {
-							log.Errorw("Error when starting the Ping Server", "PeerID", user.PeerID, "err", err)
-						} else {
-							// TODO: THIS METHOD BELOW NEEDS TO RE_INITIALIZE ANNONCEMENTS WITH NEW TOPIC ND START IT FIRST
-							/*
-								log.Debugw("Found self peerID and ran Ping Server and announcing pooljoinrequest now", "peer", user.PeerID)
-								if bl.wg != nil {
-									log.Debug("Called wg.Add in somewhere before AnnounceJoinPoolRequestPeriodically")
-									bl.wg.Add(1)
-								}
-								go func() {
+					/*
+						// No need a swe are using IPFS Ping now
+						if !bl.p.Status() && userRequestPoolIDStr == topicString {
+							log.Debugw("Found self peerID and running Ping Server now", "peer", user.PeerID)
+							err = bl.p.Start(ctx)
+							if err != nil {
+								log.Errorw("Error when starting the Ping Server", "PeerID", user.PeerID, "err", err)
+							} else {
+								// TODO: THIS METHOD BELOW NEEDS TO RE_INITIALIZE ANNONCEMENTS WITH NEW TOPIC ND START IT FIRST
+								/*
+									log.Debugw("Found self peerID and ran Ping Server and announcing pooljoinrequest now", "peer", user.PeerID)
 									if bl.wg != nil {
-										log.Debug("called wg.Done in somewhere before AnnounceJoinPoolRequestPeriodically")
-										defer bl.wg.Done() // Decrement the counter when the goroutine completes
+										log.Debug("Called wg.Add in somewhere before AnnounceJoinPoolRequestPeriodically")
+										bl.wg.Add(1)
 									}
-									defer log.Debug("somewhere before AnnounceJoinPoolRequestPeriodically go routine is ending")
-									bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
-								}()
-							*/
+									go func() {
+										if bl.wg != nil {
+											log.Debug("called wg.Done in somewhere before AnnounceJoinPoolRequestPeriodically")
+											defer bl.wg.Done() // Decrement the counter when the goroutine completes
+										}
+										defer log.Debug("somewhere before AnnounceJoinPoolRequestPeriodically go routine is ending")
+										bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
+									}()
+
+							}
+						} else {
+							userPoolIDStr := strconv.Itoa(*user.PoolID)
+							bl.updatePoolName(userPoolIDStr)
+							log.Debugw("Ping Server is already running for self peerID or current requested pool does not match the new request", user.PeerID)
 						}
-					} else {
-						userPoolIDStr := strconv.Itoa(*user.PoolID)
-						bl.updatePoolName(userPoolIDStr)
-						log.Debugw("Ping Server is already running for self peerID or current requested pool does not match the new request", user.PeerID)
-					}
+					*/
 				} else {
 					userPoolIDStr := strconv.Itoa(*user.PoolID)
 					bl.updatePoolName(userPoolIDStr)
@@ -1331,41 +1337,48 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				log.Debugw("member exists but is not approved so no need to change status", "h.ID", localPeerID, "pid", pid, "Status", status, "existingStatus", existingStatus)
 			}
 		} else {
-			log.Debugw("member does not exists", "h.ID", bl.h.ID(), "pid", pid)
+			log.Debugw("member does not exists", "h.ID", bl.h.ID(), "pid", pid, "status", status)
 			// If the user does not exist in the map, add them
 			// Create a slice to hold the multiaddresses for the peer
-			var addrs []multiaddr.Multiaddr
+			/*
+				// No need as we are using IPFS for connection between bloxes
+					var addrs []multiaddr.Multiaddr
 
-			// Loop through the static relays and convert them to multiaddr
-			for _, relay := range bl.relays {
-				fullAddr := relay + "/p2p-circuit/p2p/" + pid.String()
-				log.Debugw("full relay address", "peer", bl.h.ID(), "for", pid, "fullAddr", fullAddr)
-				ma, err := multiaddr.NewMultiaddr(fullAddr)
-				if err != nil {
-					return err
-				}
-				addrs = append(addrs, ma)
-			}
-
+					// Loop through the static relays and convert them to multiaddr
+					for _, relay := range bl.relays {
+						fullAddr := relay + "/p2p-circuit/p2p/" + pid.String()
+						log.Debugw("full relay address", "peer", bl.h.ID(), "for", pid, "fullAddr", fullAddr)
+						ma, err := multiaddr.NewMultiaddr(fullAddr)
+						if err != nil {
+							return err
+						}
+						addrs = append(addrs, ma)
+					}
+			*/
 			// Add the relay addresses to the peerstore for the peer ID
 
 			if err := updateMembers(pid, status); err != nil {
 				return err
 			}
-			log.Debugw("Added peer to peerstore", "h.ID", localPeerID, "pid", pid, "addrs", addrs)
+			log.Debugw("Added peer to peerstore", "h.ID", localPeerID, "pid", pid)
 		}
-		if pid != localPeerID {
-			//bl.h.Connect(ctx, peer.AddrInfo{ID: pid, Addrs: addrs})
-			peerAddr := bl.h.Peerstore().PeerInfo(pid)
-			log.Debugw("Connecting to other peer", "from", bl.h.ID(), "to", pid, "with address", peerAddr)
-			err := bl.h.Connect(ctx, peerAddr)
-			if err != nil {
-				log.Debugw("Not Connected to peer", "from", bl.h.ID(), "to", pid, "err", err)
-			} else {
-				log.Debugw("OK Connected to peer", "from", bl.h.ID(), "to", pid)
-			}
+		/*
+			// No need as we are using IPFS now
+			if pid != localPeerID {
+				log.Debugw("Found a new peer", "pid", pid)
+				//bl.h.Connect(ctx, peer.AddrInfo{ID: pid, Addrs: addrs})
+					peerAddr := bl.h.Peerstore().PeerInfo(pid)
+					log.Debugw("Connecting to other peer", "from", bl.h.ID(), "to", pid, "with address", peerAddr)
+					err := bl.h.Connect(ctx, peerAddr)
+					if err != nil {
+						log.Debugw("Not Connected to peer", "from", bl.h.ID(), "to", pid, "err", err)
+					} else {
+						log.Debugw("OK Connected to peer", "from", bl.h.ID(), "to", pid)
+					}
 
-		}
+
+			}
+		*/
 	}
 
 	log.Debugw("peerstore for ", "id", bl.h.ID(), "peers", bl.h.Peerstore().Peers())
