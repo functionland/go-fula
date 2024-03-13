@@ -314,6 +314,7 @@ func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]string, error)
 	blocksDir := "/uniondrive/ipfs_datastore/blocks"
 	var modifiedDirs []string
 	var modifiedFiles []string
+	//lint:ignore S1021 err may be reused for different blocks of logic
 	var err error
 
 	// Find directories modified after lastChecked
