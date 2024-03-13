@@ -43,7 +43,7 @@ func newOptions(o ...Option) (*options, error) {
 		timeout:                  30,                    // default timeout in seconds
 		wg:                       nil,                   // initialized WaitGroup
 		minPingSuccessCount:      7,                     // default minimum success count
-		maxPingTime:              400,                   // default maximum ping time in miliseconds
+		maxPingTime:              900,                   // default maximum ping time in miliseconds
 		topicName:                "0",                   // default topic name
 		relays:                   []string{},            // default to an empty slice
 		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
