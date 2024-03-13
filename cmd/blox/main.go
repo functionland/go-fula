@@ -1237,6 +1237,8 @@ func action(ctx *cli.Context) error {
 		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
 		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),
+		blox.WithMaxPingTime(900),
+		blox.WithMinSuccessPingRate(7),
 		blox.WithDefaultIPFShttpServer(useIPFSServer),
 		blox.WithIpfsClient(node),
 		blox.WithPoolHostMode(app.poolHost),
