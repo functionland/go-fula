@@ -1135,6 +1135,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 				reqCtx, cancelReqCtx := context.WithTimeout(ctx, 4*time.Second)
 				defer cancelReqCtx() // Ensures resources are cleaned up after the Stat call
 				poolHostAddrString := "/dns4/" + clusterEndpoint + "/tcp/4001/p2p/" + poolHostPeerID
+				log.Debugw("Connecting to pool host", "addr", poolHostAddrString)
 				if bl.rpc != nil {
 					bl.rpc.Request("bootstrap/add", poolHostAddrString).Send(reqCtx)
 					poolHostAddr, err := ma.NewMultiaddr(poolHostAddrString)
