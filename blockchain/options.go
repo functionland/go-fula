@@ -24,6 +24,7 @@ type (
 		topicName                string
 		relays                   []string
 		updatePoolName           func(string) error
+		getPoolName              func() string
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 		rpc                      *rpc.HttpApi
 		ipfsClusterApi           ipfsCluster.Client
@@ -32,6 +33,9 @@ type (
 
 func defaultUpdatePoolName(newPoolName string) error {
 	return nil
+}
+func defaultGetPoolName() string {
+	return "0"
 }
 func newOptions(o ...Option) (*options, error) {
 	opts := options{
@@ -47,7 +51,8 @@ func newOptions(o ...Option) (*options, error) {
 		topicName:                "0",                   // default topic name
 		relays:                   []string{},            // default to an empty slice
 		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
-		fetchFrequency:           time.Hour * 1,         // default frequency, e.g., 1 hour
+		getPoolName:              defaultGetPoolName,
+		fetchFrequency:           time.Hour * 1, // default frequency, e.g., 1 hour
 		rpc:                      nil,
 		ipfsClusterApi:           nil,
 	}
@@ -156,6 +161,13 @@ func WithTopicName(n string) Option {
 func WithUpdatePoolName(updatePoolName func(string) error) Option {
 	return func(o *options) error {
 		o.updatePoolName = updatePoolName
+		return nil
+	}
+}
+
+func WithGetPoolName(getPoolName func() string) Option {
+	return func(o *options) error {
+		o.getPoolName = getPoolName
 		return nil
 	}
 }

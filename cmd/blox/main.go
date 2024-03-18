@@ -549,6 +549,19 @@ func before(ctx *cli.Context) error {
 	return os.WriteFile(app.configPath, yc, 0700)
 }
 
+func getPoolNameFromConfig() string {
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return "0"
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return "0"
+	}
+	return app.config.PoolName
+}
+
 func updateConfig(p []peer.ID) error {
 	// Load existing config file
 	configData, err := os.ReadFile(app.configPath)
@@ -1234,6 +1247,7 @@ func action(ctx *cli.Context) error {
 		blox.WithStoreDir(app.config.StoreDir),
 		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithGetPoolName(getPoolNameFromConfig),
 		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
 		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),

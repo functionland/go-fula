@@ -146,7 +146,7 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 }
 
 func (bl *FxBlockchain) startFetchCheck() {
-	internal := 1 * time.Minute
+	internal := 2 * time.Minute
 	bl.fetchCheckTicker = time.NewTicker(internal) // check every hour, adjust as needed
 
 	if bl.wg != nil {
@@ -161,12 +161,13 @@ func (bl *FxBlockchain) startFetchCheck() {
 			defer bl.wg.Done() // Decrement the counter when the goroutine completes
 		}
 		defer log.Debug("startFetchCheck ticker go routine is ending")
-
+		var topic string
 		for {
 			select {
 			case <-bl.fetchCheckTicker.C:
 				if time.Since(bl.lastFetchTime) >= bl.fetchInterval {
-					bl.FetchUsersAndPopulateSets(context.Background(), bl.topicName, false, internal)
+					topic = bl.getPoolName()
+					bl.FetchUsersAndPopulateSets(context.Background(), topic, false, internal)
 					bl.lastFetchTime = time.Now() // update last fetch time
 				}
 			case <-bl.fetchCheckStop:

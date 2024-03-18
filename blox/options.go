@@ -24,6 +24,7 @@ import (
 type (
 	Option          func(*options) error
 	PoolNameUpdater func(string) error
+	PoolNameGetter  func() string
 	options         struct {
 		h                     host.Host
 		name                  string
@@ -37,6 +38,7 @@ type (
 		exchangeOpts          []exchange.Option
 		relays                []string
 		updatePoolName        PoolNameUpdater
+		getPoolName           PoolNameGetter
 		pingCount             int
 		maxPingTime           int
 		minSuccessRate        int
@@ -216,6 +218,13 @@ func WithRelays(r []string) Option {
 func WithUpdatePoolName(updatePoolName PoolNameUpdater) Option {
 	return func(o *options) error {
 		o.updatePoolName = updatePoolName
+		return nil
+	}
+}
+
+func WithGetPoolName(getPoolName PoolNameGetter) Option {
+	return func(o *options) error {
+		o.getPoolName = getPoolName
 		return nil
 	}
 }

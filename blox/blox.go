@@ -105,6 +105,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithFetchFrequency(1*time.Minute),
 		blockchain.WithTopicName(p.topicName),
 		blockchain.WithUpdatePoolName(p.updatePoolName),
+		blockchain.WithGetPoolName(p.getPoolName),
 		blockchain.WithRelays(p.relays),
 		blockchain.WithMaxPingTime(p.maxPingTime),
 		blockchain.WithIpfsClient(p.rpc),
@@ -485,36 +486,38 @@ func (p *Blox) Start(ctx context.Context) error {
 					log.Errorf("Error retrieving last checked time: %v", err)
 					continue
 				}
-
-				storedFiles, err := p.ListModifiedStoredBlocks(lastCheckedTime)
-				if err != nil {
-					log.Errorf("Error listing stored blocks: %v", err)
-					continue
-				}
-
-				var storedLinks []datamodel.Link
-				for _, filename := range storedFiles {
-					fi, err := os.Stat(filename)
+				p.topicName = p.getPoolName()
+				if p.topicName != "0" {
+					storedFiles, err := p.ListModifiedStoredBlocks(lastCheckedTime)
 					if err != nil {
-						log.Errorf("Error getting file info for %s: %v", filename, err)
+						log.Errorf("Error listing stored blocks: %v", err)
 						continue
 					}
-					if fi.ModTime().After(lastCheckedTime) {
-						cidv1, err := p.GetCidv1FromBlockFilename(filename)
+
+					var storedLinks []datamodel.Link
+					for _, filename := range storedFiles {
+						fi, err := os.Stat(filename)
 						if err != nil {
-							log.Errorf("Error extracting CIDv1 from filename %s: %v", filename, err)
+							log.Errorf("Error getting file info for %s: %v", filename, err)
 							continue
 						}
+						if fi.ModTime().After(lastCheckedTime) {
+							cidv1, err := p.GetCidv1FromBlockFilename(filename)
+							if err != nil {
+								log.Errorf("Error extracting CIDv1 from filename %s: %v", filename, err)
+								continue
+							}
 
-						storedLinks = append(storedLinks, cidlink.Link{Cid: cidv1})
+							storedLinks = append(storedLinks, cidlink.Link{Cid: cidv1})
+						}
 					}
-				}
 
-				// Call HandleManifestBatchStore method
-				_, err = p.bl.HandleManifestBatchStore(context.TODO(), p.topicName, storedLinks)
-				if err != nil {
-					log.Errorf("Error calling HandleManifestBatchStore: %v", err)
-					continue
+					// Call HandleManifestBatchStore method
+					_, err = p.bl.HandleManifestBatchStore(context.TODO(), p.topicName, storedLinks)
+					if err != nil {
+						log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
+						continue
+					}
 				}
 
 				// Update the last checked time
