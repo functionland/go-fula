@@ -63,7 +63,7 @@ func init() {
 	COUNTRY = getEnv("COUNTRY", "GB")
 	PROJECT_ROOT = getEnv("PROJECT_ROOT", "../..")
 	FULA_CONFIG_PATH = getEnv("FULA_CONFIG_PATH", "/internal/config.yaml")
-	BLOX_COMMAND = fmt.Sprintf(getEnv("BLOX_COMMAND", "/app --authorizer %%s --identity %%s --initOnly --config %s --storeDir /uniondrive --disableResourceManger true --maxCIDPushRate 30 --logLevel info"), FULA_CONFIG_PATH)
+	BLOX_COMMAND = fmt.Sprintf(getEnv("BLOX_COMMAND", "/app --authorizer %%s --identity %%s --initOnly --config %s --storeDir /uniondrive --disableResourceManger true --maxCIDPushRate 100 --logLevel info"), FULA_CONFIG_PATH)
 	OTA_VERSION = getEnv("OTA_VERSION", "6")
 	HOTSPOT_SSID = getEnv("HOTSPOT_SSID", "FxBlox")
 	RESTART_NEEDED_AFTER = getEnv("RESTART_NEEDED_AFTER", "6")

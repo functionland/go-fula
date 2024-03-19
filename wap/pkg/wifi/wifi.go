@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -330,9 +331,13 @@ func WifiRemoveall(ctx context.Context) WifiRemoveallResponse {
 }
 
 func createConnection(ctx context.Context, connectionName, ssid, password string) error {
+	// Quote the ssid and password to handle spaces or special characters
+	quotedSSID := strconv.Quote(ssid)
+	quotedPassword := strconv.Quote(password)
+
 	// Create a connection
-	c1 := fmt.Sprintf("nmcli con add type wifi ifname * con-name %s ssid %s", connectionName, ssid)
-	c2 := fmt.Sprintf("nmcli con modify %s wifi-sec.key-mgmt wpa-psk wifi-sec.psk %s", connectionName, password)
+	c1 := fmt.Sprintf("nmcli con add type wifi ifname %s con-name %s ssid %s", "*", strconv.Quote(connectionName), quotedSSID)
+	c2 := fmt.Sprintf("nmcli con modify %s wifi-sec.key-mgmt wpa-psk wifi-sec.psk %s", strconv.Quote(connectionName), quotedPassword)
 
 	commands := []string{c1, c2}
 	for _, command := range commands {
@@ -376,7 +381,12 @@ func readWiFiPasswordFromFile(connectionName string) (string, error) {
 
 func getWiFiPassword(connectionName string) (string, error) {
 	ctx := context.Background()
-	command := fmt.Sprintf("nmcli -s -g 802-11-wireless-security.psk connection show %s | tr -d '\n'", connectionName)
+	// Properly quote the connectionName to handle spaces or special characters
+	quotedConnectionName := strconv.Quote(connectionName)
+	// Remove the surrounding quotes for direct use in the shell command
+	trimmedConnectionName := quotedConnectionName[1 : len(quotedConnectionName)-1]
+
+	command := fmt.Sprintf("nmcli -s -g 802-11-wireless-security.psk connection show \"%s\" | tr -d '\n'", trimmedConnectionName)
 	stdout, stderr, err := runCommand(ctx, command)
 	if err != nil {
 		// Try reading the password from the file
@@ -460,24 +470,29 @@ func getDeviceOfConnection(ctx context.Context, connectionName string) (string, 
 }
 
 func connectToNetwork(ctx context.Context, connectionName string) error {
-	c3 := fmt.Sprintf("nmcli con up %s", connectionName)
+	// Quote the connectionName to handle spaces or special characters
+	quotedConnectionName := strconv.Quote(connectionName)
+
+	// Attempt to bring up the connection
+	c3 := fmt.Sprintf("nmcli con up %s", quotedConnectionName)
 	_, _, err := runCommand(ctx, c3)
 	if err != nil {
 		return err
 	}
 
-	time.Sleep(10 * time.Second)
-	interfaceName, err := getDeviceOfConnection(ctx, connectionName)
+	time.Sleep(10 * time.Second) // Consider using a more dynamic wait based on connection status
+	interfaceName, err := getDeviceOfConnection(ctx, quotedConnectionName)
 	if err != nil {
 		return err
 	}
 
+	// Check if the interface is connected to the network
 	if err := CheckIfIsConnected(ctx, interfaceName); err != nil {
 		return err
-
 	} else {
-		setAutoconnect := fmt.Sprintf("nmcli connection modify %s connection.autoconnect yes", connectionName)
-		setPriority := fmt.Sprintf("nmcli connection modify %s connection.autoconnect-priority 20", connectionName)
+		// Configure the connection to autoconnect
+		setAutoconnect := fmt.Sprintf("nmcli connection modify %s connection.autoconnect yes", quotedConnectionName)
+		setPriority := fmt.Sprintf("nmcli connection modify %s connection.autoconnect-priority 20", quotedConnectionName)
 		_, _, err := runCommand(ctx, setAutoconnect)
 		if err != nil {
 			return err
@@ -486,8 +501,8 @@ func connectToNetwork(ctx context.Context, connectionName string) error {
 		if err != nil {
 			return err
 		}
-		return nil
 	}
+	return nil
 }
 
 func activateHotspot(ctx context.Context) {
