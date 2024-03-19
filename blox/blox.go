@@ -16,6 +16,7 @@ import (
 	"github.com/functionland/go-fula/common"
 	"github.com/functionland/go-fula/exchange"
 	"github.com/functionland/go-fula/ping"
+	"github.com/ipfs-cluster/ipfs-cluster/api"
 	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
@@ -309,6 +310,31 @@ func (p *Blox) GetLastCheckedTime() (time.Time, error) {
 	return info.ModTime(), nil
 }
 
+// This method fetches the pinned items in ipfs-cluster since the lastChecked time
+func (p *Blox) ListModifiedStoredLinks(ctx context.Context, lastChecked time.Time) ([]datamodel.Link, error) {
+	var storedLinks []datamodel.Link
+	if p.ipfsClusterApi == nil {
+		log.Errorw("ipfs cluster API is nil", "p.ipfsClusterApi", p.ipfsClusterApi)
+		return nil, fmt.Errorf("ipfs cluster API is nil")
+	}
+
+	// Create a channel to receive pin info
+	out := make(chan api.GlobalPinInfo, 1024) // Adjust buffer size as needed
+	go func() {
+		defer close(out)
+		p.ipfsClusterApi.StatusAll(ctx, api.TrackerStatusPinned, true, out)
+	}()
+
+	// Filter pins based on status and creation time
+	for pinInfo := range out {
+		if pinInfo.Match(api.TrackerStatusPinned) && pinInfo.Created.After(lastChecked) {
+			storedLinks = append(storedLinks, cidlink.Link{Cid: pinInfo.Cid.Cid})
+		}
+	}
+
+	return storedLinks, nil
+}
+
 // ListModifiedStoredBlocks lists only the folders that have been modified after the last check time
 // and returns the filenames of the files created after the last check time in those folders.
 func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]string, error) {
@@ -488,28 +514,10 @@ func (p *Blox) Start(ctx context.Context) error {
 				}
 				p.topicName = p.getPoolName()
 				if p.topicName != "0" {
-					storedFiles, err := p.ListModifiedStoredBlocks(lastCheckedTime)
+					storedLinks, err := p.ListModifiedStoredLinks(p.ctx, lastCheckedTime)
 					if err != nil {
 						log.Errorf("Error listing stored blocks: %v", err)
 						continue
-					}
-
-					var storedLinks []datamodel.Link
-					for _, filename := range storedFiles {
-						fi, err := os.Stat(filename)
-						if err != nil {
-							log.Errorf("Error getting file info for %s: %v", filename, err)
-							continue
-						}
-						if fi.ModTime().After(lastCheckedTime) {
-							cidv1, err := p.GetCidv1FromBlockFilename(filename)
-							if err != nil {
-								log.Errorf("Error extracting CIDv1 from filename %s: %v", filename, err)
-								continue
-							}
-
-							storedLinks = append(storedLinks, cidlink.Link{Cid: cidv1})
-						}
 					}
 
 					// Call HandleManifestBatchStore method
