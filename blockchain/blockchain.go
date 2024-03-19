@@ -1637,6 +1637,7 @@ func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action st
 
 				// Make the HTTP request to the cluster endpoint
 				clusterURL := fmt.Sprintf("%s/pins", clusterEndPoint)
+				log.Debugw("Pinning on ipfs-cluster", "url", clusterURL)
 				resp, err := http.Post(clusterURL, "application/json", bytes.NewBuffer(reqBody))
 				if err != nil {
 					w.WriteHeader(http.StatusFailedDependency)
