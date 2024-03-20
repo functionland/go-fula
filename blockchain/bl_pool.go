@@ -747,3 +747,21 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 	}
 	return nil
 }
+
+func (bl *FxBlockchain) HandlePoolList(ctx context.Context) (PoolListResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
+	defer cancel()
+
+	req := PoolListRequest{}
+	var res PoolListResponse
+	response, _, err := bl.callBlockchain(ctx, "POST", actionPoolList, req)
+	if err != nil {
+		return PoolListResponse{}, err
+	}
+	err = json.Unmarshal(response, &res)
+	if err != nil {
+		log.Error("failed to format response: %v", err)
+		return PoolListResponse{}, err
+	}
+	return res, nil
+}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -436,6 +437,45 @@ func (p *Blox) Start(ctx context.Context) error {
 	}
 	if err := p.bl.Start(ctx); err != nil {
 		return err
+	}
+	if p.topicName == "0" {
+		// First read account from /internal/.secrets/account.txt
+		accountFilePath := "/internal/.secrets/account.txt"
+		data, err := os.ReadFile(accountFilePath)
+		if err != nil {
+			// Handle the error, maybe log it or print it
+			log.Errorw("Error reading file", "err", err)
+		} else {
+			// Convert the data to a string and store in the 'account' variable
+			account := string(data)
+			found := false
+			// Get all pools
+			poolList, err := p.bl.HandlePoolList(ctx)
+			if err != nil {
+				log.Errorw("Error getting pool list", "err", err)
+			} else {
+				//Iterate through the pool list
+				for _, pool := range poolList.Pools {
+					if found {
+						break
+					}
+					// Iterate through each pool participant
+					for _, participant := range pool.Participants {
+						if found {
+							break
+						}
+						// Check if the participant matches our account
+						if participant == account {
+							topicStr := strconv.Itoa(pool.PoolID)
+							p.updatePoolName(topicStr)
+							p.topicName = topicStr
+							found = true
+							break
+						}
+					}
+				}
+			}
+		}
 	}
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true, 15*time.Second); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
