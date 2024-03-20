@@ -107,3 +107,14 @@ func runCommand(ctx context.Context, commands string) (stdout, stderr string, er
 	}
 	return stdout, stderr, err
 }
+
+func runCommandDirect(cmd *exec.Cmd) error {
+	// Output the command being executed for debugging purposes
+	// fmt.Println("Executing:", cmd.String())
+
+	// Start the command and wait for it to finish
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Wait()
+}
