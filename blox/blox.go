@@ -35,6 +35,7 @@ import (
 )
 
 var log = logging.Logger("fula/blox")
+var once sync.Once
 
 type (
 	Blox struct {
@@ -322,7 +323,7 @@ func (p *Blox) ListModifiedStoredLinks(ctx context.Context, lastChecked time.Tim
 	// Create a channel to receive pin info
 	out := make(chan api.GlobalPinInfo, 1024) // Adjust buffer size as needed
 	go func() {
-		defer close(out)
+		defer once.Do(func() { close(out) })
 		p.ipfsClusterApi.StatusAll(ctx, api.TrackerStatusPinned, true, out)
 	}()
 
