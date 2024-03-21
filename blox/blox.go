@@ -315,6 +315,7 @@ func (p *Blox) GetLastCheckedTime() (time.Time, error) {
 
 // This method fetches the pinned items in ipfs-cluster since the lastChecked time
 func (p *Blox) ListModifiedStoredLinks(ctx context.Context, lastChecked time.Time) ([]datamodel.Link, error) {
+	log.Debugw("ListModifiedStoredLinks", "lastChecked", lastChecked)
 	var storedLinks []datamodel.Link
 	if p.ipfsClusterApi == nil {
 		log.Errorw("ipfs cluster API is nil", "p.ipfsClusterApi", p.ipfsClusterApi)
@@ -330,6 +331,7 @@ func (p *Blox) ListModifiedStoredLinks(ctx context.Context, lastChecked time.Tim
 
 	// Filter pins based on status and creation time
 	for pinInfo := range out {
+		log.Debugw("ListModifiedStoredLinks loop", "pinInfo", pinInfo)
 		if pinInfo.Match(api.TrackerStatusPinned) && pinInfo.Created.After(lastChecked) {
 			storedLinks = append(storedLinks, cidlink.Link{Cid: pinInfo.Cid.Cid})
 		}
