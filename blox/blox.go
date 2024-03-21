@@ -427,6 +427,7 @@ func FindCIDFromDigest(base32MultibaseDigest string) (cid.Cid, error) {
 // ListModifiedStoredBlocks lists only the folders that have been modified after the last check time
 // and returns the filenames of the files created after the last check time in those folders.
 func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]datamodel.Link, error) {
+	log.Debugw("ListModifiedStoredBlocks", "lastChecked", lastChecked)
 	blocksDir := "/uniondrive/ipfs_datastore/blocks"
 	var modifiedDirs []string
 	var modifiedLinks []datamodel.Link
@@ -455,6 +456,7 @@ func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]datamodel.Link
 	if err != nil {
 		return nil, err
 	}
+	log.Debugw("ListModifiedStoredBlocks", "modifiedDirs", modifiedDirs)
 
 	// Use a WaitGroup to wait for all goroutines to finish
 	var wg sync.WaitGroup
@@ -504,6 +506,7 @@ func (p *Blox) ListModifiedStoredBlocks(lastChecked time.Time) ([]datamodel.Link
 	for l := range linksChan {
 		modifiedLinks = append(modifiedLinks, l)
 	}
+	log.Debugw("ListModifiedStoredBlocks", "modifiedLinks", modifiedLinks)
 
 	return modifiedLinks, nil
 }
