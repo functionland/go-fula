@@ -2,6 +2,7 @@ package blox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -313,29 +314,64 @@ func (p *Blox) GetLastCheckedTime() (time.Time, error) {
 	return info.ModTime(), nil
 }
 
-// This method fetches the pinned items in ipfs-cluster since the lastChecked time
-func (p *Blox) ListModifiedStoredLinks(ctx context.Context, lastChecked time.Time) ([]datamodel.Link, error) {
-	log.Debugw("ListModifiedStoredLinks", "lastChecked", lastChecked)
-	var storedLinks []datamodel.Link
-	if p.ipfsClusterApi == nil {
-		log.Errorw("ipfs cluster API is nil", "p.ipfsClusterApi", p.ipfsClusterApi)
-		return nil, fmt.Errorf("ipfs cluster API is nil")
-	}
+// IpfsClusterPins streams pins from the IPFS Cluster API and sends them through a channel.
+func IpfsClusterPins(ctx context.Context, lastChecked time.Time, account string) (<-chan datamodel.Link, <-chan error) {
+	pins := make(chan datamodel.Link)
+	errChan := make(chan error, 1) // Buffered channel for error
 
-	// Create a channel to receive pin info
-	out := make(chan api.GlobalPinInfo, 1024) // Adjust buffer size as needed
 	go func() {
-		//defer p.once.Do(func() { close(out) })
-		p.ipfsClusterApi.StatusAll(ctx, api.TrackerStatusPinned, true, out)
+		defer close(pins)
+		defer close(errChan)
+
+		client := &http.Client{}
+		req, err := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:9094/pins", nil)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		defer resp.Body.Close()
+
+		decoder := json.NewDecoder(resp.Body)
+
+		for decoder.More() {
+			var pin api.GlobalPinInfo
+			if err := decoder.Decode(&pin); err != nil {
+				errChan <- err
+				return
+			}
+			if pin.Created.After(lastChecked) && pin.PeerMap[account].Status == api.TrackerStatusPinned {
+				pins <- cidlink.Link{Cid: pin.Cid.Cid}
+			}
+		}
 	}()
 
-	// Filter pins based on status and creation time
-	for pinInfo := range out {
-		log.Debugw("ListModifiedStoredLinks loop", "pinInfo", pinInfo)
-		if pinInfo.Match(api.TrackerStatusPinned) && pinInfo.Created.After(lastChecked) {
-			storedLinks = append(storedLinks, cidlink.Link{Cid: pinInfo.Cid.Cid})
-		}
+	return pins, errChan
+}
+
+// This method fetches the pinned items in ipfs-cluster since the lastChecked time
+func (p *Blox) ListModifiedStoredLinks(ctx context.Context, lastChecked time.Time, account string) ([]datamodel.Link, error) {
+	log.Debugw("ListModifiedStoredLinks", "lastChecked", lastChecked, "account", account)
+	var storedLinks []datamodel.Link
+
+	pins, errChan := IpfsClusterPins(ctx, lastChecked, account)
+
+	// Collect pins from the channel until it's closed
+	for pin := range pins {
+		storedLinks = append(storedLinks, pin)
 	}
+
+	// Check for errors after collecting pins
+	if err, ok := <-errChan; ok {
+		log.Errorw("Error fetching pins", "error", err)
+		return nil, err // Return or handle the error as needed
+	}
+	log.Debugw("ListModifiedStoredLinks result", "storedLinks", storedLinks)
 
 	return storedLinks, nil
 }
@@ -442,34 +478,54 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.Start(ctx); err != nil {
 		return err
 	}
+	var nodeAccount string
+	accountFilePath := "/internal/.secrets/account.txt"
+	data, err := os.ReadFile(accountFilePath)
+	if err != nil {
+		log.Errorw("Error reading file", "err", err)
+	} else {
+		nodeAccount = string(data)
+	}
+
 	if p.topicName == "0" {
 		// First read account from /internal/.secrets/account.txt
-		accountFilePath := "/internal/.secrets/account.txt"
-		data, err := os.ReadFile(accountFilePath)
-		if err != nil {
-			// Handle the error, maybe log it or print it
-			log.Errorw("Error reading file", "err", err)
-		} else {
-			// Convert the data to a string and store in the 'account' variable
-			account := string(data)
+		if nodeAccount != "" {
 			found := false
-			// Get all pools
-			poolList, err := p.bl.HandlePoolList(ctx)
-			if err != nil {
-				log.Errorw("Error getting pool list", "err", err)
-			} else {
-				//Iterate through the pool list
+
+			// Initial delay in seconds
+			delay := time.Duration(60) * time.Second
+			// Maximum number of retries
+			maxRetries := 5
+			// Attempt counter
+			attempt := 0
+
+			for {
+				attempt++
+				poolList, err := p.bl.HandlePoolList(ctx)
+				if err != nil {
+					log.Errorw("Error getting pool list", "err", err, "attempt", attempt)
+					if attempt >= maxRetries {
+						// Handle the case when max retries are reached, maybe log or break
+						log.Errorw("Max retries reached. Giving up.", "maxRetries", maxRetries)
+						break
+					}
+					// Wait for the current delay before retrying
+					time.Sleep(delay)
+					// Increase the delay for the next attempt, e.g., double it
+					delay *= 2
+					continue
+				}
+
+				//Iterate through the pool list if no error
 				for _, pool := range poolList.Pools {
 					if found {
 						break
 					}
-					// Iterate through each pool participant
 					for _, participant := range pool.Participants {
 						if found {
 							break
 						}
-						// Check if the participant matches our account
-						if participant == account {
+						if participant == nodeAccount {
 							topicStr := strconv.Itoa(pool.PoolID)
 							p.updatePoolName(topicStr)
 							p.topicName = topicStr
@@ -478,9 +534,13 @@ func (p *Blox) Start(ctx context.Context) error {
 						}
 					}
 				}
+				if found || err == nil {
+					break
+				}
 			}
 		}
 	}
+
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true, 15*time.Second); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
 	}
@@ -539,7 +599,7 @@ func (p *Blox) Start(ctx context.Context) error {
 		defer log.Debug("Start blox blox.start go routine is ending")
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
-
+		pidStr := p.h.ID().String()
 		for {
 			select {
 			case <-ticker.C:
@@ -558,7 +618,7 @@ func (p *Blox) Start(ctx context.Context) error {
 				}
 				p.topicName = p.getPoolName()
 				if p.topicName != "0" {
-					storedLinks, err := p.ListModifiedStoredLinks(p.ctx, lastCheckedTime)
+					storedLinks, err := p.ListModifiedStoredLinks(p.ctx, lastCheckedTime, pidStr)
 					if err != nil {
 						log.Errorf("Error listing stored blocks: %v", err)
 						continue
