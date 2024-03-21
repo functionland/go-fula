@@ -692,14 +692,16 @@ func (p *Blox) Start(ctx context.Context) error {
 					}
 
 					// Call HandleManifestBatchStore method
-					_, err = p.bl.HandleManifestBatchStore(context.TODO(), p.topicName, storedLinks)
-					if strings.Contains(err.Error(), "AccountAlreadyStorer") {
-						// Log the occurrence of the specific error but do not continue
-						log.Warnw("Attempt to store with an account that is already a storer", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
-					} else {
-						// For any other error, log and continue
-						log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
-						continue
+					if len(storedLinks) > 0 {
+						_, err = p.bl.HandleManifestBatchStore(context.TODO(), p.topicName, storedLinks)
+						if strings.Contains(err.Error(), "AccountAlreadyStorer") {
+							// Log the occurrence of the specific error but do not continue
+							log.Warnw("Attempt to store with an account that is already a storer", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
+						} else {
+							// For any other error, log and continue
+							log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
+							continue
+						}
 					}
 				}
 
