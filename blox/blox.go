@@ -35,7 +35,6 @@ import (
 )
 
 var log = logging.Logger("fula/blox")
-var once sync.Once
 
 type (
 	Blox struct {
@@ -43,11 +42,12 @@ type (
 		cancel context.CancelFunc
 
 		*options
-		ls ipld.LinkSystem
-		ex *exchange.FxExchange
-		bl *blockchain.FxBlockchain
-		pn *ping.FxPing
-		an *announcements.FxAnnouncements
+		ls   ipld.LinkSystem
+		ex   *exchange.FxExchange
+		bl   *blockchain.FxBlockchain
+		pn   *ping.FxPing
+		an   *announcements.FxAnnouncements
+		once sync.Once
 	}
 )
 
@@ -59,6 +59,7 @@ func New(o ...Option) (*Blox, error) {
 	p := Blox{
 		options: opts,
 		ls:      cidlink.DefaultLinkSystem(),
+		once:    sync.Once{},
 	}
 	p.ls.StorageReadOpener = p.blockReadOpener
 	p.ls.StorageWriteOpener = p.blockWriteOpener
