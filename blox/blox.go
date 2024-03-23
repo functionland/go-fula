@@ -533,6 +533,36 @@ func (p *Blox) UpdateLastCheckedTime() error {
 	return nil
 }
 
+// UpdateFailedCids updates the last checked time by appending failed CIDs to a file.
+// It collects all errors encountered and returns them together.
+func (p *Blox) UpdateFailedCids(links []datamodel.Link) error {
+	lastFailedFile := "/uniondrive/failed_cids.info"
+	// Open the file in append mode. If it doesn't exist, create it.
+	file, err := os.OpenFile(lastFailedFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var errorMessages []string
+
+	for _, link := range links {
+		_, err := file.WriteString(link.String() + "\n")
+		if err != nil {
+			// Collect the error message.
+			errorMessages = append(errorMessages, err.Error())
+			continue
+		}
+	}
+
+	if len(errorMessages) > 0 {
+		// Join all error messages into a single string and return it as an error.
+		return fmt.Errorf("errors occurred while updating failed CIDs: %s", strings.Join(errorMessages, "; "))
+	}
+
+	return nil
+}
+
 func (p *Blox) Start(ctx context.Context) error {
 	ctx = network.WithUseTransient(ctx, "fx.exchange")
 	// implemented topic validators with chain integration.
@@ -701,7 +731,8 @@ func (p *Blox) Start(ctx context.Context) error {
 							} else {
 								// For any other error, log and continue
 								log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
-								continue
+								p.UpdateFailedCids(storedLinks)
+								//continue
 							}
 						}
 					}
