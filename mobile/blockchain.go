@@ -32,11 +32,38 @@ func (c *Client) AccountBalance(account string) ([]byte, error) {
 	return c.bl.AccountBalance(ctx, c.bloxPid, blockchain.AccountBalanceRequest{Account: account})
 }
 
+type AssetsBalanceResponse struct {
+	Amount uint64 `json:"amount"`
+}
+
 // AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) AssetsBalance(account string, assetId int, classId int) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: uint64(assetId), ClassId: uint64(classId)})
+	responseBytes, err := c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: uint64(assetId), ClassId: uint64(classId)})
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode the response into the temporary struct
+	var tempResponse AssetsBalanceResponse
+	err = json.Unmarshal(responseBytes, &tempResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	// Construct a new response with Amount as a string
+	modifiedResponse := map[string]string{
+		"amount": strconv.FormatUint(tempResponse.Amount, 10),
+	}
+
+	// Re-encode the modified response to JSON
+	modifiedResponseBytes, err := json.Marshal(modifiedResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return modifiedResponseBytes, nil
 }
 
 // AccountFund requests blox at Config.BloxAddr to fund the account.

@@ -128,6 +128,9 @@ type AssetsBalanceRequest struct {
 	AssetId uint64 `json:"asset_id"`
 }
 type AssetsBalanceResponse struct {
+	Amount uint64 `json:"amount"`
+}
+type MobileAssetsBalanceResponse struct {
 	Amount string `json:"amount"`
 }
 
