@@ -731,6 +731,8 @@ func (p *Blox) Start(ctx context.Context) error {
 							if strings.Contains(err.Error(), "AccountAlreadyStorer") {
 								// Log the occurrence of the specific error but do not continue
 								log.Warnw("Attempt to store with an account that is already a storer", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
+							} else if strings.Contains(err.Error(), "Transaction is outdated") {
+								continue
 							} else {
 								// For any other error, log and continue
 								log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
