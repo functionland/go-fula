@@ -696,7 +696,7 @@ func (p *Blox) Start(ctx context.Context) error {
 			log.Debug("Called wg.Done in blox.start")
 			defer p.wg.Done()
 			defer log.Debug("Start blox blox.start go routine is ending")
-			ticker := time.NewTicker(10 * time.Minute)
+			ticker := time.NewTicker(15 * time.Minute)
 			defer ticker.Stop()
 			for {
 				select {
@@ -716,6 +716,9 @@ func (p *Blox) Start(ctx context.Context) error {
 					}
 					p.topicName = p.getPoolName()
 					if p.topicName != "0" {
+						shortCtx, shortCtxCancel := context.WithDeadline(p.ctx, time.Now().Add(60*time.Second))
+						defer shortCtxCancel()
+						p.rpc.Request("repo/gc").Send(shortCtx)
 						storedLinks, err := p.ListModifiedStoredBlocks(lastCheckedTime)
 						if err != nil {
 							log.Errorf("Error listing stored blocks: %v", err)
