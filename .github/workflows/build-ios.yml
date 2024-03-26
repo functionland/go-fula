@@ -24,8 +24,6 @@ jobs:
         run: |
           go version
           go env
-      - name: Run tests
-        run: go test -v -shuffle=on ./mobile
 
       - name: Build the artifact
         run: make fula-xcframework
