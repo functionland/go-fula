@@ -727,16 +727,23 @@ func (p *Blox) Start(ctx context.Context) error {
 
 						// Call HandleManifestBatchStore method
 						if len(storedLinks) > 0 {
-							_, err = p.bl.HandleManifestBatchStore(context.TODO(), p.topicName, storedLinks)
+							// Check if the manifests are available to be stored or not
+							availableLinks, err := p.bl.HandleManifestAvailableBatch(shortCtx, p.topicName, nodeAccount, storedLinks)
+							if err != nil {
+								log.Errorw("Error checking available manifests", "err", err)
+								continue // Or handle the error appropriately
+							}
+							// If available then submit to store
+							_, err = p.bl.HandleManifestBatchStore(context.TODO(), p.topicName, availableLinks)
 							if strings.Contains(err.Error(), "AccountAlreadyStorer") {
 								// Log the occurrence of the specific error but do not continue
-								log.Warnw("Attempt to store with an account that is already a storer", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
+								log.Warnw("Attempt to store with an account that is already a storer", "err", err, "p.topicName", p.topicName, "availableLinks", availableLinks)
 							} else if strings.Contains(err.Error(), "Transaction is outdated") {
 								continue
 							} else {
 								// For any other error, log and continue
-								log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "storedLinks", storedLinks)
-								p.UpdateFailedCids(storedLinks)
+								log.Errorw("Error calling HandleManifestBatchStore", "err", err, "p.topicName", p.topicName, "availableLinks", availableLinks)
+								p.UpdateFailedCids(availableLinks)
 								//continue
 							}
 						}

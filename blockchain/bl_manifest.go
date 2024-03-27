@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
@@ -82,6 +83,61 @@ func (bl *FxBlockchain) ManifestStore(ctx context.Context, to peer.ID, r Manifes
 	default:
 		return b, nil
 	}
+}
+
+func (bl *FxBlockchain) HandleManifestAvailableBatch(ctx context.Context, poolIDString string, account string, links []ipld.Link) ([]ipld.Link, error) {
+	var availableLinks []ipld.Link
+	poolID, err := strconv.Atoi(poolIDString)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pool ID: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
+	defer cancel()
+
+	var cids []string
+	for _, link := range links {
+		cids = append(cids, link.String())
+	}
+
+	reqBody := ReplicateRequest{
+		Cids:    cids,
+		Account: account,
+		PoolID:  poolID,
+	}
+	log.Debugw("HandleManifestAvailableBatch", "reqBody", reqBody)
+	req, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize request: %w", err)
+	}
+
+	response, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestAvailableBatch, req)
+	if err != nil {
+		return nil, fmt.Errorf("blockchain call failed: %w", err)
+	}
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", statusCode)
+	}
+
+	var resp ReplicateResponse
+	if err := json.Unmarshal(response, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	log.Debugw("HandleManifestAvailableBatch", "resp", resp)
+
+	// Filter for available manifests.
+	for _, manifest := range resp.Manifests {
+		if manifest.ReplicationAvailable > 0 {
+			c, err := cid.Decode(manifest.Cid)
+			if err != nil {
+				// Log or handle the error based on your application's logging strategy.
+				continue // Skipping invalid CIDs.
+			}
+			availableLinks = append(availableLinks, cidlink.Link{Cid: c})
+		}
+	}
+
+	return availableLinks, nil
 }
 
 func (bl *FxBlockchain) HandleManifestBatchStore(ctx context.Context, poolIDString string, links []ipld.Link) ([]string, error) {
