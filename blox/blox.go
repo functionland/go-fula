@@ -649,7 +649,6 @@ func (p *Blox) Start(ctx context.Context) error {
 			// Handle error
 			log.Errorw("RecoverAll error", "err", err.Error())
 		}
-		close(recoverOut) // Close the channel when RecoverAll is done
 	}()
 
 	// Create an HTTP server instance
