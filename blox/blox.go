@@ -642,6 +642,15 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true, 15*time.Second); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
 	}
+	recoverOut := make(chan api.GlobalPinInfo)
+	go func() {
+		err := p.ipfsClusterApi.RecoverAll(ctx, true, recoverOut)
+		if err != nil {
+			// Handle error
+			log.Errorw("RecoverAll error", "err", err.Error())
+		}
+		close(recoverOut) // Close the channel when RecoverAll is done
+	}()
 
 	// Create an HTTP server instance
 	if p.DefaultIPFShttpServer == "fula" {
