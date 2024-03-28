@@ -85,7 +85,7 @@ func (bl *FxBlockchain) ManifestStore(ctx context.Context, to peer.ID, r Manifes
 	}
 }
 
-func (bl *FxBlockchain) HandleManifestAvailableBatch(ctx context.Context, poolIDString string, account string, links []ipld.Link) ([]ipld.Link, error) {
+func (bl *FxBlockchain) HandleManifestAvailableAllaccountsBatch(ctx context.Context, poolIDString string, links []ipld.Link) ([]ipld.Link, error) {
 	var availableLinks []ipld.Link
 	poolID, err := strconv.Atoi(poolIDString)
 	if err != nil {
@@ -100,18 +100,17 @@ func (bl *FxBlockchain) HandleManifestAvailableBatch(ctx context.Context, poolID
 		cids = append(cids, link.String())
 	}
 
-	reqBody := ReplicateRequest{
-		Cids:    cids,
-		Account: account,
-		PoolID:  poolID,
+	reqBody := AvailableAllaccountsBatchRequest{
+		Cids:   cids,
+		PoolID: poolID,
 	}
-	log.Debugw("HandleManifestAvailableBatch", "reqBody", reqBody)
+	log.Debugw("HandleManifestAvailableAllaccountsBatch", "reqBody", reqBody)
 	req, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize request: %w", err)
 	}
 
-	response, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestAvailableBatch, req)
+	response, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestAvailableAllaccountsBatch, req)
 	if err != nil {
 		return nil, fmt.Errorf("blockchain call failed: %w", err)
 	}
@@ -119,22 +118,20 @@ func (bl *FxBlockchain) HandleManifestAvailableBatch(ctx context.Context, poolID
 		return nil, fmt.Errorf("unexpected status code: %d", statusCode)
 	}
 
-	var resp ReplicateResponse
+	var resp BatchManifestAllaccountsResponse
 	if err := json.Unmarshal(response, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	log.Debugw("HandleManifestAvailableBatch", "resp", resp)
+	log.Debugw("HandleManifestAvailableAllaccountsBatch", "resp", resp)
 
 	// Filter for available manifests.
 	for _, manifest := range resp.Manifests {
-		if manifest.ReplicationAvailable > 0 {
-			c, err := cid.Decode(manifest.Cid)
-			if err != nil {
-				// Log or handle the error based on your application's logging strategy.
-				continue // Skipping invalid CIDs.
-			}
-			availableLinks = append(availableLinks, cidlink.Link{Cid: c})
+		c, err := cid.Decode(manifest.Cid)
+		if err != nil {
+			// Log or handle the error based on your application's logging strategy.
+			continue // Skipping invalid CIDs.
 		}
+		availableLinks = append(availableLinks, cidlink.Link{Cid: c})
 	}
 
 	return availableLinks, nil

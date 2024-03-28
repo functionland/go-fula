@@ -728,7 +728,7 @@ func (p *Blox) Start(ctx context.Context) error {
 						// Call HandleManifestBatchStore method
 						if len(storedLinks) > 0 {
 							// Check if the manifests are available to be stored or not
-							availableLinks, err := p.bl.HandleManifestAvailableBatch(shortCtx, p.topicName, nodeAccount, storedLinks)
+							availableLinks, err := p.bl.HandleManifestAvailableAllaccountsBatch(shortCtx, p.topicName, storedLinks)
 							if err != nil {
 								log.Errorw("Error checking available manifests", "err", err)
 								continue // Or handle the error appropriately

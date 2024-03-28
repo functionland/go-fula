@@ -10,31 +10,32 @@ import (
 )
 
 const (
-	actionSeeded                 = "account-seeded"
-	actionAccountExists          = "account-exists"
-	actionAccountCreate          = "account-create"
-	actionAccountFund            = "account-fund"
-	actionAccountBalance         = "account-balance"
-	actionAssetsBalance          = "asset-balance"
-	actionTransferToMumbai       = "fula-mumbai-convert_tokens"
-	actionTransferToGoerli       = "fula-goerli-convert_tokens"
-	actionPoolCreate             = "fula-pool-create"
-	actionPoolJoin               = "fula-pool-join"
-	actionPoolCancelJoin         = "fula-pool-cancel_join"
-	actionPoolRequests           = "fula-pool-poolrequests"
-	actionPoolList               = "fula-pool"
-	actionPoolUserList           = "fula-pool-users"
-	actionPoolVote               = "fula-pool-vote"
-	actionPoolLeave              = "fula-pool-leave"
-	actionManifestUpload         = "fula-manifest-upload"
-	actionManifestStore          = "fula-manifest-storage"
-	actionManifestBatchStore     = "fula-manifest-batch_storage"
-	actionManifestBatchUpload    = "fula-manifest-batch_upload"
-	actionManifestAvailable      = "fula-manifest-available"
-	actionManifestRemove         = "fula-manifest-remove"
-	actionManifestRemoveStorer   = "fula-manifest-remove_storer"
-	actionManifestRemoveStored   = "fula-manifest-remove_storing_manifest"
-	actionManifestAvailableBatch = "fula-manifest-available_batch"
+	actionSeeded                            = "account-seeded"
+	actionAccountExists                     = "account-exists"
+	actionAccountCreate                     = "account-create"
+	actionAccountFund                       = "account-fund"
+	actionAccountBalance                    = "account-balance"
+	actionAssetsBalance                     = "asset-balance"
+	actionTransferToMumbai                  = "fula-mumbai-convert_tokens"
+	actionTransferToGoerli                  = "fula-goerli-convert_tokens"
+	actionPoolCreate                        = "fula-pool-create"
+	actionPoolJoin                          = "fula-pool-join"
+	actionPoolCancelJoin                    = "fula-pool-cancel_join"
+	actionPoolRequests                      = "fula-pool-poolrequests"
+	actionPoolList                          = "fula-pool"
+	actionPoolUserList                      = "fula-pool-users"
+	actionPoolVote                          = "fula-pool-vote"
+	actionPoolLeave                         = "fula-pool-leave"
+	actionManifestUpload                    = "fula-manifest-upload"
+	actionManifestStore                     = "fula-manifest-storage"
+	actionManifestBatchStore                = "fula-manifest-batch_storage"
+	actionManifestBatchUpload               = "fula-manifest-batch_upload"
+	actionManifestAvailable                 = "fula-manifest-available"
+	actionManifestRemove                    = "fula-manifest-remove"
+	actionManifestRemoveStorer              = "fula-manifest-remove_storer"
+	actionManifestRemoveStored              = "fula-manifest-remove_storing_manifest"
+	actionManifestAvailableBatch            = "fula-manifest-available_batch"
+	actionManifestAvailableAllaccountsBatch = "fula-manifest-available_allaccounts_batch"
 
 	//Hardware
 	actionBloxFreeSpace      = "blox-free-space"
@@ -60,6 +61,11 @@ type ReplicateRequest struct {
 	PoolID  int      `json:"pool_id"`
 }
 
+type AvailableAllaccountsBatchRequest struct {
+	Cids   []string `json:"cids"`
+	PoolID int      `json:"pool_id"`
+}
+
 type ReplicateResponse struct {
 	Manifests []BatchManifest `json:"manifests"`
 }
@@ -67,6 +73,14 @@ type ReplicateResponse struct {
 type BatchManifest struct {
 	Cid                  string `json:"cid"`
 	ReplicationAvailable int    `json:"replication_available"`
+}
+
+type BatchManifestAllaccountsResponse struct {
+	Manifests []BatchManifestAllaccounts `json:"manifests"`
+}
+
+type BatchManifestAllaccounts struct {
+	Cid string `json:"cid"`
 }
 
 type LinkWithLimit struct {
@@ -413,31 +427,32 @@ type Blockchain interface {
 }
 
 var requestTypes = map[string]reflect.Type{
-	actionSeeded:                 reflect.TypeOf(SeededRequest{}),
-	actionAccountExists:          reflect.TypeOf(AccountExistsRequest{}),
-	actionAccountCreate:          reflect.TypeOf(AccountCreateRequest{}),
-	actionAccountFund:            reflect.TypeOf(AccountFundRequest{}),
-	actionPoolCreate:             reflect.TypeOf(PoolCreateRequest{}),
-	actionPoolJoin:               reflect.TypeOf(PoolJoinRequest{}),
-	actionPoolRequests:           reflect.TypeOf(PoolRequestsRequest{}),
-	actionPoolCancelJoin:         reflect.TypeOf(PoolCancelJoinRequest{}),
-	actionPoolList:               reflect.TypeOf(PoolListRequest{}),
-	actionPoolUserList:           reflect.TypeOf(PoolUserListRequest{}),
-	actionPoolVote:               reflect.TypeOf(PoolVoteRequest{}),
-	actionPoolLeave:              reflect.TypeOf(PoolLeaveRequest{}),
-	actionManifestUpload:         reflect.TypeOf(ManifestUploadRequest{}),
-	actionManifestStore:          reflect.TypeOf(ManifestStoreRequest{}),
-	actionManifestBatchStore:     reflect.TypeOf(ManifestBatchStoreRequest{}),
-	actionManifestBatchUpload:    reflect.TypeOf(ManifestBatchUploadRequest{}),
-	actionManifestAvailable:      reflect.TypeOf(ManifestAvailableRequest{}),
-	actionManifestAvailableBatch: reflect.TypeOf(ReplicateRequest{}),
-	actionManifestRemove:         reflect.TypeOf(ManifestRemoveRequest{}),
-	actionManifestRemoveStorer:   reflect.TypeOf(ManifestRemoveStorerRequest{}),
-	actionManifestRemoveStored:   reflect.TypeOf(ManifestRemoveStoredRequest{}),
-	actionAssetsBalance:          reflect.TypeOf(AssetsBalanceRequest{}),
-	actionTransferToGoerli:       reflect.TypeOf(TransferToFulaRequest{}),
-	actionTransferToMumbai:       reflect.TypeOf(TransferToFulaRequest{}),
-	actionReplicateInPool:        reflect.TypeOf(ReplicateRequest{}),
+	actionSeeded:                            reflect.TypeOf(SeededRequest{}),
+	actionAccountExists:                     reflect.TypeOf(AccountExistsRequest{}),
+	actionAccountCreate:                     reflect.TypeOf(AccountCreateRequest{}),
+	actionAccountFund:                       reflect.TypeOf(AccountFundRequest{}),
+	actionPoolCreate:                        reflect.TypeOf(PoolCreateRequest{}),
+	actionPoolJoin:                          reflect.TypeOf(PoolJoinRequest{}),
+	actionPoolRequests:                      reflect.TypeOf(PoolRequestsRequest{}),
+	actionPoolCancelJoin:                    reflect.TypeOf(PoolCancelJoinRequest{}),
+	actionPoolList:                          reflect.TypeOf(PoolListRequest{}),
+	actionPoolUserList:                      reflect.TypeOf(PoolUserListRequest{}),
+	actionPoolVote:                          reflect.TypeOf(PoolVoteRequest{}),
+	actionPoolLeave:                         reflect.TypeOf(PoolLeaveRequest{}),
+	actionManifestUpload:                    reflect.TypeOf(ManifestUploadRequest{}),
+	actionManifestStore:                     reflect.TypeOf(ManifestStoreRequest{}),
+	actionManifestBatchStore:                reflect.TypeOf(ManifestBatchStoreRequest{}),
+	actionManifestBatchUpload:               reflect.TypeOf(ManifestBatchUploadRequest{}),
+	actionManifestAvailable:                 reflect.TypeOf(ManifestAvailableRequest{}),
+	actionManifestAvailableBatch:            reflect.TypeOf(ReplicateRequest{}),
+	actionManifestAvailableAllaccountsBatch: reflect.TypeOf(AvailableAllaccountsBatchRequest{}),
+	actionManifestRemove:                    reflect.TypeOf(ManifestRemoveRequest{}),
+	actionManifestRemoveStorer:              reflect.TypeOf(ManifestRemoveStorerRequest{}),
+	actionManifestRemoveStored:              reflect.TypeOf(ManifestRemoveStoredRequest{}),
+	actionAssetsBalance:                     reflect.TypeOf(AssetsBalanceRequest{}),
+	actionTransferToGoerli:                  reflect.TypeOf(TransferToFulaRequest{}),
+	actionTransferToMumbai:                  reflect.TypeOf(TransferToFulaRequest{}),
+	actionReplicateInPool:                   reflect.TypeOf(ReplicateRequest{}),
 
 	//Hardware
 	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
@@ -455,31 +470,32 @@ var requestTypes = map[string]reflect.Type{
 }
 
 var responseTypes = map[string]reflect.Type{
-	actionSeeded:                 reflect.TypeOf(SeededResponse{}),
-	actionAccountExists:          reflect.TypeOf(AccountExistsResponse{}),
-	actionAccountCreate:          reflect.TypeOf(AccountCreateResponse{}),
-	actionAccountFund:            reflect.TypeOf(AccountFundResponse{}),
-	actionPoolCreate:             reflect.TypeOf(PoolCreateResponse{}),
-	actionPoolJoin:               reflect.TypeOf(PoolJoinResponse{}),
-	actionPoolRequests:           reflect.TypeOf(PoolRequestsResponse{}),
-	actionPoolCancelJoin:         reflect.TypeOf(PoolCancelJoinResponse{}),
-	actionPoolList:               reflect.TypeOf(PoolListResponse{}),
-	actionPoolUserList:           reflect.TypeOf(PoolUserListResponse{}),
-	actionPoolVote:               reflect.TypeOf(PoolVoteResponse{}),
-	actionPoolLeave:              reflect.TypeOf(PoolLeaveResponse{}),
-	actionManifestUpload:         reflect.TypeOf(ManifestUploadResponse{}),
-	actionManifestStore:          reflect.TypeOf(ManifestStoreResponse{}),
-	actionManifestBatchStore:     reflect.TypeOf(ManifestBatchStoreResponse{}),
-	actionManifestBatchUpload:    reflect.TypeOf(ManifestBatchUploadResponse{}),
-	actionManifestAvailable:      reflect.TypeOf(ManifestAvailableResponse{}),
-	actionManifestAvailableBatch: reflect.TypeOf(ReplicateResponse{}),
-	actionManifestRemove:         reflect.TypeOf(ManifestRemoveResponse{}),
-	actionManifestRemoveStorer:   reflect.TypeOf(ManifestRemoveStorerResponse{}),
-	actionManifestRemoveStored:   reflect.TypeOf(ManifestRemoveStoredResponse{}),
-	actionAssetsBalance:          reflect.TypeOf(AssetsBalanceResponse{}),
-	actionTransferToGoerli:       reflect.TypeOf(TransferToFulaResponse{}),
-	actionTransferToMumbai:       reflect.TypeOf(TransferToFulaResponse{}),
-	actionReplicateInPool:        reflect.TypeOf(ReplicateResponse{}),
+	actionSeeded:                            reflect.TypeOf(SeededResponse{}),
+	actionAccountExists:                     reflect.TypeOf(AccountExistsResponse{}),
+	actionAccountCreate:                     reflect.TypeOf(AccountCreateResponse{}),
+	actionAccountFund:                       reflect.TypeOf(AccountFundResponse{}),
+	actionPoolCreate:                        reflect.TypeOf(PoolCreateResponse{}),
+	actionPoolJoin:                          reflect.TypeOf(PoolJoinResponse{}),
+	actionPoolRequests:                      reflect.TypeOf(PoolRequestsResponse{}),
+	actionPoolCancelJoin:                    reflect.TypeOf(PoolCancelJoinResponse{}),
+	actionPoolList:                          reflect.TypeOf(PoolListResponse{}),
+	actionPoolUserList:                      reflect.TypeOf(PoolUserListResponse{}),
+	actionPoolVote:                          reflect.TypeOf(PoolVoteResponse{}),
+	actionPoolLeave:                         reflect.TypeOf(PoolLeaveResponse{}),
+	actionManifestUpload:                    reflect.TypeOf(ManifestUploadResponse{}),
+	actionManifestStore:                     reflect.TypeOf(ManifestStoreResponse{}),
+	actionManifestBatchStore:                reflect.TypeOf(ManifestBatchStoreResponse{}),
+	actionManifestBatchUpload:               reflect.TypeOf(ManifestBatchUploadResponse{}),
+	actionManifestAvailable:                 reflect.TypeOf(ManifestAvailableResponse{}),
+	actionManifestAvailableBatch:            reflect.TypeOf(ReplicateResponse{}),
+	actionManifestAvailableAllaccountsBatch: reflect.TypeOf(BatchManifestAllaccountsResponse{}),
+	actionManifestRemove:                    reflect.TypeOf(ManifestRemoveResponse{}),
+	actionManifestRemoveStorer:              reflect.TypeOf(ManifestRemoveStorerResponse{}),
+	actionManifestRemoveStored:              reflect.TypeOf(ManifestRemoveStoredResponse{}),
+	actionAssetsBalance:                     reflect.TypeOf(AssetsBalanceResponse{}),
+	actionTransferToGoerli:                  reflect.TypeOf(TransferToFulaResponse{}),
+	actionTransferToMumbai:                  reflect.TypeOf(TransferToFulaResponse{}),
+	actionReplicateInPool:                   reflect.TypeOf(ReplicateResponse{}),
 
 	//Hardware
 	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
