@@ -100,17 +100,13 @@ func (bl *FxBlockchain) HandleManifestAvailableAllaccountsBatch(ctx context.Cont
 		cids = append(cids, link.String())
 	}
 
-	reqBody := AvailableAllaccountsBatchRequest{
+	reqBody := &AvailableAllaccountsBatchRequest{
 		Cids:   cids,
 		PoolID: poolID,
 	}
 	log.Debugw("HandleManifestAvailableAllaccountsBatch", "reqBody", reqBody)
-	req, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize request: %w", err)
-	}
 
-	response, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestAvailableAllaccountsBatch, req)
+	response, statusCode, err := bl.callBlockchain(ctx, "POST", actionManifestAvailableAllaccountsBatch, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("blockchain call failed: %w", err)
 	}
@@ -185,7 +181,7 @@ func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDStri
 		// Handle the error if the conversion fails
 		return nil, fmt.Errorf("invalid poolID, not an integer: %s", err)
 	}
-	manifestAvailableRequest := ManifestAvailableRequest{
+	manifestAvailableRequest := &ManifestAvailableRequest{
 		PoolID: poolID,
 	}
 
