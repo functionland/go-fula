@@ -38,18 +38,19 @@ const (
 	actionManifestAvailableAllaccountsBatch = "fula-manifest-available_allaccounts_batch"
 
 	//Hardware
-	actionBloxFreeSpace      = "blox-free-space"
-	actionEraseBlData        = "erase-blockchain-data"
-	actionWifiRemoveall      = "wifi-removeall"
-	actionReboot             = "reboot"
-	actionPartition          = "partition"
-	actionDeleteFulaConfig   = "delete-fula-config"
-	actionDeleteWifi         = "delete-wifi"
-	actionDisconnectWifi     = "disconnect-wifi"
-	actionGetAccount         = "get-account"
-	actionFetchContainerLogs = "fetch-container-logs"
-	actionGetFolderSize      = "get-folder-size"
-	actionGetDatastoreSize   = "get-datastore-size"
+	actionBloxFreeSpace           = "blox-free-space"
+	actionEraseBlData             = "erase-blockchain-data"
+	actionWifiRemoveall           = "wifi-removeall"
+	actionReboot                  = "reboot"
+	actionPartition               = "partition"
+	actionDeleteFulaConfig        = "delete-fula-config"
+	actionDeleteWifi              = "delete-wifi"
+	actionDisconnectWifi          = "disconnect-wifi"
+	actionGetAccount              = "get-account"
+	actionFetchContainerLogs      = "fetch-container-logs"
+	actionFindBestAndTargetInLogs = "find-bestandtarget-inlogs"
+	actionGetFolderSize           = "get-folder-size"
+	actionGetDatastoreSize        = "get-datastore-size"
 
 	// Cluster
 	actionReplicateInPool = "replicate"
@@ -422,6 +423,7 @@ type Blockchain interface {
 	DeleteFulaConfig(context.Context, peer.ID) ([]byte, error)
 	GetAccount(context.Context, peer.ID) ([]byte, error)
 	FetchContainerLogs(context.Context, peer.ID, wifi.FetchContainerLogsRequest) ([]byte, error)
+	FindBestAndTargetInLogs(context.Context, peer.ID, wifi.FindBestAndTargetInLogsRequest) ([]byte, error)
 	GetFolderSize(context.Context, peer.ID, wifi.GetFolderSizeRequest) ([]byte, error)
 	GetDatastoreSize(context.Context, peer.ID, wifi.GetDatastoreSizeRequest) ([]byte, error)
 }
@@ -455,18 +457,19 @@ var requestTypes = map[string]reflect.Type{
 	actionReplicateInPool:                   reflect.TypeOf(ReplicateRequest{}),
 
 	//Hardware
-	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
-	actionEraseBlData:        reflect.TypeOf(wifi.EraseBlDataRequest{}),
-	actionWifiRemoveall:      reflect.TypeOf(wifi.WifiRemoveallRequest{}),
-	actionReboot:             reflect.TypeOf(wifi.RebootRequest{}),
-	actionPartition:          reflect.TypeOf(wifi.PartitionRequest{}),
-	actionDeleteFulaConfig:   reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
-	actionDeleteWifi:         reflect.TypeOf(wifi.DeleteWifiRequest{}),
-	actionDisconnectWifi:     reflect.TypeOf(wifi.DeleteWifiRequest{}),
-	actionGetAccount:         reflect.TypeOf(GetAccountRequest{}),
-	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsRequest{}),
-	actionGetFolderSize:      reflect.TypeOf(wifi.GetFolderSizeRequest{}),
-	actionGetDatastoreSize:   reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
+	actionBloxFreeSpace:           reflect.TypeOf(wifi.BloxFreeSpaceRequest{}),
+	actionEraseBlData:             reflect.TypeOf(wifi.EraseBlDataRequest{}),
+	actionWifiRemoveall:           reflect.TypeOf(wifi.WifiRemoveallRequest{}),
+	actionReboot:                  reflect.TypeOf(wifi.RebootRequest{}),
+	actionPartition:               reflect.TypeOf(wifi.PartitionRequest{}),
+	actionDeleteFulaConfig:        reflect.TypeOf(wifi.DeleteFulaConfigRequest{}),
+	actionDeleteWifi:              reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionDisconnectWifi:          reflect.TypeOf(wifi.DeleteWifiRequest{}),
+	actionGetAccount:              reflect.TypeOf(GetAccountRequest{}),
+	actionFetchContainerLogs:      reflect.TypeOf(wifi.FetchContainerLogsRequest{}),
+	actionFindBestAndTargetInLogs: reflect.TypeOf(wifi.FindBestAndTargetInLogsRequest{}),
+	actionGetFolderSize:           reflect.TypeOf(wifi.GetFolderSizeRequest{}),
+	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -498,16 +501,17 @@ var responseTypes = map[string]reflect.Type{
 	actionReplicateInPool:                   reflect.TypeOf(ReplicateResponse{}),
 
 	//Hardware
-	actionBloxFreeSpace:      reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
-	actionEraseBlData:        reflect.TypeOf(wifi.EraseBlDataResponse{}),
-	actionWifiRemoveall:      reflect.TypeOf(wifi.WifiRemoveallResponse{}),
-	actionReboot:             reflect.TypeOf(wifi.RebootResponse{}),
-	actionPartition:          reflect.TypeOf(wifi.PartitionResponse{}),
-	actionDeleteFulaConfig:   reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
-	actionDeleteWifi:         reflect.TypeOf(wifi.DeleteWifiResponse{}),
-	actionDisconnectWifi:     reflect.TypeOf(wifi.DeleteWifiResponse{}),
-	actionGetAccount:         reflect.TypeOf(GetAccountResponse{}),
-	actionFetchContainerLogs: reflect.TypeOf(wifi.FetchContainerLogsResponse{}),
-	actionGetFolderSize:      reflect.TypeOf(wifi.GetFolderSizeResponse{}),
-	actionGetDatastoreSize:   reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
+	actionBloxFreeSpace:           reflect.TypeOf(wifi.BloxFreeSpaceResponse{}),
+	actionEraseBlData:             reflect.TypeOf(wifi.EraseBlDataResponse{}),
+	actionWifiRemoveall:           reflect.TypeOf(wifi.WifiRemoveallResponse{}),
+	actionReboot:                  reflect.TypeOf(wifi.RebootResponse{}),
+	actionPartition:               reflect.TypeOf(wifi.PartitionResponse{}),
+	actionDeleteFulaConfig:        reflect.TypeOf(wifi.DeleteFulaConfigResponse{}),
+	actionDeleteWifi:              reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionDisconnectWifi:          reflect.TypeOf(wifi.DeleteWifiResponse{}),
+	actionGetAccount:              reflect.TypeOf(GetAccountResponse{}),
+	actionFetchContainerLogs:      reflect.TypeOf(wifi.FetchContainerLogsResponse{}),
+	actionFindBestAndTargetInLogs: reflect.TypeOf(wifi.FindBestAndTargetInLogsResponse{}),
+	actionGetFolderSize:           reflect.TypeOf(wifi.GetFolderSizeResponse{}),
+	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -68,6 +69,17 @@ type FetchContainerLogsResponse struct {
 type FetchContainerLogsRequest struct {
 	ContainerName string
 	TailCount     string
+}
+
+type FindBestAndTargetInLogsRequest struct {
+	NodeContainerName string
+	TailCount         string
+}
+
+type FindBestAndTargetInLogsResponse struct {
+	Best   string `json:"best"`
+	Target string `json:"target"`
+	Err    string `json:"err"`
 }
 
 type DockerInfo struct {
@@ -348,6 +360,43 @@ func fetchLogsFromDocker(ctx context.Context, containerName string, tailCount st
 	}
 
 	return string(logBytes), nil
+}
+
+// Usage example:
+// best, target, err := findBestAndTargetInLogs(context.Background(), "fula_node")
+//
+//	if err != nil {
+//	    log.Fatalf("Error: %s", err)
+//	}
+//
+// log.Printf("Best: %s, Target: %s", best, target)
+func FindBestAndTargetInLogs(ctx context.Context, req FindBestAndTargetInLogsRequest) (string, string, error) {
+	logs, err := fetchLogsFromDocker(ctx, req.NodeContainerName, req.TailCount)
+	if err != nil {
+		return "0", "0", err
+	}
+
+	// Compile the regular expressions once before the loop
+	bestRegex := regexp.MustCompile(`best: #(\d+)`)
+	targetRegex := regexp.MustCompile(`target=#(\d+)`)
+
+	// Split logs into lines and iterate in reverse
+	lines := strings.Split(logs, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if strings.Contains(line, "Syncing") && strings.Contains(line, "target") && strings.Contains(line, "best") {
+			bestMatches := bestRegex.FindStringSubmatch(line)
+			targetMatches := targetRegex.FindStringSubmatch(line)
+
+			if len(bestMatches) > 1 && len(targetMatches) > 1 {
+				// Return the values found for best and target from the first matching line
+				return bestMatches[1], targetMatches[1], nil
+			}
+		}
+	}
+
+	// If we get here, it means no matching line was found
+	return "0", "0", fmt.Errorf("no logs containing 'Syncing', 'target', and 'best' were found")
 }
 
 func fetchLogsFromFile(ctx context.Context, name string, tailCount string) (string, error) {

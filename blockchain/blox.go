@@ -245,6 +245,43 @@ func (bl *FxBlockchain) FetchContainerLogs(ctx context.Context, to peer.ID, r wi
 	}
 }
 
+func (bl *FxBlockchain) FindBestAndTargetInLogs(ctx context.Context, to peer.ID, r wifi.FindBestAndTargetInLogsRequest) ([]byte, error) {
+
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(r); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionFindBestAndTargetInLogs, &buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.StatusCode != http.StatusAccepted:
+		// Attempt to parse the body as JSON.
+		if jsonErr := json.Unmarshal(b, &apiError); jsonErr != nil {
+			// If we can't parse the JSON, return the original body in the error.
+			return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+		}
+		// Return the parsed error message and description.
+		return nil, fmt.Errorf("unexpected response: %d %s - %s", resp.StatusCode, apiError.Message, apiError.Description)
+	default:
+		return b, nil
+	}
+}
+
 func (bl *FxBlockchain) GetFolderSize(ctx context.Context, to peer.ID, r wifi.GetFolderSizeRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
@@ -422,6 +459,47 @@ func (bl *FxBlockchain) handleFetchContainerLogs(ctx context.Context, from peer.
 		}
 	}
 	log.Debugw("handleFetchContainerLogs response", "out", out)
+	w.WriteHeader(http.StatusAccepted)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+}
+
+func (bl *FxBlockchain) handleFindBestAndTargetInLogs(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionFindBestAndTargetInLogs, "from", from)
+
+	// Parse the JSON body of the request into the DeleteWifiRequest struct
+	var req wifi.FindBestAndTargetInLogsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error("failed to decode request: %v", err)
+		http.Error(w, "failed to decode request", http.StatusBadRequest)
+		return
+	}
+	log.Debugw("handleFindBestAndTargetInLogs received", "req", req)
+
+	out := wifi.FindBestAndTargetInLogsResponse{
+		Best:   "0",
+		Target: "0",
+		Err:    "",
+	}
+	best, target, err := wifi.FindBestAndTargetInLogs(ctx, req)
+	if err != nil {
+		out = wifi.FindBestAndTargetInLogsResponse{
+			Best:   "0",
+			Target: "0",
+			Err:    err.Error(),
+		}
+	} else {
+		out = wifi.FindBestAndTargetInLogsResponse{
+			Best:   best,
+			Target: target,
+			Err:    "",
+		}
+	}
+	log.Debugw("handleFindBestAndTargetInLogs response", "out", out)
 	w.WriteHeader(http.StatusAccepted)
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		log.Error("failed to write response: %v", err)
