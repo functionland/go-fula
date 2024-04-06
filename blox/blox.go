@@ -748,6 +748,10 @@ func (p *Blox) Start(ctx context.Context) error {
 									// Log the occurrence of the specific error but do not continue
 									log.Warnw("Attempt to store with an account that is already a storer", "err", err, "p.topicName", p.topicName, "availableLinks", availableLinks)
 								} else if strings.Contains(err.Error(), "Transaction is outdated") {
+									log.Error("Transaction is outdated")
+									continue
+								} else if strings.Contains(err.Error(), "syncing") {
+									log.Error("The chain is syncing")
 									continue
 								} else {
 									// For any other error, log and continue

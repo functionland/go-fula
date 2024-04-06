@@ -215,7 +215,41 @@ func prependProtocol(addr string) string {
 	return "https://" + addr
 }
 
+// checkHealth checks the health of the blockchain by querying the /health endpoint.
+// It returns an error if the blockchain is currently syncing.
+func (bl *FxBlockchain) checkHealth(ctx context.Context) error {
+	endpoint := prependProtocol(bl.blockchainEndPoint)
+	healthAddr := endpoint + "/health"
+	healthReq, err := http.NewRequestWithContext(ctx, "POST", healthAddr, nil)
+	if err != nil {
+		return err
+	}
+	healthResp, err := bl.ch.Do(healthReq)
+	if err != nil {
+		return err
+	}
+	defer healthResp.Body.Close()
+
+	var healthCheckResponse struct {
+		IsSyncing       bool `json:"is_syncing"`
+		Peers           int  `json:"peers"`
+		ShouldHavePeers bool `json:"should_have_peers"`
+	}
+	if err := json.NewDecoder(healthResp.Body).Decode(&healthCheckResponse); err != nil {
+		return err
+	}
+	if healthCheckResponse.IsSyncing {
+		return fmt.Errorf("the chain is syncing, you can see the progress in pools screen")
+	}
+	return nil
+}
+
 func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, action string, p interface{}) ([]byte, int, error) {
+	// Check blockchain health before proceeding
+	if err := bl.checkHealth(ctx); err != nil {
+		return nil, http.StatusFailedDependency, err // Use 424 as the status code for a syncing blockchain
+	}
+
 	endpoint := prependProtocol(bl.blockchainEndPoint)
 	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
 
