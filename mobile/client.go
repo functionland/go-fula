@@ -3,8 +3,14 @@ package fulamobile
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/functionland/go-fula/blockchain"
@@ -12,6 +18,14 @@ import (
 	bsfetcher "github.com/ipfs/boxo/fetcher/impl/blockservice"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
+	badger "github.com/ipfs/go-ds-badger"
+	config "github.com/ipfs/kubo/config"
+	core "github.com/ipfs/kubo/core"
+	iface "github.com/ipfs/kubo/core/coreiface"
+	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
+	"github.com/ipfs/kubo/plugin/loader"
+	"github.com/ipfs/kubo/repo"
+	"github.com/ipfs/kubo/repo/fsrepo"
 	"github.com/ipld/go-ipld-prime"
 	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 	_ "github.com/ipld/go-ipld-prime/codec/dagjson"
@@ -23,8 +37,11 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multicodec"
 )
@@ -44,15 +61,228 @@ var rootDatastoreKey = datastore.NewKey("/")
 var exploreAllRecursivelySelector selector.Selector
 
 type Client struct {
-	h       host.Host
-	ds      datastore.Batching
-	ls      ipld.LinkSystem
-	ex      exchange.Exchange
-	bl      blockchain.Blockchain
-	bloxPid peer.ID
-	relays  []string
+	h        host.Host
+	ds       datastore.Batching
+	ls       ipld.LinkSystem
+	ex       exchange.Exchange
+	bl       blockchain.Blockchain
+	bloxPid  peer.ID
+	relays   []string
+	ipfsAPI  iface.CoreAPI
+	ipfsNode *core.IpfsNode
 }
 
+type DatastoreConfigSpec struct {
+	Mounts []Mount `json:"mounts"`
+	Type   string  `json:"type"`
+}
+
+type Mount struct {
+	Child      Child  `json:"child"`
+	Mountpoint string `json:"mountpoint"`
+	Prefix     string `json:"prefix"`
+	Type       string `json:"type"`
+}
+
+type Child struct {
+	Path        string `json:"path"`
+	ShardFunc   string `json:"shardFunc,omitempty"`
+	Sync        bool   `json:"sync,omitempty"`
+	Type        string `json:"type"`
+	Compression string `json:"compression,omitempty"`
+}
+
+func CustomHostOption(opts []libp2p.Option) kubolibp2p.HostOption {
+	return func(id peer.ID, ps peerstore.Peerstore, options ...libp2p.Option) (host.Host, error) {
+		return libp2p.New(opts...)
+	}
+}
+
+func IPFSSpec(dsPath string) DatastoreConfigSpec {
+	return DatastoreConfigSpec{
+		Mounts: []Mount{
+			{
+				Child: Child{
+					Path: filepath.Join(dsPath, "blocks"),
+					Sync: true,
+					Type: "badgerds",
+				},
+				Mountpoint: "/blocks",
+				Prefix:     "badger.blocks",
+				Type:       "measure",
+			},
+			{
+				Child: Child{
+					Path: filepath.Join(dsPath, "keystore"),
+					Sync: true,
+					Type: "badgerds",
+				},
+				Mountpoint: "/keystore",
+				Prefix:     "badgerds.keystore",
+				Type:       "measure",
+			},
+			{
+				Child: Child{
+					Path:        dsPath,
+					Type:        "badgerds",
+					Compression: "none",
+				},
+				Mountpoint: "/",
+				Prefix:     "badgerds.datastore",
+				Type:       "measure",
+			},
+		},
+		Type: "mount",
+	}
+}
+
+func BadgerSpec(options *badger.Options, dsPath string) map[string]interface{} {
+	return map[string]interface{}{
+		"type":   "measure",
+		"prefix": "badger.datastore",
+		"child": map[string]interface{}{
+			"type":           "badgerds",
+			"path":           dsPath,
+			"syncWrites":     options.SyncWrites,
+			"truncate":       options.Truncate,
+			"gcDiscardRatio": options.GcDiscardRatio,
+			"gcSleep":        options.GcSleep.String(),
+			"gcInterval":     options.GcInterval.String(),
+		},
+	}
+}
+
+func DefaultDatastoreConfig(options *badger.Options, dsPath string, storageMax string) config.Datastore {
+	spec := IPFSSpec(dsPath)
+
+	// Marshal the DatastoreConfigSpec to JSON
+	specJSON, err := json.Marshal(spec)
+	if err != nil {
+		panic(err) // Handle the error appropriately
+	}
+
+	// Unmarshal JSON into a map[string]interface{}
+	var specMap map[string]interface{}
+	if err := json.Unmarshal(specJSON, &specMap); err != nil {
+		panic(err) // Handle the error appropriately
+	}
+
+	return config.Datastore{
+		StorageMax:         storageMax,
+		StorageGCWatermark: 90, // 90%
+		GCPeriod:           "1h",
+		BloomFilterSize:    0,
+		Spec:               BadgerSpec(options, dsPath),
+	}
+}
+
+func CreateCustomRepo(ctx context.Context, cfg *Config, basePath string, h host.Host, options *badger.Options, dsPath string, storageMax string, refresh bool) (repo.Repo, error) {
+	// Path to the repository
+	log.Print("CreateCustomRepo started")
+	repoPath := basePath
+
+	if !fsrepo.IsInitialized(repoPath) || refresh {
+		// Create the repository if it doesn't exist
+
+		versionFilePath := filepath.Join(repoPath, "version")
+		versionContent := strconv.Itoa(15)
+		if err := os.WriteFile(versionFilePath, []byte(versionContent), 0644); err != nil {
+			return nil, err
+		}
+		dataStoreFilePath := filepath.Join(repoPath, "datastore_spec")
+		datastoreContent := map[string]interface{}{
+			"type": "badgerds",
+			"path": dsPath,
+		}
+		datastoreContentBytes, err := json.Marshal(datastoreContent)
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(dataStoreFilePath, []byte(datastoreContentBytes), 0644); err != nil {
+			return nil, err
+		}
+		// Extract private key and peer ID from the libp2p host
+		privKey := h.Peerstore().PrivKey(h.ID())
+		if privKey == nil {
+			return nil, fmt.Errorf("private key for host not found")
+		}
+		privKeyBytes, err := crypto.MarshalPrivateKey(privKey)
+		if err != nil {
+			return nil, err
+		}
+
+		peerID := h.ID().String()
+		conf := config.Config{
+			Identity: config.Identity{
+				PeerID:  peerID,
+				PrivKey: base64.StdEncoding.EncodeToString(privKeyBytes),
+			},
+		}
+		log.Print("customRepo identity set")
+
+		// Set the custom configuration
+		conf.Bootstrap = append(conf.Bootstrap, conf.Bootstrap...)
+
+		conf.Datastore = DefaultDatastoreConfig(options, dsPath, storageMax)
+
+		conf.Addresses.Swarm = []string{
+			"/ip4/0.0.0.0/tcp/4001",
+			"/ip6/::/tcp/4001",
+			"/ip4/0.0.0.0/udp/4001/quic-v1",
+			"/ip4/0.0.0.0/udp/4001/quic-v1/webtransport",
+			"/ip6/::/udp/4001/quic-v1",
+			"/ip6/::/udp/4001/quic-v1/webtransport",
+		}
+		conf.Swarm.RelayService.Enabled = 1
+		conf.Addresses.API = []string{"/ip4/127.0.0.1/tcp/5001"}
+		conf.Bootstrap = []string{
+			"/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+			"/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+			"/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+			"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+			"/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+			"/ip4/104.131.131.82/udp/4001/quic-v1/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+		}
+		conf.Swarm.RelayService.Enabled = 1
+		conf.Discovery.MDNS.Enabled = true
+
+		// Initialize the repo with the configuration
+
+		if err := fsrepo.Init(repoPath, &conf); err != nil {
+			return nil, err
+		}
+	}
+	plugins, err := loader.NewPluginLoader(repoPath)
+	if err != nil {
+		panic(fmt.Errorf("error loading plugins: %s", err))
+	}
+
+	if err := plugins.Initialize(); err != nil {
+		panic(fmt.Errorf("error initializing plugins: %s", err))
+	}
+
+	if err := plugins.Inject(); err != nil {
+		panic(fmt.Errorf("error initializing plugins: %s", err))
+	}
+
+	// Open the repo
+	repo, err := fsrepo.Open(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	log.Println(repoPath)
+	log.Println(repo.GetConfigKey("Identity"))
+
+	return repo, nil
+}
+
+func NewIpfsClient(ctx context.Context, cfg *Config) (*Client, error) {
+	var mc Client
+	if err := cfg.initIpfs(ctx, &mc); err != nil {
+		return nil, err
+	}
+	return &mc, nil
+}
 func NewClient(cfg *Config) (*Client, error) {
 	var mc Client
 	if err := cfg.init(&mc); err != nil {
@@ -68,6 +298,14 @@ func (c *Client) ConnectToBlox() error {
 		return nil
 	}
 	return c.h.Connect(context.TODO(), c.h.Peerstore().PeerInfo(c.bloxPid))
+}
+
+func (c *Client) ConnectToBloxIpfs() error {
+	if _, ok := c.ex.(exchange.NoopExchange); ok {
+		return nil
+	}
+
+	return c.ipfsAPI.Swarm().Connect(context.TODO(), c.h.Peerstore().PeerInfo(c.bloxPid))
 }
 
 // ID returns the libp2p peer ID of the client.
@@ -377,6 +615,24 @@ func (c *Client) IpniNotifyLink(l string) {
 func (c *Client) Shutdown() error {
 	ctx := context.TODO()
 	xErr := c.ex.Shutdown(ctx)
+	hErr := c.h.Close()
+	fErr := c.Flush()
+	dsErr := c.ds.Close()
+	switch {
+	case hErr != nil:
+		return hErr
+	case fErr != nil:
+		return fErr
+	case dsErr != nil:
+		return dsErr
+	default:
+		return xErr
+	}
+}
+
+func (c *Client) ShutdownIpfs() error {
+	ctx := context.TODO()
+	xErr := c.ex.ShutdownIpfs(ctx)
 	hErr := c.h.Close()
 	fErr := c.Flush()
 	dsErr := c.ds.Close()

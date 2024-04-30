@@ -16,6 +16,7 @@ type Exchange interface {
 	PullBlock(context.Context, peer.ID, ipld.Link) error
 	SetAuth(context.Context, peer.ID, peer.ID, bool) error
 	Shutdown(context.Context) error
+	ShutdownIpfs(context.Context) error
 	IpniNotifyLink(link ipld.Link)
 	FindProvidersIpni(l ipld.Link, relays []string) ([]peer.AddrInfo, error)
 }

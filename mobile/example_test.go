@@ -286,6 +286,7 @@ func updatePoolName(newPoolName string) error {
 }
 
 func Example_poolExchangeDagBetweenClientBlox() {
+	ctx := context.TODO()
 	server := startMockServer("127.0.0.1:4004")
 	defer func() {
 		// Shutdown the server after test
@@ -296,172 +297,60 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	}()
 
 	const poolName = "1"
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// Elevate log level to show internal communications.
-	if err := logging.SetLogLevel("*", "debug"); err != nil {
-		log.Error("Error happened in logging.SetLogLevel")
-		panic(err)
-	}
 
 	// Use a deterministic random generator to generate deterministic
-	// output for the example.
-
-	// Instantiate the first node in the pool
-	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
-	if err != nil {
-		log.Errorw("Error happened in libp2p.New", "err", err)
-		panic(err)
-	}
-	n1, err := blox.New(
-		blox.WithHost(h1),
-		blox.WithPoolName("1"),
-		blox.WithUpdatePoolName(updatePoolName),
-		blox.WithBlockchainEndPoint("127.0.0.1:4004"),
-		blox.WithPingCount(5),
-		blox.WithExchangeOpts(
-			exchange.WithIpniGetEndPoint("http://127.0.0.1:4004/cid/"),
-		),
-	)
-	if err != nil {
-		log.Errorw("Error happened in blox.New", "err", err)
-		panic(err)
-	}
-	if err := n1.Start(ctx); err != nil {
-		log.Errorw("Error happened in n1.Start", "err", err)
-		panic(err)
-	}
-	defer n1.Shutdown(ctx)
-	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
 
 	mcfg := fulamobile.NewConfig()
+	mcfg.StorePath = "C:/Users/ehsan/.tmp/datastore"
+	mcfg.ConfigPath = "C:/Users/ehsan/.tmp"
 	mcfg.AllowTransientConnection = true
-	bloxAddrString := ""
-	if len(h1.Addrs()) > 0 {
-		// Convert the first multiaddr to a string
-		bloxAddrString = h1.Addrs()[0].String()
-		log.Infow("blox multiadddr is", "addr", bloxAddrString, "peerID", h1.ID().String())
-	} else {
-		log.Errorw("Error happened in h1.Addrs", "err", "No addresses in slice")
-		panic("No addresses in slice")
-	}
-	mcfg.BloxAddr = bloxAddrString + "/p2p/" + h1.ID().String()
+	bloxAddrString := "/ip4/70.34.208.109/udp/4001/quic-v1/p2p/12D3KooWQto3ReEkHtMNByVsSnMUWxRZyxk1Ni4yfMuizmYNmcJ9"
+	bloxId := "12D3KooWDaT8gS2zGMLGBKmW1mKhQSHxYeEX3Fr3VSjuPzmjyfZC"
+	mcfg.BloxAddr = bloxAddrString + "/p2p-circuit/p2p/" + bloxId
 	mcfg.PoolName = "1"
 	mcfg.Exchange = bloxAddrString
 	mcfg.BlockchainEndpoint = "127.0.0.1:4004"
-	log.Infow("bloxAdd string created", "addr", bloxAddrString+"/p2p/"+h1.ID().String())
-
-	c1, err := fulamobile.NewClient(mcfg)
+	log.Infow("bloxAdd string created", "addr", bloxAddrString+"/p2p/"+bloxId)
+	base64Key := "CAESQO7+La/pQFXs1GZoc5D4ujMczh87ZUMr1Kb8K4owTw3q4ZAFrgJ+9P3NHrMn+LHHmjZakMv28H5wIrpdNWTu4ew="
+	privBytes, err := base64.StdEncoding.DecodeString(base64Key)
 	if err != nil {
-		log.Errorw("Error happened in fulamobile.NewClient", "err", err)
+		log.Fatalf("Failed to decode base64 string: %v", err)
+	}
+
+	// This privBytes can now be used to set cfg.Identity in your Config structure
+	fmt.Printf("Private Key Bytes: %x\n", privBytes)
+	mcfg.Identity = privBytes
+
+	cIpfs1, err := fulamobile.NewIpfsClient(ctx, mcfg)
+	if err != nil {
+		log.Errorw("Error happened in fulamobile.NewIpfsClient", "err", err)
 		panic(err)
 	}
 	// Authorize exchange between the two nodes
-	mobilePeerIDString := c1.ID()
-	log.Infof("first client created with ID: %s", mobilePeerIDString)
+	mobilePeerIDString := cIpfs1.ID()
+	fmt.Printf("first client created with ID: %s", mobilePeerIDString)
 	mpid, err := peer.Decode(mobilePeerIDString)
 	if err != nil {
 		log.Errorw("Error happened in peer.Decode", "err", err)
 		panic(err)
 	}
-	if err := n1.SetAuth(ctx, h1.ID(), mpid, true); err != nil {
-		log.Error("Error happened in n1.SetAuth")
-		panic(err)
-	}
+	fmt.Println(mpid)
 
-	err = c1.ConnectToBlox()
+	err = cIpfs1.ConnectToBloxIpfs()
 	if err != nil {
-		log.Errorw("Error happened in c1.ConnectToBlox", "err", err)
+		log.Errorw("Error happened in cIpfs1.ConnectToBlox", "err", err)
 		panic(err)
 	}
-	_, err = c1.BloxFreeSpace()
+	fmt.Println("connected to blox")
+	/*_, err = cIpfs1.BloxFreeSpace()
 	if err != nil {
 		panic(err)
-	}
-
-	rawData := []byte("some raw data")
-	fmt.Printf("Original Val is: %s\n", string(rawData))
-	rawCodec := int64(0x55)
-	linkBytes, err := c1.Put(rawData, rawCodec)
-	if err != nil {
-		fmt.Printf("Error storing the raw data: %v", err)
-		return
-	}
-	c, err := cid.Cast(linkBytes)
-	if err != nil {
-		fmt.Printf("Error casting bytes to CID: %v", err)
-		return
-	}
-	fmt.Printf("Stored raw data link: %s\n", c.String())
-	log.Infof("Stored raw data link: %s", c.String())
-
-	recentCids, err := c1.ListRecentCidsAsStringWithChildren()
-	if err != nil {
-		log.Errorw("Error happened in ListRecentCidsAsStringWithChildre", "err", err)
-		panic(err)
-	}
-	for recentCids.HasNext() {
-		cid, err := recentCids.Next()
-		if err != nil {
-			fmt.Printf("Error retrieving next CID: %v", err)
-			log.Errorf("Error retrieving next CID: %v", err)
-			// Decide if you want to break or continue based on your error handling strategy
-			break
-		}
-		fmt.Printf("recentCid link: %s\n", cid) // Print each CID
-		log.Infof("recentCid link: %s", cid)
-	}
-	fmt.Print("Waiting for 5 seconds\n")
-	time.Sleep(5 * time.Second)
-	fmt.Printf("Now fetching the link %x\n", linkBytes)
-	log.Infof("Now fetching the link %x", linkBytes)
-
-	c2, err := fulamobile.NewClient(mcfg)
-	if err != nil {
-		log.Errorw("Error happened in fulamobile.NewClient2", "err", err)
-		panic(err)
-	}
-	mobilePeerIDString2 := c2.ID()
-	log.Infof("second client created with ID: %s", mobilePeerIDString2)
-	mpid2, err := peer.Decode(mobilePeerIDString2)
-	if err != nil {
-		log.Errorw("Error happened in peer.Decode2", "err", err)
-		panic(err)
-	}
-	if err := n1.SetAuth(ctx, h1.ID(), mpid2, true); err != nil {
-		log.Errorw("Error happened in n1.SetAuth2", "err", err)
-		panic(err)
-	}
-
-	err = c2.ConnectToBlox()
-	if err != nil {
-		log.Errorw("Error happened in c2.ConnectToBlox", "err", err)
-		panic(err)
-	}
-	/*
-		//If you uncomment this section, it just fetches the cid that blox stored and not with the key that mobile has
-		ct, err := cid.Decode("bafyreibcwjmj25zyylzw36xaglokmmcbk7c4tqtouaz7qmw6nskx5iqgqi")
-		if err != nil {
-			fmt.Println("Error decoding CID:", err)
-			return
-		}
-		linkBytes = ct.Bytes()
-		//
-	*/
-	val, err := c2.Get(linkBytes)
-	if err != nil {
-		log.Errorw("Error happened in c2.Get", "err", err)
-		panic(err)
-	}
-	fmt.Printf("Fetched Val is: %s\n", string(val))
-	log.Infof("Fetched Val is: %v", val)
-	log.Infof("Original Val is: %v", rawData)
-	if !bytes.Equal(val, rawData) {
-		panic(fmt.Sprintf("Original data is not equal to fetched data: [original] %s != [fetch] %s", string(val), string(rawData)))
-	}
+	}*/
 
 	// Output:
+	//Private Key Bytes: 08011240eefe2dafe94055ecd466687390f8ba331cce1f3b65432bd4a6fc2b8a304f0deae19005ae027ef4fdcd1eb327f8b1c79a365a90cbf6f07e7022ba5d3564eee1ec
+	// first client created with ID: 12D3KooWQzsGtYKX62PFvTeh67H7jdU7QqcMJgwiEzKFJCbqrKw112D3KooWQzsGtYKX62PFvTeh67H7jdU7QqcMJgwiEzKFJCbqrKw1
+	// connected to blox
 	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	// Original Val is: some raw data
 	// Stored raw data link: bafkr4ifmwbmdrkxep3mci37ionvgturlylvganap4ch7ouia2ui5tmr4iy

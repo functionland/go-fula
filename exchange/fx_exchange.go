@@ -138,12 +138,12 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 			return nil, err
 		}
 	}
-	//if !e.ipniPublishDisabled {
-	e.pub, err = newHubPublisher(h, opts)
-	if err != nil {
-		return nil, err
+	if !e.ipniPublishDisabled {
+		e.pub, err = newHubPublisher(h, opts)
+		if err != nil {
+			return nil, err
+		}
 	}
-	//}
 	e.dht, err = newDhtProvider(h, opts)
 	if err != nil {
 		return nil, err
@@ -283,8 +283,10 @@ func (e *FxExchange) IpniNotifyLink(link ipld.Link) {
 func (e *FxExchange) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // Ensures we cancel the context when someFunction exits
-	if err := e.pub.Start(ctx); err != nil {
-		return err
+	if !e.ipniPublishDisabled {
+		if err := e.pub.Start(ctx); err != nil {
+			return err
+		}
 	}
 	listen, err := gostream.Listen(e.h, FxExchangeProtocolID)
 	if err != nil {
@@ -621,8 +623,10 @@ func (e *FxExchange) decodeAndStoreBlock(ctx context.Context, r io.ReadCloser, l
 	}
 	log.Debugw("Successfully stored pushed node", "cid", storedLink.(cidlink.Link).Cid)
 	log.Debugw("Notifying stored pushed link to IPNI publisher", "link", storedLink)
-	e.pub.notifyReceivedLink(storedLink)
-	log.Debugw("Successfully notified stored pushed link to IPNI publisher", "link", storedLink)
+	if !e.ipniPublishDisabled {
+		e.pub.notifyReceivedLink(storedLink)
+		log.Debugw("Successfully notified stored pushed link to IPNI publisher", "link", storedLink)
+	}
 	return nil
 }
 
@@ -852,16 +856,33 @@ func (e *FxExchange) cleanupTempAuths() {
 
 func (e *FxExchange) Shutdown(ctx context.Context) error {
 	log.Info("Started shutdown IPNI publisher")
-	//if !e.ipniPublishDisabled {
-	if err := e.pub.shutdown(); err != nil {
-		log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
+	if !e.ipniPublishDisabled {
+		if err := e.pub.shutdown(); err != nil {
+			log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
+		}
+		log.Info("Completed shutdown IPNI publisher")
 	}
-	log.Info("Completed shutdown IPNI publisher")
 	e.dht.dh.Close()
 	e.dht.Shutdown()
 	log.Info("Completed shutdown dht")
-	//}
 	e.c.CloseIdleConnections()
 	log.Info("Completed CloseIdleConnections")
+	return e.s.Shutdown(ctx)
+}
+
+func (e *FxExchange) ShutdownIpfs(ctx context.Context) error {
+	log.Info("Started shutdown IPNI publisher")
+	if !e.ipniPublishDisabled {
+		if err := e.pub.shutdown(); err != nil {
+			log.Warnw("Failed to shutdown IPNI publisher gracefully", "err", err)
+		}
+		log.Info("Completed shutdown IPNI publisher")
+	}
+	e.dht.dh.Close()
+	e.dht.Shutdown()
+	log.Info("Completed shutdown dht")
+	e.c.CloseIdleConnections()
+	log.Info("Completed CloseIdleConnections")
+	e.ipfsNode.Close()
 	return e.s.Shutdown(ctx)
 }
