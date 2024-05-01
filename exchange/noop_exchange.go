@@ -41,6 +41,11 @@ func (n NoopExchange) Shutdown(context.Context) error {
 	return nil
 }
 
+func (n NoopExchange) ShutdownIpfs(context.Context) error {
+	log.Debug("Shut down ipfs noop exchange.")
+	return nil
+}
+
 func (n NoopExchange) IpniNotifyLink(l ipld.Link) {
 	log.Debugw("IpniNotifyLink noop exchange.", "link", l)
 }

@@ -116,7 +116,7 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 		return nil, err
 	}
 	tr := &http.Transport{
-		DisableKeepAlives: true, // Ensure connections are not reused
+		DisableKeepAlives: false, // Ensure connections are not reused
 		MaxIdleConns:      500,
 		MaxConnsPerHost:   2000,
 		IdleConnTimeout:   20 * time.Second,

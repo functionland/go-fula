@@ -38,6 +38,7 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal/selector"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
 	"github.com/libp2p/go-libp2p"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -70,6 +71,9 @@ type Client struct {
 	relays   []string
 	ipfsAPI  iface.CoreAPI
 	ipfsNode *core.IpfsNode
+	ps       *pubsub.PubSub
+	topic    *pubsub.Topic
+	sub      *pubsub.Subscription
 }
 
 type DatastoreConfigSpec struct {
@@ -92,9 +96,9 @@ type Child struct {
 	Compression string `json:"compression,omitempty"`
 }
 
-func CustomHostOption(opts []libp2p.Option) kubolibp2p.HostOption {
+func CustomHostOption(h host.Host) kubolibp2p.HostOption {
 	return func(id peer.ID, ps peerstore.Peerstore, options ...libp2p.Option) (host.Host, error) {
-		return libp2p.New(opts...)
+		return h, nil
 	}
 }
 
@@ -242,9 +246,11 @@ func CreateCustomRepo(ctx context.Context, cfg *Config, basePath string, h host.
 			"/dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
 			"/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
 			"/ip4/104.131.131.82/udp/4001/quic-v1/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
+			"/dns4/1.pools.functionyard.fula.network/tcp/9096/p2p/12D3KooWS79EhkPU7ESUwgG4vyHHzW9FDNZLoWVth9b5N5NSrvaj",
 		}
 		conf.Swarm.RelayService.Enabled = 1
 		conf.Discovery.MDNS.Enabled = true
+		conf.Pubsub.Enabled = 1
 
 		// Initialize the repo with the configuration
 
@@ -301,11 +307,14 @@ func (c *Client) ConnectToBlox() error {
 }
 
 func (c *Client) ConnectToBloxIpfs() error {
+	ctx := context.TODO()
 	if _, ok := c.ex.(exchange.NoopExchange); ok {
 		return nil
 	}
 
-	return c.ipfsAPI.Swarm().Connect(context.TODO(), c.h.Peerstore().PeerInfo(c.bloxPid))
+	err := c.ipfsAPI.Swarm().Connect(ctx, c.h.Peerstore().PeerInfo(c.bloxPid))
+	return err
+
 }
 
 // ID returns the libp2p peer ID of the client.
@@ -636,6 +645,7 @@ func (c *Client) ShutdownIpfs() error {
 	hErr := c.h.Close()
 	fErr := c.Flush()
 	dsErr := c.ds.Close()
+	psErr := c.ShutdownPubSub()
 	switch {
 	case hErr != nil:
 		return hErr
@@ -643,6 +653,8 @@ func (c *Client) ShutdownIpfs() error {
 		return fErr
 	case dsErr != nil:
 		return dsErr
+	case psErr != nil:
+		return psErr
 	default:
 		return xErr
 	}

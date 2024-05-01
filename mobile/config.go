@@ -28,6 +28,8 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -361,7 +363,7 @@ func (cfg *Config) initIpfs(ctx context.Context, mc *Client) error {
 	ipfsConfig := &core.BuildCfg{
 		Online:    true,
 		Permanent: false,
-		Host:      CustomHostOption(hopts),
+		Host:      CustomHostOption(mc.h),
 		Routing:   kubolibp2p.DHTOption,
 		Repo:      repo,
 	}
@@ -373,10 +375,12 @@ func (cfg *Config) initIpfs(ctx context.Context, mc *Client) error {
 	log.Print("mc ipfsNode created")
 	// ipfsHostId := ipfsNode.PeerHost.ID()
 	// ipfsId := ipfsNode.Identity.String()
+
 	ipfsAPI, err := coreapi.NewCoreAPI(ipfsNode)
 	if err != nil {
 		panic(fmt.Errorf("failed to create IPFS API: %w", err))
 	}
+
 	mc.ipfsNode = ipfsNode
 	mc.ipfsAPI = ipfsAPI
 	log.Print("mc ipfsAPI created")
@@ -439,6 +443,13 @@ func (cfg *Config) initIpfs(ctx context.Context, mc *Client) error {
 			}
 		}
 	}
+
+	ps, err := pubsub.NewGossipSub(context.Background(), mc.h)
+	if err != nil {
+		return fmt.Errorf("failed to create pubsub: %w", err)
+	}
+	mc.ps = ps
+
 	ctx3, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel() // Ensure the context cancel function is called to free resources
 

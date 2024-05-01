@@ -304,9 +304,9 @@ func Example_poolExchangeDagBetweenClientBlox() {
 	mcfg.StorePath = "C:/Users/ehsan/.tmp/datastore"
 	mcfg.ConfigPath = "C:/Users/ehsan/.tmp"
 	mcfg.AllowTransientConnection = true
-	bloxAddrString := "/ip4/70.34.208.109/udp/4001/quic-v1/p2p/12D3KooWQto3ReEkHtMNByVsSnMUWxRZyxk1Ni4yfMuizmYNmcJ9"
+	bloxAddrString := "/ip4/192.168.1.4/udp/4001/quic-v1/webtransport/certhash/uEiAkTJtNLmP1bkTg8_yWc7mHAM1i_zZ8RcVfxakkhkKjRg/certhash/uEiAyxCIPgYELZLjtX4JsWS7SlYV8XK78N9QqXhLBcAg0QQ"
 	bloxId := "12D3KooWDaT8gS2zGMLGBKmW1mKhQSHxYeEX3Fr3VSjuPzmjyfZC"
-	mcfg.BloxAddr = bloxAddrString + "/p2p-circuit/p2p/" + bloxId
+	mcfg.BloxAddr = bloxAddrString + "/p2p/" + bloxId
 	mcfg.PoolName = "1"
 	mcfg.Exchange = bloxAddrString
 	mcfg.BlockchainEndpoint = "127.0.0.1:4004"
@@ -342,14 +342,16 @@ func Example_poolExchangeDagBetweenClientBlox() {
 		panic(err)
 	}
 	fmt.Println("connected to blox")
-	/*_, err = cIpfs1.BloxFreeSpace()
+
+	_, err = cIpfs1.BloxFreeSpaceIpfs()
 	if err != nil {
+		log.Error("An Error occurred with panic")
 		panic(err)
-	}*/
+	}
 
 	// Output:
 	//Private Key Bytes: 08011240eefe2dafe94055ecd466687390f8ba331cce1f3b65432bd4a6fc2b8a304f0deae19005ae027ef4fdcd1eb327f8b1c79a365a90cbf6f07e7022ba5d3564eee1ec
-	// first client created with ID: 12D3KooWQzsGtYKX62PFvTeh67H7jdU7QqcMJgwiEzKFJCbqrKw112D3KooWQzsGtYKX62PFvTeh67H7jdU7QqcMJgwiEzKFJCbqrKw1
+	// first client created with ID: 12D3KooWQzsGtYKX62PFvTeh67H7jdU7QqcMJgwiEzKFJCbqrKw1
 	// connected to blox
 	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	// Original Val is: some raw data

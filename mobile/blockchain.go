@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/functionland/go-fula/blockchain"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
@@ -180,6 +181,124 @@ func (c *Client) ReplicateInPool(cidsBytes []byte, account string, poolID int) [
 //////////////////////////////////////////////////
 /////////////////////HARDWARE/////////////////////
 //////////////////////////////////////////////////
+
+// PreparePubSub initializes or reinitializes the pubsub system
+func (c *Client) PreparePubSub(ctx context.Context) error {
+	topicName := "fula-global-channel"
+	// Check if already subscribed and topic is active
+	if c.sub == nil || c.topic == nil {
+		var err error
+		// Join the topic if not already joined or if topic was closed
+		if c.topic == nil {
+			c.topic, err = c.ps.Join(topicName)
+			if err != nil {
+				return fmt.Errorf("failed to join topic: %v", err)
+			}
+		}
+
+		// Subscribe to the topic if not already subscribed
+		c.sub, err = c.topic.Subscribe()
+		if err != nil {
+			return fmt.Errorf("failed to subscribe to topic: %v", err)
+		}
+	}
+	return nil
+}
+
+// ShutdownPubSub cleanly closes the pubsub topic and subscription
+func (c *Client) ShutdownPubSub() error {
+	if c.sub != nil {
+		c.sub.Cancel()
+		c.sub = nil
+	}
+	if c.topic != nil {
+		if err := c.topic.Close(); err != nil {
+			return fmt.Errorf("failed to close topic: %v", err)
+		}
+		c.topic = nil
+	}
+	return nil
+}
+
+// This function should be implemented to listen to the responses and match the correct response to the request
+func (c *Client) waitForResponse(ctx context.Context, responseType string) ([]byte, error) {
+	// This channel might be part of the client struct or managed globally depending on your architecture
+	responseChan := make(chan []byte, 1)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				msg, err := c.sub.Next(ctx)
+				if err != nil {
+					continue // Handle error or break as needed
+				}
+				if msg.ReceivedFrom != c.bloxPid {
+					continue
+				}
+				var response struct {
+					Type   string `json:"type"`
+					Data   []byte `json:"data"`
+					PeerID string `json:"peerID"`
+				}
+				if err := json.Unmarshal(msg.Data, &response); err != nil {
+					continue // Log or handle the error
+				}
+				if response.Type == responseType && response.PeerID == c.h.ID().String() {
+					responseChan <- response.Data
+					return
+				}
+			}
+		}
+	}()
+
+	select {
+	case data := <-responseChan:
+		return data, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// BloxFreeSpace requests the blox avail/used free space information.
+func (c *Client) BloxFreeSpaceIpfs() ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Ensure that the pubsub system is ready
+	if err := c.PreparePubSub(ctx); err != nil {
+		return nil, fmt.Errorf("failed to prepare pubsub: %w", err)
+	}
+
+	// Create a message to request free space, targeted at the blox peer
+	request := struct {
+		TargetPeerID string `json:"targetPeerID"`
+		Command      string `json:"command"`
+	}{
+		TargetPeerID: c.bloxPid.String(), // Assuming c.bloxPid is the peer ID of the blox
+		Command:      "requestFreeSpace",
+	}
+
+	requestData, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request data: %w", err)
+	}
+
+	// Publish the request
+	if err := c.topic.Publish(ctx, requestData); err != nil {
+		return nil, fmt.Errorf("failed to publish request: %w", err)
+	}
+
+	// Listen for a response
+	// This part assumes your ListenForMessages handles responses and can return them
+	response, err := c.waitForResponse(ctx, "freeSpaceResponse")
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
 
 // BloxFreeSpace requests the blox avail/used free space information.
 func (c *Client) BloxFreeSpace() ([]byte, error) {
