@@ -116,10 +116,10 @@ func NewFxExchange(h host.Host, ls ipld.LinkSystem, o ...Option) (*FxExchange, e
 		return nil, err
 	}
 	tr := &http.Transport{
-		DisableKeepAlives: true, // Ensure connections are not reused
-		MaxIdleConns:      500,
-		MaxConnsPerHost:   2000,
-		IdleConnTimeout:   20 * time.Second,
+		DisableKeepAlives: false, // Ensure connections are reused
+		MaxIdleConns:      0,
+		MaxConnsPerHost:   0,
+		IdleConnTimeout:   60 * time.Second,
 		// Include any other necessary transport configuration here
 	}
 	tr.RegisterProtocol("libp2p", p2phttp.NewTransport(h, p2phttp.ProtocolOption(FxExchangeProtocolID)))
