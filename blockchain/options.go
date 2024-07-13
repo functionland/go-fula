@@ -42,7 +42,7 @@ func newOptions(o ...Option) (*options, error) {
 		authorizer:               "",                    // replace with an appropriate default peer.ID
 		authorizedPeers:          []peer.ID{},           // default to an empty slice
 		allowTransientConnection: true,                  // or false, as per your default
-		blockchainEndPoint:       "127.0.0.1:4000",      // default endpoint
+		blockchainEndPoint:       "api.node3.functionyard.fula.network",      // default endpoint
 		secretsPath:              "",                    //path to secrets dir
 		timeout:                  30,                    // default timeout in seconds
 		wg:                       nil,                   // initialized WaitGroup
@@ -88,7 +88,7 @@ func WithAllowTransientConnection(t bool) Option {
 func WithBlockchainEndPoint(b string) Option {
 	return func(o *options) error {
 		if b == "" {
-			b = "127.0.0.1:4000"
+			b = "api.node3.functionyard.fula.network"
 		}
 		o.blockchainEndPoint = b
 		return nil

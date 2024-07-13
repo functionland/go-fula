@@ -253,7 +253,7 @@ func WithMinSuccessPingRate(sr int) Option {
 func WithBlockchainEndPoint(b string) Option {
 	return func(o *options) error {
 		if b == "" {
-			b = "127.0.0.1:4000"
+			b = "api.node3.functionyard.fula.network"
 		}
 		o.blockchainEndpoint = b
 		return nil

@@ -417,7 +417,7 @@ func init() {
 				Name:        "blockchainEndpoint",
 				Usage:       "Change the blockchain APIs endpoint",
 				Destination: &app.blockchainEndpoint,
-				Value:       "127.0.0.1:4000",
+				Value:       "api.node3.functionyard.fula.network",
 			},
 			&cli.StringFlag{
 				Name:        "secretsPath",
