@@ -546,7 +546,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 				log.Errorw("Failed to get non-loopback IP address for serve", "err", err)
 				ip = "0.0.0.0"
 			}*/
-			ip = "127.0.0.1"
+			ip = "0.0.0.0"
 		}
 		listenAddr = ip + ":" + port
 
