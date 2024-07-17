@@ -541,11 +541,12 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		ip, err = getIPFromSpecificNetwork(ctx, config.HOTSPOT_SSID)
 		if err != nil {
 			log.Errorw("Failed to use IP of hotspot", "err", err)
-			ip, err = getNonLoopbackIP()
+			/*ip, err = getNonLoopbackIP()
 			if err != nil {
 				log.Errorw("Failed to get non-loopback IP address for serve", "err", err)
 				ip = "0.0.0.0"
-			}
+			}*/
+			ip = "127.0.0.1"
 		}
 		listenAddr = ip + ":" + port
 
