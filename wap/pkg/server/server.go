@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,8 @@ import (
 	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 var log = logging.Logger("fula/wap/server")
@@ -394,6 +397,60 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func generateIdentityHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/peer/generate-identity" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Unsupported method type.", http.StatusMethodNotAllowed)
+		log.Errorw("Method is not supported.", "StatusNotFound", http.StatusMethodNotAllowed, "w", w)
+		return
+	}
+
+	seed := r.FormValue("seed")
+	if seed == "" {
+		http.Error(w, "missing seed", http.StatusBadRequest)
+		return
+	}
+
+	seedByte := []byte(seed)
+	// Convert byte slice to string
+	seedString := string(seedByte)
+
+	privKeyString, err := wifi.GeneratePrivateKeyFromSeed(seedString)
+	if err != nil {
+		http.Error(w, "failed to create privKeyString", http.StatusBadRequest)
+		return
+	}
+	privKeyBytes, err := base64.StdEncoding.DecodeString(privKeyString)
+	if err != nil {
+		http.Error(w, "failed to StdEncoding.DecodeString", http.StatusBadRequest)
+		return
+	}
+
+	// Unmarshal the byte slice to get the crypto.PrivKey
+	privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		http.Error(w, "failed to UnmarshalPrivateKey", http.StatusBadRequest)
+		return
+	}
+	peerID, err := peer.IDFromPrivateKey(privKey)
+	if err != nil {
+		http.Error(w, "failed to create peer id", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": peerID.String(), "seed": privKeyString})
+	if jsonErr != nil {
+		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
 func enableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/ap/enable" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
@@ -522,6 +579,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	mux.HandleFunc("/partition", partitionHandler)
 	mux.HandleFunc("/delete-fula-config", deleteFulaConfigHandler)
 	mux.HandleFunc("/peer/exchange", exchangePeersHandler)
+	mux.HandleFunc("/peer/generate-identity", generateIdentityHandler)
 
 	listenAddr := ""
 
