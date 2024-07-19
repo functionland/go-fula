@@ -229,8 +229,9 @@ func handleAppState(ctx context.Context, isConnected bool, stopServer chan struc
 				// Execute the disconnect in the background
 				disconnectWifiResponse := wifi.DisconnectNamedWifi(ctx, req)
 				log.Infow("Disconnect Wifi with response", "res", disconnectWifiResponse)
-
-				stopServer <- struct{}{} // stop the HTTP server
+				if wifi.CheckIfIsConnectedWifi(ctx, "") == nil {
+					stopServer <- struct{}{} // stop the HTTP server
+				}
 			} else {
 				log.Info("No config file found, activating the hotspot mode.")
 				if !isHotspotStarted {
