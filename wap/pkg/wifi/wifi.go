@@ -68,7 +68,16 @@ type Credentials struct {
 func CheckIfIsConnected(ctx context.Context, interfaceName string) error {
 	switch runtime.GOOS {
 	case "linux":
-		return checkIfIsConnectedLinux(ctx, interfaceName)
+		err := checkIfIsConnectedLinux(ctx, interfaceName)
+		if err != nil {
+			// If not connected via WiFi, try to ping a well-known website
+			pingCmd := exec.CommandContext(ctx, "ping", "-c", "1", "-W", "5", "google.com")
+			if err := pingCmd.Run(); err != nil {
+				return fmt.Errorf("wifi not connected and unable to reach internet: %v", err)
+			}
+			log.Info("Not connected to WiFi, but can access internet via other means")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported platform")
 	}
