@@ -18,10 +18,31 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"gopkg.in/yaml.v3"
 )
 
 var log = logging.Logger("fula/wap/server")
 var peerFunction func(clientPeerId string, bloxSeed string) (string, error)
+
+type Config struct {
+	Identity                  string   `yaml:"identity"`
+	StoreDir                  string   `yaml:"storeDir"`
+	PoolName                  string   `yaml:"poolName"`
+	LogLevel                  string   `yaml:"logLevel"`
+	ListenAddrs               []string `yaml:"listenAddrs"`
+	Authorizer                string   `yaml:"authorizer"`
+	AuthorizedPeers           []string `yaml:"authorizedPeers"`
+	IpfsBootstrapNodes        []string `yaml:"ipfsBootstrapNodes"`
+	StaticRelays              []string `yaml:"staticRelays"`
+	ForceReachabilityPrivate  bool     `yaml:"forceReachabilityPrivate"`
+	AllowTransientConnection  bool     `yaml:"allowTransientConnection"`
+	DisableResourceManager    bool     `yaml:"disableResourceManager"`
+	MaxCIDPushRate            int      `yaml:"maxCIDPushRate"`
+	IpniPublishDisabled       bool     `yaml:"ipniPublishDisabled"`
+	IpniPublishInterval       string   `yaml:"ipniPublishInterval"`
+	IpniPublishDirectAnnounce []string `yaml:"IpniPublishDirectAnnounce"`
+	IpniPublisherIdentity     string   `yaml:"ipniPublisherIdentity"`
+}
 
 func checkPathExistAndFileNotExist(path string) string {
 	dir := filepath.Dir(path)
@@ -561,6 +582,99 @@ func getNonLoopbackIP() (string, error) {
 	return "", fmt.Errorf("no non-loopback IP address found")
 }
 
+func joinPoolHandler(w http.ResponseWriter, r *http.Request) {
+	// Read the poolID from the request
+	poolID := r.FormValue("poolID")
+
+	// Read the existing config.yaml file
+	configFilePath := "/internal/config.yaml"
+	configData, err := os.ReadFile(configFilePath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read config file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse the config.yaml file
+	var config Config
+	err = yaml.Unmarshal(configData, &config)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to parse config file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Update the poolName field
+	config.PoolName = poolID
+
+	// Marshal the updated config back to YAML
+	updatedConfigData, err := yaml.Marshal(&config)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to marshal updated config: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Write the updated config back to the file
+	err = os.WriteFile(configFilePath, updatedConfigData, 0644)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to write updated config file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Send response
+	response := map[string]string{"status": "joined", "poolID": poolID}
+	json.NewEncoder(w).Encode(response)
+}
+
+func leavePoolHandler(w http.ResponseWriter, r *http.Request) {
+	poolID := r.FormValue("poolID")
+	// Leave pool logic
+	response := map[string]string{"status": "left", "poolID": poolID}
+	json.NewEncoder(w).Encode(response)
+}
+
+func cancelJoinPoolHandler(w http.ResponseWriter, r *http.Request) {
+	poolID := r.FormValue("poolID")
+	// Cancel join pool logic
+	response := map[string]string{"status": "cancelled", "poolID": poolID}
+	json.NewEncoder(w).Encode(response)
+}
+
+func chainStatusHandler(w http.ResponseWriter, r *http.Request) {
+	// Check chain sync status logic
+	status := map[string]interface{}{
+		"isSynced":     true,
+		"syncProgress": 100,
+	}
+	json.NewEncoder(w).Encode(status)
+}
+
+func accountIdHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if the account file exists
+	filePath := "/internal/.secrets/account.txt"
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		http.Error(w, "Account file not found", http.StatusNotFound)
+		return
+	}
+
+	// Read the account file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		http.Error(w, "Failed to read account file", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert byte slice to string and trim any whitespace
+	accountID := strings.TrimSpace(string(data))
+
+	// Create the account map
+	account := map[string]interface{}{
+		"accountId": accountID,
+	}
+
+	// Return the account as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(account)
+}
+
 // This function accepts an ip and port that it runs the webserver on. Default is 10.42.0.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, connectedCh chan bool) io.Closer {
@@ -580,6 +694,13 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	mux.HandleFunc("/delete-fula-config", deleteFulaConfigHandler)
 	mux.HandleFunc("/peer/exchange", exchangePeersHandler)
 	mux.HandleFunc("/peer/generate-identity", generateIdentityHandler)
+
+	mux.HandleFunc("/pools/join", joinPoolHandler)
+	mux.HandleFunc("/pools/leave", leavePoolHandler)
+	mux.HandleFunc("/pools/cancel", cancelJoinPoolHandler)
+	mux.HandleFunc("/chain/status", chainStatusHandler)
+
+	mux.HandleFunc("/account/id", accountIdHandler)
 
 	listenAddr := ""
 
