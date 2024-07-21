@@ -675,6 +675,34 @@ func accountIdHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(account)
 }
 
+func accountSeedHandler(w http.ResponseWriter, r *http.Request) {
+	// Check if the account file exists
+	filePath := "/internal/.secrets/secret_seed.txt"
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		http.Error(w, "Account Seed file not found", http.StatusNotFound)
+		return
+	}
+
+	// Read the account seed file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		http.Error(w, "Failed to read account seed file", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert byte slice to string and trim any whitespace
+	accountSeed := strings.TrimSpace(string(data))
+
+	// Create the account map
+	account := map[string]interface{}{
+		"accountSeed": accountSeed,
+	}
+
+	// Return the account seed as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(account)
+}
+
 // This function accepts an ip and port that it runs the webserver on. Default is 10.42.0.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, connectedCh chan bool) io.Closer {
@@ -701,6 +729,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	mux.HandleFunc("/chain/status", chainStatusHandler)
 
 	mux.HandleFunc("/account/id", accountIdHandler)
+	mux.HandleFunc("/account/seed", accountSeedHandler)
 
 	listenAddr := ""
 
