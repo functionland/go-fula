@@ -288,6 +288,51 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 	return b, resp.StatusCode, nil
 }
 
+// TODO: The below method should be removed after fixing hte syncing issue with blockchain
+func (bl *FxBlockchain) callBlockchainWithSeedTemporary(ctx context.Context, method string, action string, p interface{}) ([]byte, int, error) {
+	// Check blockchain health before proceeding
+	if err := bl.checkHealth(ctx); err != nil {
+		return nil, http.StatusFailedDependency, err // Use 424 as the status code for a syncing blockchain
+	}
+
+	endpoint := prependProtocol("api.node3.functionyard.fula.network")
+	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
+
+	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
+	buf := bl.bufPool.Get().(*bytes.Buffer)
+	req := bl.reqPool.Get().(*http.Request)
+	defer func() {
+		bl.putBuf(buf)
+		bl.putReq(req)
+	}()
+
+	preparedRequest := bl.PlugSeedIfNeeded(ctx, action, p)
+	if err := json.NewEncoder(buf).Encode(preparedRequest); err != nil {
+		return nil, 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, addr, buf)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := bl.ch.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	var bufRes bytes.Buffer
+	_, err = io.Copy(&bufRes, resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	b := bufRes.Bytes()
+
+	return b, resp.StatusCode, nil
+}
+
 func (bl *FxBlockchain) PlugSeedIfNeeded(ctx context.Context, action string, req interface{}) interface{} {
 	switch action {
 	case actionSeeded, actionAccountExists, actionAccountFund, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionManifestBatchUpload, actionManifestBatchStore:

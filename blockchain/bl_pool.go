@@ -74,9 +74,10 @@ func (bl *FxBlockchain) HandlePoolJoin(method string, action string, from peer.I
 	}
 
 	//TODO: Ensure it is optimized for long-running calls
+	//TODO: replace callBlockchainWithSeedTemporary with callBlockchain after fixing sync chain issue
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
-	response, statusCode, err := bl.callBlockchain(ctx, method, action, &req)
+	response, statusCode, err := bl.callBlockchainWithSeedTemporary(ctx, method, action, &req)
 	if err != nil {
 		poolID := req.PoolID
 		poolIDStr := strconv.Itoa(poolID)
