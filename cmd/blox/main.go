@@ -210,7 +210,7 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 		// Create the repository if it doesn't exist
 
 		versionFilePath := filepath.Join(repoPath, "version")
-		versionContent := strconv.Itoa(15)
+		versionContent := strconv.Itoa(16)
 		if err := os.WriteFile(versionFilePath, []byte(versionContent), 0644); err != nil {
 			return nil, err
 		}

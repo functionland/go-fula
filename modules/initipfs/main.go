@@ -424,7 +424,7 @@ func writeIPFSConfig(path string, cfg IPFSConfig) {
 
 func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
 	// Write version file
-	if err := os.WriteFile(ipfsDataPath+"/version", []byte("15"), 0644); err != nil {
+	if err := os.WriteFile(ipfsDataPath+"/version", []byte("16"), 0644); err != nil {
 		fmt.Printf("Failed to write version file: %v\n", err)
 		os.Exit(1)
 	}
