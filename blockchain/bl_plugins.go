@@ -31,6 +31,11 @@ type PluginInfo struct {
 	Installed bool                `json:"installed"`
 }
 
+type PluginParam struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 func (bl *FxBlockchain) ListPlugins(ctx context.Context) ([]byte, error) {
 	// Fetch the list of plugins
 	resp, err := http.Get("https://raw.githubusercontent.com/functionland/fula-ota/refs/heads/main/docker/fxsupport/linux/plugins/info.json")
@@ -75,7 +80,7 @@ func (bl *FxBlockchain) ListPlugins(ctx context.Context) ([]byte, error) {
 	return json.Marshal(detailedPlugins)
 }
 
-func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string) ([]byte, error) {
+func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, params []PluginParam) ([]byte, error) {
 	// Read existing plugins
 	plugins, err := bl.readActivePlugins()
 	if err != nil {
@@ -86,6 +91,25 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string) ([
 	for _, p := range plugins {
 		if p == pluginName {
 			return []byte("Plugin already installed"), nil
+		}
+	}
+
+	// Process parameters
+	if len(params) > 0 {
+		for _, param := range params {
+			filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, param.Name)
+			dirPath := fmt.Sprintf("/internal/%s", pluginName)
+
+			// Create directory if it doesn't exist
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create directory for plugin %s: %w", pluginName, err)
+			}
+
+			// Write parameter value to file
+			content := strings.TrimSpace(param.Value)
+			if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+				return nil, fmt.Errorf("failed to write parameter file for plugin %s: %w", pluginName, err)
+			}
 		}
 	}
 
@@ -195,9 +219,9 @@ func (bl *FxBlockchain) showPluginStatusImpl(ctx context.Context, pluginName str
 
 func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request, action string) {
 	var req struct {
-		PluginName string `json:"plugin_name"`
-		Lines      int    `json:"lines,omitempty"`
-		Follow     bool   `json:"follow,omitempty"`
+		PluginName string        `json:"plugin_name"`
+		Lines      int           `json:"lines,omitempty"`
+		Params     []PluginParam `json:"params,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -217,7 +241,7 @@ func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w 
 	case "list":
 		result, err = bl.ListPlugins(ctx)
 	case "install":
-		result, err = bl.InstallPlugin(ctx, req.PluginName)
+		result, err = bl.InstallPlugin(ctx, req.PluginName, req.Params)
 	case "uninstall":
 		result, err = bl.UninstallPlugin(ctx, req.PluginName)
 	case "status":
