@@ -80,7 +80,7 @@ func (bl *FxBlockchain) ListPlugins(ctx context.Context) ([]byte, error) {
 	return json.Marshal(detailedPlugins)
 }
 
-func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, params []PluginParam) ([]byte, error) {
+func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
 	// Read existing plugins
 	plugins, err := bl.readActivePlugins()
 	if err != nil {
@@ -94,10 +94,18 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, pa
 		}
 	}
 
-	// Process parameters
-	if len(params) > 0 {
+	// Process parameters param1====value1,,,,param2====value2
+	if paramsString != "" {
+		params := strings.Split(paramsString, ",,,,")
 		for _, param := range params {
-			filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, param.Name)
+			parts := strings.SplitN(param, "=====", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid parameter format: %s", param)
+			}
+			name := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+
+			filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, name)
 			dirPath := fmt.Sprintf("/internal/%s", pluginName)
 
 			// Create directory if it doesn't exist
@@ -106,8 +114,7 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, pa
 			}
 
 			// Write parameter value to file
-			content := strings.TrimSpace(param.Value)
-			if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			if err := os.WriteFile(filePath, []byte(value), 0644); err != nil {
 				return nil, fmt.Errorf("failed to write parameter file for plugin %s: %w", pluginName, err)
 			}
 		}
@@ -219,9 +226,9 @@ func (bl *FxBlockchain) showPluginStatusImpl(ctx context.Context, pluginName str
 
 func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request, action string) {
 	var req struct {
-		PluginName string        `json:"plugin_name"`
-		Lines      int           `json:"lines,omitempty"`
-		Params     []PluginParam `json:"params,omitempty"`
+		PluginName string `json:"plugin_name"`
+		Lines      int    `json:"lines,omitempty"`
+		Params     string `json:"params,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

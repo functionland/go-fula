@@ -12,6 +12,11 @@ import (
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 )
 
+type PluginParam struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // AccountExists requests blox at Config.BloxAddr to check if the account exists or not.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) AccountExists(account string) ([]byte, error) {
@@ -277,9 +282,9 @@ func (c *Client) ListPlugins() ([]byte, error) {
 }
 
 // InstallPlugin requests the blox to install a specific plugin
-func (c *Client) InstallPlugin(pluginName string) ([]byte, error) {
+func (c *Client) InstallPlugin(pluginName string, params string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.InstallPlugin(ctx, pluginName)
+	return c.bl.InstallPlugin(ctx, pluginName, params)
 }
 
 // UninstallPlugin requests the blox to uninstall a specific plugin

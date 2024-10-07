@@ -404,6 +404,7 @@ type ListPluginsResponse struct {
 // InstallPlugin
 type InstallPluginRequest struct {
 	PluginName string `json:"plugin_name"`
+	Params     string `json:"params"`
 }
 
 type InstallPluginResponse struct {
@@ -476,7 +477,7 @@ type Blockchain interface {
 
 	//Plugins
 	ListPlugins(context.Context) ([]byte, error)
-	InstallPlugin(context.Context, string) ([]byte, error)
+	InstallPlugin(context.Context, string, string) ([]byte, error)
 	UninstallPlugin(context.Context, string) ([]byte, error)
 	ShowPluginStatus(context.Context, string, int) ([]byte, error)
 }
