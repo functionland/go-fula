@@ -852,3 +852,104 @@ func Example_blockchainCalls() {
 	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
 	// account is {"account":"5GEottBB4kGzpN6imRwpnhyVDtKMTSYHYZvT4Rq93dchjN45"}
 }
+
+func Example_listPlugins() {
+	server := startMockServer("127.0.0.1:4004")
+	defer func() {
+		// Shutdown the server after test
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Error("Error happened in server.Shutdown")
+			panic(err) // Handle the error as you see fit
+		}
+	}()
+
+	const poolName = "1"
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Elevate log level to show internal communications.
+	if err := logging.SetLogLevel("*", "info"); err != nil {
+		log.Error("Error happened in logging.SetLogLevel")
+		panic(err)
+	}
+
+	// Use a deterministic random generator to generate deterministic
+	// output for the example.
+
+	// Instantiate the first node in the pool
+	h1, err := libp2p.New(libp2p.Identity(generateIdentity(1)))
+	if err != nil {
+		log.Errorw("Error happened in libp2p.New", "err", err)
+		panic(err)
+	}
+	n1, err := blox.New(
+		blox.WithHost(h1),
+		blox.WithPoolName("1"),
+		blox.WithUpdatePoolName(updatePoolName),
+		blox.WithBlockchainEndPoint("127.0.0.1:4004"),
+		blox.WithPingCount(5),
+		blox.WithExchangeOpts(
+			exchange.WithIpniGetEndPoint("http://127.0.0.1:4004/cid/"),
+		),
+	)
+	if err != nil {
+		log.Errorw("Error happened in blox.New", "err", err)
+		panic(err)
+	}
+	if err := n1.Start(ctx); err != nil {
+		log.Errorw("Error happened in n1.Start", "err", err)
+		panic(err)
+	}
+	defer n1.Shutdown(ctx)
+	fmt.Printf("Instantiated node in pool %s with ID: %s\n", poolName, h1.ID().String())
+
+	mcfg := fulamobile.NewConfig()
+	mcfg.AllowTransientConnection = true
+	bloxAddrString := ""
+	if len(h1.Addrs()) > 0 {
+		// Convert the first multiaddr to a string
+		bloxAddrString = h1.Addrs()[0].String()
+		log.Infow("blox multiadddr is", "addr", bloxAddrString, "peerID", h1.ID().String())
+	} else {
+		log.Errorw("Error happened in h1.Addrs", "err", "No addresses in slice")
+		panic("No addresses in slice")
+	}
+	mcfg.BloxAddr = bloxAddrString + "/p2p/" + h1.ID().String()
+	mcfg.PoolName = "1"
+	mcfg.Exchange = bloxAddrString
+	mcfg.BlockchainEndpoint = "127.0.0.1:4004"
+	log.Infow("bloxAdd string created", "addr", bloxAddrString+"/p2p/"+h1.ID().String())
+
+	c1, err := fulamobile.NewClient(mcfg)
+	if err != nil {
+		log.Errorw("Error happened in fulamobile.NewClient", "err", err)
+		panic(err)
+	}
+	// Authorize exchange between the two nodes
+	mobilePeerIDString := c1.ID()
+	log.Infof("first client created with ID: %s", mobilePeerIDString)
+	mpid, err := peer.Decode(mobilePeerIDString)
+	if err != nil {
+		log.Errorw("Error happened in peer.Decode", "err", err)
+		panic(err)
+	}
+	if err := n1.SetAuth(ctx, h1.ID(), mpid, true); err != nil {
+		log.Error("Error happened in n1.SetAuth")
+		panic(err)
+	}
+
+	err = c1.ConnectToBlox()
+	if err != nil {
+		log.Errorw("Error happened in c1.ConnectToBlox", "err", err)
+		panic(err)
+	}
+	plugins, err := c1.ListPlugins()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("account is %v", plugins)
+
+	// Output:
+	// Instantiated node in pool 1 with ID: 12D3KooWQfGkPUkoLDEeJE3H3ZTmu9BZvAdbJpmhha8WpjeSLKMM
+	// account is {"account":"5GEottBB4kGzpN6imRwpnhyVDtKMTSYHYZvT4Rq93dchjN45"}
+}

@@ -269,3 +269,27 @@ func (c *Client) GetDatastoreSize() ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.GetDatastoreSize(ctx, c.bloxPid, wifi.GetDatastoreSizeRequest{})
 }
+
+// ListPlugins requests the blox to list all available plugins
+func (c *Client) ListPlugins() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ListPlugins(ctx)
+}
+
+// InstallPlugin requests the blox to install a specific plugin
+func (c *Client) InstallPlugin(pluginName string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.InstallPlugin(ctx, pluginName)
+}
+
+// UninstallPlugin requests the blox to uninstall a specific plugin
+func (c *Client) UninstallPlugin(pluginName string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.UninstallPlugin(ctx, pluginName)
+}
+
+// ShowPluginStatus requests the status of a specific plugin
+func (c *Client) ShowPluginStatus(pluginName string, lines int) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ShowPluginStatus(ctx, pluginName, lines)
+}

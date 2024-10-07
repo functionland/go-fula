@@ -540,6 +540,20 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionGetDatastoreSize: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleGetDatastoreSize(r.Context(), from, w, r)
 		},
+
+		// Plugin actions
+		actionListPlugins: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePluginAction(r.Context(), from, w, r, actionListPlugins)
+		},
+		actionInstallPlugin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePluginAction(r.Context(), from, w, r, actionInstallPlugin)
+		},
+		actionUninstallPlugin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePluginAction(r.Context(), from, w, r, actionUninstallPlugin)
+		},
+		actionShowPluginStatus: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePluginAction(r.Context(), from, w, r, actionShowPluginStatus)
+		},
 	}
 
 	// Look up the function in the map and call it

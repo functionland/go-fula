@@ -54,6 +54,12 @@ const (
 
 	// Cluster
 	actionReplicateInPool = "replicate"
+
+	// Plugins
+	actionListPlugins      = "list-plugins"
+	actionInstallPlugin    = "install-plugin"
+	actionUninstallPlugin  = "uninstall-plugin"
+	actionShowPluginStatus = "show-plugin-status"
 )
 
 type ReplicateRequest struct {
@@ -385,6 +391,47 @@ type ManifestRemoveStoredResponse struct {
 	PoolID   int    `json:"pool_id"`
 }
 
+// Plugins
+// Plugin structures
+
+// ListPlugins
+type ListPluginsRequest struct{}
+
+type ListPluginsResponse struct {
+	Plugins []PluginInfo `json:"plugins"`
+}
+
+// InstallPlugin
+type InstallPluginRequest struct {
+	PluginName string `json:"plugin_name"`
+}
+
+type InstallPluginResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// UninstallPlugin
+type UninstallPluginRequest struct {
+	PluginName string `json:"plugin_name"`
+}
+
+type UninstallPluginResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// ShowPluginStatus
+type ShowPluginStatusRequest struct {
+	PluginName string `json:"plugin_name"`
+	Lines      int    `json:"lines"`
+	Follow     bool   `json:"follow"`
+}
+
+type ShowPluginStatusResponse struct {
+	Status []string `json:"status"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -426,6 +473,12 @@ type Blockchain interface {
 	FindBestAndTargetInLogs(context.Context, peer.ID, wifi.FindBestAndTargetInLogsRequest) ([]byte, error)
 	GetFolderSize(context.Context, peer.ID, wifi.GetFolderSizeRequest) ([]byte, error)
 	GetDatastoreSize(context.Context, peer.ID, wifi.GetDatastoreSizeRequest) ([]byte, error)
+
+	//Plugins
+	ListPlugins(context.Context) ([]byte, error)
+	InstallPlugin(context.Context, string) ([]byte, error)
+	UninstallPlugin(context.Context, string) ([]byte, error)
+	ShowPluginStatus(context.Context, string, int) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -470,6 +523,12 @@ var requestTypes = map[string]reflect.Type{
 	actionFindBestAndTargetInLogs: reflect.TypeOf(wifi.FindBestAndTargetInLogsRequest{}),
 	actionGetFolderSize:           reflect.TypeOf(wifi.GetFolderSizeRequest{}),
 	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
+
+	// Plugins
+	actionListPlugins:      reflect.TypeOf(ListPluginsRequest{}),
+	actionInstallPlugin:    reflect.TypeOf(InstallPluginRequest{}),
+	actionUninstallPlugin:  reflect.TypeOf(UninstallPluginRequest{}),
+	actionShowPluginStatus: reflect.TypeOf(ShowPluginStatusRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -514,4 +573,10 @@ var responseTypes = map[string]reflect.Type{
 	actionFindBestAndTargetInLogs: reflect.TypeOf(wifi.FindBestAndTargetInLogsResponse{}),
 	actionGetFolderSize:           reflect.TypeOf(wifi.GetFolderSizeResponse{}),
 	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
+
+	// Plugins
+	actionListPlugins:      reflect.TypeOf(ListPluginsResponse{}),
+	actionInstallPlugin:    reflect.TypeOf(InstallPluginResponse{}),
+	actionUninstallPlugin:  reflect.TypeOf(UninstallPluginResponse{}),
+	actionShowPluginStatus: reflect.TypeOf(ShowPluginStatusResponse{}),
 }
