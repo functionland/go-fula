@@ -56,10 +56,11 @@ const (
 	actionReplicateInPool = "replicate"
 
 	// Plugins
-	actionListPlugins      = "list-plugins"
-	actionInstallPlugin    = "install-plugin"
-	actionUninstallPlugin  = "uninstall-plugin"
-	actionShowPluginStatus = "show-plugin-status"
+	actionListPlugins       = "list-plugins"
+	actionInstallPlugin     = "install-plugin"
+	actionUninstallPlugin   = "uninstall-plugin"
+	actionShowPluginStatus  = "show-plugin-status"
+	actionListActivePlugins = "list-active-plugins"
 )
 
 type ReplicateRequest struct {
@@ -433,6 +434,11 @@ type ShowPluginStatusResponse struct {
 	Status []string `json:"status"`
 }
 
+type ListActivePluginsRequest struct{}
+type ListActivePluginsResponse struct {
+	ActivePlugins []string `json:"active_plugins"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -476,9 +482,10 @@ type Blockchain interface {
 	GetDatastoreSize(context.Context, peer.ID, wifi.GetDatastoreSizeRequest) ([]byte, error)
 
 	//Plugins
-	ListPlugins(context.Context) ([]byte, error)
-	InstallPlugin(context.Context, string, string) ([]byte, error)
-	UninstallPlugin(context.Context, string) ([]byte, error)
+	ListPlugins(context.Context, peer.ID) ([]byte, error)
+	ListActivePlugins(context.Context, peer.ID) ([]byte, error)
+	InstallPlugin(context.Context, peer.ID, string, string) ([]byte, error)
+	UninstallPlugin(context.Context, peer.ID, string) ([]byte, error)
 	ShowPluginStatus(context.Context, string, int) ([]byte, error)
 }
 
@@ -526,10 +533,11 @@ var requestTypes = map[string]reflect.Type{
 	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
 
 	// Plugins
-	actionListPlugins:      reflect.TypeOf(ListPluginsRequest{}),
-	actionInstallPlugin:    reflect.TypeOf(InstallPluginRequest{}),
-	actionUninstallPlugin:  reflect.TypeOf(UninstallPluginRequest{}),
-	actionShowPluginStatus: reflect.TypeOf(ShowPluginStatusRequest{}),
+	actionListPlugins:       reflect.TypeOf(ListPluginsRequest{}),
+	actionListActivePlugins: reflect.TypeOf(ListActivePluginsRequest{}),
+	actionInstallPlugin:     reflect.TypeOf(InstallPluginRequest{}),
+	actionUninstallPlugin:   reflect.TypeOf(UninstallPluginRequest{}),
+	actionShowPluginStatus:  reflect.TypeOf(ShowPluginStatusRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -576,8 +584,9 @@ var responseTypes = map[string]reflect.Type{
 	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
 
 	// Plugins
-	actionListPlugins:      reflect.TypeOf(ListPluginsResponse{}),
-	actionInstallPlugin:    reflect.TypeOf(InstallPluginResponse{}),
-	actionUninstallPlugin:  reflect.TypeOf(UninstallPluginResponse{}),
-	actionShowPluginStatus: reflect.TypeOf(ShowPluginStatusResponse{}),
+	actionListPlugins:       reflect.TypeOf(ListPluginsResponse{}),
+	actionListActivePlugins: reflect.TypeOf(ListActivePluginsResponse{}),
+	actionInstallPlugin:     reflect.TypeOf(InstallPluginResponse{}),
+	actionUninstallPlugin:   reflect.TypeOf(UninstallPluginResponse{}),
+	actionShowPluginStatus:  reflect.TypeOf(ShowPluginStatusResponse{}),
 }

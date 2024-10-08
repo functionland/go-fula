@@ -278,19 +278,24 @@ func (c *Client) GetDatastoreSize() ([]byte, error) {
 // ListPlugins requests the blox to list all available plugins
 func (c *Client) ListPlugins() ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.ListPlugins(ctx)
+	return c.bl.ListPlugins(ctx, c.bloxPid)
+}
+
+func (c *Client) ListActivePlugins() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.ListActivePlugins(ctx, c.bloxPid)
 }
 
 // InstallPlugin requests the blox to install a specific plugin
 func (c *Client) InstallPlugin(pluginName string, params string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.InstallPlugin(ctx, pluginName, params)
+	return c.bl.InstallPlugin(ctx, c.bloxPid, pluginName, params)
 }
 
 // UninstallPlugin requests the blox to uninstall a specific plugin
 func (c *Client) UninstallPlugin(pluginName string) ([]byte, error) {
 	ctx := context.TODO()
-	return c.bl.UninstallPlugin(ctx, pluginName)
+	return c.bl.UninstallPlugin(ctx, c.bloxPid, pluginName)
 }
 
 // ShowPluginStatus requests the status of a specific plugin

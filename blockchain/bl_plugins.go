@@ -1,14 +1,17 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -36,7 +39,7 @@ type PluginParam struct {
 	Value string `json:"value"`
 }
 
-func (bl *FxBlockchain) ListPlugins(ctx context.Context) ([]byte, error) {
+func (bl *FxBlockchain) listPluginsImpl(ctx context.Context) ([]byte, error) {
 	// Fetch the list of plugins
 	resp, err := http.Get("https://raw.githubusercontent.com/functionland/fula-ota/refs/heads/main/docker/fxsupport/linux/plugins/info.json")
 	if err != nil {
@@ -80,7 +83,30 @@ func (bl *FxBlockchain) ListPlugins(ctx context.Context) ([]byte, error) {
 	return json.Marshal(detailedPlugins)
 }
 
-func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
+func (bl *FxBlockchain) listActivePluginsImpl(ctx context.Context) ([]byte, error) {
+	activePlugins, err := bl.readActivePlugins()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read active plugins: %w", err)
+	}
+
+	// Create a slice of plugin names
+	var pluginNames []string
+	for _, plugin := range activePlugins {
+		if plugin != "" {
+			pluginNames = append(pluginNames, plugin)
+		}
+	}
+
+	// Marshal the plugin names to JSON
+	result, err := json.Marshal(pluginNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal active plugins: %w", err)
+	}
+
+	return result, nil
+}
+
+func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
 	// Read existing plugins
 	plugins, err := bl.readActivePlugins()
 	if err != nil {
@@ -98,7 +124,7 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, pa
 	if paramsString != "" {
 		params := strings.Split(paramsString, ",,,,")
 		for _, param := range params {
-			parts := strings.SplitN(param, "=====", 2)
+			parts := strings.SplitN(param, "====", 2)
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid parameter format: %s", param)
 			}
@@ -131,7 +157,7 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, pluginName string, pa
 	return []byte("Plugin installed successfully"), nil
 }
 
-func (bl *FxBlockchain) UninstallPlugin(ctx context.Context, pluginName string) ([]byte, error) {
+func (bl *FxBlockchain) uninstallPluginImpl(ctx context.Context, pluginName string) ([]byte, error) {
 	// Read existing plugins
 	plugins, err := bl.readActivePlugins()
 	if err != nil {
@@ -159,6 +185,139 @@ func (bl *FxBlockchain) UninstallPlugin(ctx context.Context, pluginName string) 
 	}
 
 	return []byte("Plugin uninstalled successfully"), nil
+}
+
+func (bl *FxBlockchain) ListPlugins(ctx context.Context, to peer.ID) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionListPlugins, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) InstallPlugin(ctx context.Context, to peer.ID, pluginName string, paramsString string) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(map[string]string{"plugin_name": pluginName, "params": paramsString}); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionInstallPlugin, &buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) UninstallPlugin(ctx context.Context, to peer.ID, pluginName string) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(map[string]string{"plugin_name": pluginName}); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionUninstallPlugin, &buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) ListActivePlugins(ctx context.Context, to peer.ID) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionListActivePlugins, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) HandleListPlugins(w http.ResponseWriter, r *http.Request) {
+	plugins, err := bl.listPluginsImpl(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(plugins)
+}
+
+func (bl *FxBlockchain) HandleInstallPlugin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PluginName string `json:"plugin_name"`
+		Params     string `json:"params"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	result, err := bl.installPluginImpl(r.Context(), req.PluginName, req.Params)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(result)
+}
+
+func (bl *FxBlockchain) HandleUninstallPlugin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PluginName string `json:"plugin_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	result, err := bl.uninstallPluginImpl(r.Context(), req.PluginName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(result)
+}
+
+func (bl *FxBlockchain) HandleListActivePlugins(w http.ResponseWriter, r *http.Request) {
+	activePlugins, err := bl.listActivePluginsImpl(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(activePlugins)
 }
 
 func (bl *FxBlockchain) readActivePlugins() ([]string, error) {
@@ -245,12 +404,14 @@ func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w 
 	var err error
 
 	switch action {
-	case "list":
-		result, err = bl.ListPlugins(ctx)
-	case "install":
-		result, err = bl.InstallPlugin(ctx, req.PluginName, req.Params)
-	case "uninstall":
-		result, err = bl.UninstallPlugin(ctx, req.PluginName)
+	case "list-plugins":
+		result, err = bl.listPluginsImpl(ctx)
+	case "list-active-plugins":
+		result, err = bl.listActivePluginsImpl(ctx)
+	case "install-plugin":
+		result, err = bl.installPluginImpl(ctx, req.PluginName, req.Params)
+	case "uninstall-plugin":
+		result, err = bl.uninstallPluginImpl(ctx, req.PluginName)
 	case "status":
 		result, err = bl.ShowPluginStatus(ctx, req.PluginName, req.Lines)
 	default:
