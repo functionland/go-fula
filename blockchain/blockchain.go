@@ -421,6 +421,8 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		log.Errorw("rejected unauthorized request", "from", from, "action", action)
 		http.Error(w, "", http.StatusUnauthorized)
 		return
+	} else {
+		log.Debugw("action: ", action, "was permitted from: ", from)
 	}
 	// Define a map of functions with the same signature as handleAction
 	actionMap := map[string]func(peer.ID, http.ResponseWriter, *http.Request){
@@ -545,6 +547,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionListPlugins: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handlePluginAction(r.Context(), from, w, r, actionListPlugins)
 		},
+		actionListActivePlugins: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePluginAction(r.Context(), from, w, r, actionListActivePlugins)
+		},
 		actionInstallPlugin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handlePluginAction(r.Context(), from, w, r, actionInstallPlugin)
 		},
@@ -559,6 +564,7 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 	// Look up the function in the map and call it
 	handleActionFunc, ok := actionMap[action]
 	if !ok {
+		log.Errorw("action not found", "from", from, "action", action)
 		http.Error(w, "", http.StatusNotFound)
 		return
 	}

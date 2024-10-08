@@ -84,9 +84,22 @@ func (bl *FxBlockchain) listPluginsImpl(ctx context.Context) ([]byte, error) {
 }
 
 func (bl *FxBlockchain) listActivePluginsImpl(ctx context.Context) ([]byte, error) {
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
+
 	activePlugins, err := bl.readActivePlugins()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read active plugins: %w", err)
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to read active plugins: %v", err),
+			"status": false,
+		})
 	}
 
 	// Create a slice of plugin names
@@ -97,26 +110,55 @@ func (bl *FxBlockchain) listActivePluginsImpl(ctx context.Context) ([]byte, erro
 		}
 	}
 
-	// Marshal the plugin names to JSON
-	result, err := json.Marshal(pluginNames)
+	// Create the response
+	response := map[string]interface{}{
+		"msg":    pluginNames,
+		"status": true,
+	}
+
+	// Marshal the response to JSON
+	result, err := json.Marshal(response)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal active plugins: %w", err)
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to marshal active plugins: %v", err),
+			"status": false,
+		})
 	}
 
 	return result, nil
 }
 
 func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
+	log.Debug("installPluginImpl started")
+
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
+
 	// Read existing plugins
 	plugins, err := bl.readActivePlugins()
 	if err != nil {
-		return nil, err
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to read active plugins: %v", err),
+			"status": false,
+		})
 	}
+	log.Debugw("installPluginImpl plugins:", "plugins", plugins, "pluginName", pluginName)
 
 	// Check if plugin already exists
 	for _, p := range plugins {
+		log.Debugw("installPluginImpl plugins for loop:", "p", p, "pluginName", pluginName)
 		if p == pluginName {
-			return []byte("Plugin already installed"), nil
+			return json.Marshal(map[string]interface{}{
+				"msg":    "Plugin already installed",
+				"status": true,
+			})
 		}
 	}
 
@@ -126,7 +168,10 @@ func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string
 		for _, param := range params {
 			parts := strings.SplitN(param, "====", 2)
 			if len(parts) != 2 {
-				return nil, fmt.Errorf("invalid parameter format: %s", param)
+				return json.Marshal(map[string]interface{}{
+					"msg":    fmt.Sprintf("Invalid parameter format: %s", param),
+					"status": false,
+				})
 			}
 			name := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
@@ -136,12 +181,18 @@ func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string
 
 			// Create directory if it doesn't exist
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
-				return nil, fmt.Errorf("failed to create directory for plugin %s: %w", pluginName, err)
+				return json.Marshal(map[string]interface{}{
+					"msg":    fmt.Sprintf("Failed to create directory for plugin %s: %v", pluginName, err),
+					"status": false,
+				})
 			}
 
 			// Write parameter value to file
 			if err := os.WriteFile(filePath, []byte(value), 0644); err != nil {
-				return nil, fmt.Errorf("failed to write parameter file for plugin %s: %w", pluginName, err)
+				return json.Marshal(map[string]interface{}{
+					"msg":    fmt.Sprintf("Failed to write parameter file for plugin %s: %v", pluginName, err),
+					"status": false,
+				})
 			}
 		}
 	}
@@ -151,17 +202,36 @@ func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string
 
 	// Write updated list back to file
 	if err := bl.writeActivePlugins(plugins); err != nil {
-		return nil, err
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to write active plugins: %v", err),
+			"status": false,
+		})
 	}
 
-	return []byte("Plugin installed successfully"), nil
+	return json.Marshal(map[string]interface{}{
+		"msg":    "Plugin installed successfully",
+		"status": true,
+	})
 }
 
 func (bl *FxBlockchain) uninstallPluginImpl(ctx context.Context, pluginName string) ([]byte, error) {
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
+
 	// Read existing plugins
 	plugins, err := bl.readActivePlugins()
 	if err != nil {
-		return nil, err
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to read active plugins: %v", err),
+			"status": false,
+		})
 	}
 
 	// Remove the plugin if it exists
@@ -176,15 +246,24 @@ func (bl *FxBlockchain) uninstallPluginImpl(ctx context.Context, pluginName stri
 	}
 
 	if !found {
-		return []byte("Plugin not found"), nil
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Plugin not found",
+			"status": false,
+		})
 	}
 
 	// Write updated list back to file
 	if err := bl.writeActivePlugins(newPlugins); err != nil {
-		return nil, err
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to write active plugins: %v", err),
+			"status": false,
+		})
 	}
 
-	return []byte("Plugin uninstalled successfully"), nil
+	return json.Marshal(map[string]interface{}{
+		"msg":    "Plugin uninstalled successfully",
+		"status": true,
+	})
 }
 
 func (bl *FxBlockchain) ListPlugins(ctx context.Context, to peer.ID) ([]byte, error) {
@@ -321,13 +400,17 @@ func (bl *FxBlockchain) HandleListActivePlugins(w http.ResponseWriter, r *http.R
 }
 
 func (bl *FxBlockchain) readActivePlugins() ([]string, error) {
+	log.Debug("readActivePlugins started")
 	content, err := os.ReadFile(activePluginsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Debug("readActivePlugins file does not exist")
 			return []string{}, nil
 		}
+		log.Debugw("readActivePlugins error", "error", err)
 		return nil, fmt.Errorf("failed to read active plugins file: %w", err)
 	}
+	log.Debugw("readActivePlugins finished", "content", string(content))
 	return strings.Split(strings.TrimSpace(string(content)), "\n"), nil
 }
 
@@ -384,18 +467,27 @@ func (bl *FxBlockchain) showPluginStatusImpl(ctx context.Context, pluginName str
 }
 
 func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request, action string) {
+	log := log.With("action", action, "from", from)
+	log.Debug("started handlePluginAction")
 	var req struct {
-		PluginName string `json:"plugin_name"`
+		PluginName string `json:"plugin_name,omitempty"`
 		Lines      int    `json:"lines,omitempty"`
 		Params     string `json:"params,omitempty"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
-		return
+	// Check if the request body is not empty before attempting to decode
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err != io.EOF {
+				log.Errorw("An Error occurred while decoding request body", "error", err)
+				http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+				return
+			}
+		}
 	}
 
-	if req.PluginName == "" && action != "list" {
+	if req.PluginName == "" && (action != actionListPlugins && action != actionListActivePlugins) {
+		log.Error("Plugin name is required")
 		http.Error(w, "Plugin name is required", http.StatusBadRequest)
 		return
 	}
@@ -404,17 +496,22 @@ func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w 
 	var err error
 
 	switch action {
-	case "list-plugins":
+	case actionListPlugins:
+		log.Debug("handlePluginAction: calling method")
 		result, err = bl.listPluginsImpl(ctx)
-	case "list-active-plugins":
+	case actionListActivePlugins:
+		log.Debug("handlePluginAction: calling method")
 		result, err = bl.listActivePluginsImpl(ctx)
-	case "install-plugin":
+	case actionInstallPlugin:
+		log.Debugw("handlePluginAction: calling method", "PluginName", req.PluginName, "params", req.Params)
 		result, err = bl.installPluginImpl(ctx, req.PluginName, req.Params)
-	case "uninstall-plugin":
+	case actionUninstallPlugin:
+		log.Debug("handlePluginAction: calling method")
 		result, err = bl.uninstallPluginImpl(ctx, req.PluginName)
-	case "status":
+	case actionShowPluginStatus:
 		result, err = bl.ShowPluginStatus(ctx, req.PluginName, req.Lines)
 	default:
+		log.Error("Invalid action")
 		http.Error(w, "Invalid action", http.StatusBadRequest)
 		return
 	}
