@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -40,6 +41,17 @@ type PluginParam struct {
 }
 
 func (bl *FxBlockchain) listPluginsImpl(ctx context.Context) ([]byte, error) {
+	log.Debug("listPluginImpl started")
+
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
 	// Fetch the list of plugins
 	resp, err := http.Get("https://raw.githubusercontent.com/functionland/fula-ota/refs/heads/main/docker/fxsupport/linux/plugins/info.json")
 	if err != nil {
@@ -130,7 +142,6 @@ func (bl *FxBlockchain) listActivePluginsImpl(ctx context.Context) ([]byte, erro
 
 func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
 	log.Debug("installPluginImpl started")
-
 	// Check for context cancellation
 	select {
 	case <-ctx.Done():
@@ -155,6 +166,7 @@ func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string
 	for _, p := range plugins {
 		log.Debugw("installPluginImpl plugins for loop:", "p", p, "pluginName", pluginName)
 		if p == pluginName {
+			bl.setPluginStatus(pluginName, "install plugin request: Processed")
 			return json.Marshal(map[string]interface{}{
 				"msg":    "Plugin already installed",
 				"status": true,
@@ -208,6 +220,7 @@ func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string
 		})
 	}
 
+	bl.setPluginStatus(pluginName, "install plugin request: Processed")
 	return json.Marshal(map[string]interface{}{
 		"msg":    "Plugin installed successfully",
 		"status": true,
@@ -511,6 +524,18 @@ func (bl *FxBlockchain) GetInstallStatus(ctx context.Context, to peer.ID, plugin
 }
 
 func (bl *FxBlockchain) getInstallOutputImpl(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
+	log.Debug("getInstallOutputImpl started")
+
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
+
 	output := make(map[string]string)
 	params := strings.Split(paramsString, ",,,,")
 
@@ -543,6 +568,18 @@ func (bl *FxBlockchain) getInstallOutputImpl(ctx context.Context, pluginName str
 }
 
 func (bl *FxBlockchain) getInstallStatusImpl(ctx context.Context, pluginName string) ([]byte, error) {
+	log.Debug("getInstallStatusImpl started")
+
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
+
 	filePath := fmt.Sprintf("/internal/%s/status.txt", pluginName)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -597,6 +634,27 @@ func (bl *FxBlockchain) HandleGetInstallStatus(w http.ResponseWriter, r *http.Re
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(result)
+}
+
+func (bl *FxBlockchain) setPluginStatus(pluginName, status string) error {
+	// Trim any leading or trailing whitespace from the status
+	status = strings.TrimSpace(status)
+
+	// Construct the file path
+	filePath := fmt.Sprintf("/internal/%s/status.txt", pluginName)
+
+	// Ensure the directory exists
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory for plugin status: %w", err)
+	}
+
+	// Write the status to the file
+	if err := os.WriteFile(filePath, []byte(status), 0644); err != nil {
+		return fmt.Errorf("failed to write status file for plugin %s: %w", pluginName, err)
+	}
+
+	return nil
 }
 
 func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request, action string) {
