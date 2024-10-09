@@ -539,12 +539,7 @@ func (bl *FxBlockchain) getInstallOutputImpl(ctx context.Context, pluginName str
 	output := make(map[string]string)
 	params := strings.Split(paramsString, ",,,,")
 
-	for _, param := range params {
-		parts := strings.Split(param, "====")
-		if len(parts) != 2 {
-			continue
-		}
-		name := parts[0]
+	for _, name := range params {
 		filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, name)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
