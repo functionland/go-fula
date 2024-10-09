@@ -315,3 +315,8 @@ func (c *Client) GetInstallStatus(pluginName string) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.GetInstallStatus(ctx, c.bloxPid, pluginName)
 }
+
+func (c *Client) UpdatePlugin(pluginName string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.UpdatePlugin(ctx, c.bloxPid, pluginName)
+}

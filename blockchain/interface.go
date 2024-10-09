@@ -63,6 +63,7 @@ const (
 	actionListActivePlugins = "list-active-plugins"
 	actionGetInstallOutput  = "get-install-output"
 	actionGetInstallStatus  = "get-install-status"
+	actionUpdatePlugin      = "update-plugin"
 )
 
 type ReplicateRequest struct {
@@ -460,6 +461,14 @@ type GetInstallStatusResponse struct {
 	Status string `json:"status"`
 }
 
+type UpdatePluginRequest struct {
+	PluginName string `json:"plugin_name"`
+}
+type UpdatePluginResponse struct {
+	Msg    string `json:"msg"`
+	Status bool   `json:"status"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -510,6 +519,7 @@ type Blockchain interface {
 	ShowPluginStatus(context.Context, string, int) ([]byte, error)
 	GetInstallOutput(context.Context, peer.ID, string, string) ([]byte, error)
 	GetInstallStatus(context.Context, peer.ID, string) ([]byte, error)
+	UpdatePlugin(context.Context, peer.ID, string) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -563,6 +573,7 @@ var requestTypes = map[string]reflect.Type{
 	actionShowPluginStatus:  reflect.TypeOf(ShowPluginStatusRequest{}),
 	actionGetInstallOutput:  reflect.TypeOf(GetInstallOutputRequest{}),
 	actionGetInstallStatus:  reflect.TypeOf(GetInstallStatusRequest{}),
+	actionUpdatePlugin:      reflect.TypeOf(UpdatePluginRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -616,4 +627,5 @@ var responseTypes = map[string]reflect.Type{
 	actionShowPluginStatus:  reflect.TypeOf(ShowPluginStatusResponse{}),
 	actionGetInstallOutput:  reflect.TypeOf(GetInstallOutputResponse{}),
 	actionGetInstallStatus:  reflect.TypeOf(GetInstallStatusResponse{}),
+	actionUpdatePlugin:      reflect.TypeOf(UpdatePluginResponse{}),
 }

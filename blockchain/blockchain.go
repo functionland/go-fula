@@ -565,6 +565,9 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 		actionGetInstallStatus: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handlePluginAction(r.Context(), from, w, r, actionGetInstallStatus)
 		},
+		actionUpdatePlugin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handlePluginAction(r.Context(), from, w, r, actionUpdatePlugin)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -978,7 +981,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 	switch action {
 	case actionReplicateInPool:
 		return (bl.authorizer == bl.h.ID() || bl.authorizer == "")
-	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput:
+	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput, actionUpdatePlugin:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

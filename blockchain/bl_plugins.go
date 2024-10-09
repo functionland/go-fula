@@ -17,6 +17,7 @@ import (
 )
 
 const activePluginsFile = "/internal/active-plugins.txt"
+const updatePluginsFile = "/internal/update-plugins.txt"
 
 type PluginInfo struct {
 	Name        string `json:"name"`
@@ -652,6 +653,114 @@ func (bl *FxBlockchain) setPluginStatus(pluginName, status string) error {
 	return nil
 }
 
+func (bl *FxBlockchain) updatePluginImpl(ctx context.Context, pluginName string) ([]byte, error) {
+	log.Debug("updatePluginImpl started")
+
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return json.Marshal(map[string]interface{}{
+			"msg":    "Operation cancelled",
+			"status": false,
+		})
+	default:
+	}
+
+	// Read existing update plugins
+	updatePlugins, err := bl.readUpdatePlugins()
+	if err != nil {
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to read update plugins: %v", err),
+			"status": false,
+		})
+	}
+	log.Debugw("updatePluginImpl plugins:", "updatePlugins", updatePlugins, "pluginName", pluginName)
+
+	// Check if plugin already exists in update list
+	for _, p := range updatePlugins {
+		if p == pluginName {
+			return json.Marshal(map[string]interface{}{
+				"msg":    "Plugin already in update queue",
+				"status": true,
+			})
+		}
+	}
+
+	// Append new plugin to update list
+	updatePlugins = append(updatePlugins, pluginName)
+
+	// Write updated list back to file
+	if err := bl.writeUpdatePlugins(updatePlugins); err != nil {
+		return json.Marshal(map[string]interface{}{
+			"msg":    fmt.Sprintf("Failed to write update plugins: %v", err),
+			"status": false,
+		})
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"msg":    "Plugin update queued successfully",
+		"status": true,
+	})
+}
+
+func (bl *FxBlockchain) HandleUpdatePlugin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PluginName string `json:"plugin_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	result, err := bl.updatePluginImpl(r.Context(), req.PluginName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(result)
+}
+
+func (bl *FxBlockchain) UpdatePlugin(ctx context.Context, to peer.ID, pluginName string) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(map[string]string{"plugin_name": pluginName}); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionUpdatePlugin, &buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) readUpdatePlugins() ([]string, error) {
+	content, err := os.ReadFile(updatePluginsFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to read update plugins file: %w", err)
+	}
+	return strings.Split(strings.TrimSpace(string(content)), "\n"), nil
+}
+
+func (bl *FxBlockchain) writeUpdatePlugins(plugins []string) error {
+	content := strings.Join(plugins, "\n")
+	if err := os.WriteFile(updatePluginsFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write update plugins file: %w", err)
+	}
+	return nil
+}
+
 func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request, action string) {
 	log := log.With("action", action, "from", from)
 	log.Debug("started handlePluginAction")
@@ -702,6 +811,9 @@ func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w 
 	case actionGetInstallStatus:
 		log.Debugw("handlePluginAction: calling method actionGetInstallStatus", "PluginName", req.PluginName)
 		result, err = bl.getInstallStatusImpl(ctx, req.PluginName)
+	case actionUpdatePlugin:
+		log.Debug("handlePluginAction: calling method actionUpdatePlugin")
+		result, err = bl.updatePluginImpl(ctx, req.PluginName)
 	default:
 		log.Error("Invalid action")
 		http.Error(w, "Invalid action", http.StatusBadRequest)
