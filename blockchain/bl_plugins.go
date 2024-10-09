@@ -586,7 +586,7 @@ func (bl *FxBlockchain) getInstallStatusImpl(ctx context.Context, pluginName str
 		if os.IsNotExist(err) {
 			return json.Marshal(map[string]interface{}{
 				"status": true,
-				"msg":    "Status file not found",
+				"msg":    "No Status",
 			})
 		}
 		return json.Marshal(map[string]interface{}{
