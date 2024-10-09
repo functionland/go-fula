@@ -303,3 +303,15 @@ func (c *Client) ShowPluginStatus(pluginName string, lines int) ([]byte, error) 
 	ctx := context.TODO()
 	return c.bl.ShowPluginStatus(ctx, pluginName, lines)
 }
+
+// InstallPlugin requests the blox to install a specific plugin
+func (c *Client) GetInstallOutput(pluginName string, params string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetInstallOutput(ctx, c.bloxPid, pluginName, params)
+}
+
+// InstallPlugin requests the blox to install a specific plugin
+func (c *Client) GetInstallStatus(pluginName string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetInstallStatus(ctx, c.bloxPid, pluginName)
+}

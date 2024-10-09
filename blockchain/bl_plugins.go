@@ -466,6 +466,139 @@ func (bl *FxBlockchain) showPluginStatusImpl(ctx context.Context, pluginName str
 	return formattedLines, nil
 }
 
+func (bl *FxBlockchain) GetInstallOutput(ctx context.Context, to peer.ID, pluginName string, paramsString string) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(map[string]string{"plugin_name": pluginName, "params": paramsString}); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionGetInstallOutput, &buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) GetInstallStatus(ctx context.Context, to peer.ID, pluginName string) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(map[string]string{"plugin_name": pluginName}); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionGetInstallStatus, &buf)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func (bl *FxBlockchain) getInstallOutputImpl(ctx context.Context, pluginName string, paramsString string) ([]byte, error) {
+	output := make(map[string]string)
+	params := strings.Split(paramsString, ",,,,")
+
+	for _, param := range params {
+		parts := strings.Split(param, "====")
+		if len(parts) != 2 {
+			continue
+		}
+		name := parts[0]
+		filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, name)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				output[name] = ""
+			} else {
+				return json.Marshal(map[string]interface{}{
+					"msg":    fmt.Errorf("error reading file for %s: %w", name, err),
+					"status": false,
+				})
+			}
+		} else {
+			output[name] = strings.TrimSpace(string(content))
+		}
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"msg":    output,
+		"status": true,
+	})
+}
+
+func (bl *FxBlockchain) getInstallStatusImpl(ctx context.Context, pluginName string) ([]byte, error) {
+	filePath := fmt.Sprintf("/internal/%s/status.txt", pluginName)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return json.Marshal(map[string]interface{}{
+				"status": true,
+				"msg":    "Status file not found",
+			})
+		}
+		return json.Marshal(map[string]interface{}{
+			"status": false,
+			"msg":    fmt.Errorf("error reading status file for %s: %w", pluginName, err),
+		})
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"status": true,
+		"msg":    strings.TrimSpace(string(content)),
+	})
+}
+
+func (bl *FxBlockchain) HandleGetInstallOutput(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PluginName string `json:"plugin_name"`
+		Params     string `json:"params"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	result, err := bl.getInstallOutputImpl(r.Context(), req.PluginName, req.Params)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(result)
+}
+
+func (bl *FxBlockchain) HandleGetInstallStatus(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PluginName string `json:"plugin_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	result, err := bl.getInstallStatusImpl(r.Context(), req.PluginName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(result)
+}
+
 func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request, action string) {
 	log := log.With("action", action, "from", from)
 	log.Debug("started handlePluginAction")
@@ -497,19 +630,25 @@ func (bl *FxBlockchain) handlePluginAction(ctx context.Context, from peer.ID, w 
 
 	switch action {
 	case actionListPlugins:
-		log.Debug("handlePluginAction: calling method")
+		log.Debug("handlePluginAction: calling method actionListPlugins")
 		result, err = bl.listPluginsImpl(ctx)
 	case actionListActivePlugins:
-		log.Debug("handlePluginAction: calling method")
+		log.Debug("handlePluginAction: calling method actionListActivePlugins")
 		result, err = bl.listActivePluginsImpl(ctx)
 	case actionInstallPlugin:
-		log.Debugw("handlePluginAction: calling method", "PluginName", req.PluginName, "params", req.Params)
+		log.Debugw("handlePluginAction: calling method actionInstallPlugin", "PluginName", req.PluginName, "params", req.Params)
 		result, err = bl.installPluginImpl(ctx, req.PluginName, req.Params)
 	case actionUninstallPlugin:
-		log.Debug("handlePluginAction: calling method")
+		log.Debug("handlePluginAction: calling method actionUninstallPlugin")
 		result, err = bl.uninstallPluginImpl(ctx, req.PluginName)
 	case actionShowPluginStatus:
 		result, err = bl.ShowPluginStatus(ctx, req.PluginName, req.Lines)
+	case actionGetInstallOutput:
+		log.Debugw("handlePluginAction: calling method", "PluginName", req.PluginName, "params", req.Params)
+		result, err = bl.getInstallOutputImpl(ctx, req.PluginName, req.Params)
+	case actionGetInstallStatus:
+		log.Debugw("handlePluginAction: calling method actionGetInstallStatus", "PluginName", req.PluginName)
+		result, err = bl.getInstallStatusImpl(ctx, req.PluginName)
 	default:
 		log.Error("Invalid action")
 		http.Error(w, "Invalid action", http.StatusBadRequest)

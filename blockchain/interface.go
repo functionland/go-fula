@@ -61,6 +61,8 @@ const (
 	actionUninstallPlugin   = "uninstall-plugin"
 	actionShowPluginStatus  = "show-plugin-status"
 	actionListActivePlugins = "list-active-plugins"
+	actionGetInstallOutput  = "get-install-output"
+	actionGetInstallStatus  = "get-install-status"
 )
 
 type ReplicateRequest struct {
@@ -439,6 +441,25 @@ type ListActivePluginsResponse struct {
 	ActivePlugins []string `json:"active_plugins"`
 }
 
+// GetInstallOutput
+type GetInstallOutputRequest struct {
+	PluginName string `json:"plugin_name"`
+	Params     string `json:"params"`
+}
+
+type GetInstallOutputResponse struct {
+	Outputs map[string]string `json:"outputs"`
+}
+
+// GetInstallStatus
+type GetInstallStatusRequest struct {
+	PluginName string `json:"plugin_name"`
+}
+
+type GetInstallStatusResponse struct {
+	Status string `json:"status"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -487,6 +508,8 @@ type Blockchain interface {
 	InstallPlugin(context.Context, peer.ID, string, string) ([]byte, error)
 	UninstallPlugin(context.Context, peer.ID, string) ([]byte, error)
 	ShowPluginStatus(context.Context, string, int) ([]byte, error)
+	GetInstallOutput(context.Context, peer.ID, string, string) ([]byte, error)
+	GetInstallStatus(context.Context, peer.ID, string) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -538,6 +561,8 @@ var requestTypes = map[string]reflect.Type{
 	actionInstallPlugin:     reflect.TypeOf(InstallPluginRequest{}),
 	actionUninstallPlugin:   reflect.TypeOf(UninstallPluginRequest{}),
 	actionShowPluginStatus:  reflect.TypeOf(ShowPluginStatusRequest{}),
+	actionGetInstallOutput:  reflect.TypeOf(GetInstallOutputRequest{}),
+	actionGetInstallStatus:  reflect.TypeOf(GetInstallStatusRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -589,4 +614,6 @@ var responseTypes = map[string]reflect.Type{
 	actionInstallPlugin:     reflect.TypeOf(InstallPluginResponse{}),
 	actionUninstallPlugin:   reflect.TypeOf(UninstallPluginResponse{}),
 	actionShowPluginStatus:  reflect.TypeOf(ShowPluginStatusResponse{}),
+	actionGetInstallOutput:  reflect.TypeOf(GetInstallOutputResponse{}),
+	actionGetInstallStatus:  reflect.TypeOf(GetInstallStatusResponse{}),
 }
