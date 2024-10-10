@@ -16,8 +16,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-const activePluginsFile = "/internal/active-plugins.txt"
-const updatePluginsFile = "/internal/update-plugins.txt"
+const pluginInternalDir = "/internal/plugins"
+const activePluginsFile = pluginInternalDir + "/active-plugins.txt"
+const updatePluginsFile = pluginInternalDir + "/update-plugins.txt"
 
 type PluginInfo struct {
 	Name        string `json:"name"`
@@ -189,8 +190,8 @@ func (bl *FxBlockchain) installPluginImpl(ctx context.Context, pluginName string
 			name := strings.TrimSpace(parts[0])
 			value := strings.TrimSpace(parts[1])
 
-			filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, name)
-			dirPath := fmt.Sprintf("/internal/%s", pluginName)
+			filePath := fmt.Sprintf("/%s/%s/%s.txt", pluginInternalDir, pluginName, name)
+			dirPath := fmt.Sprintf("/%s/%s", pluginInternalDir, pluginName)
 
 			// Create directory if it doesn't exist
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
@@ -541,7 +542,7 @@ func (bl *FxBlockchain) getInstallOutputImpl(ctx context.Context, pluginName str
 	params := strings.Split(paramsString, ",,,,")
 
 	for _, name := range params {
-		filePath := fmt.Sprintf("/internal/%s/%s.txt", pluginName, name)
+		filePath := fmt.Sprintf("/%s/%s/%s.txt", pluginInternalDir, pluginName, name)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -576,7 +577,7 @@ func (bl *FxBlockchain) getInstallStatusImpl(ctx context.Context, pluginName str
 	default:
 	}
 
-	filePath := fmt.Sprintf("/internal/%s/status.txt", pluginName)
+	filePath := fmt.Sprintf("/%s/%s/status.txt", pluginInternalDir, pluginName)
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -637,7 +638,7 @@ func (bl *FxBlockchain) setPluginStatus(pluginName, status string) error {
 	status = strings.TrimSpace(status)
 
 	// Construct the file path
-	filePath := fmt.Sprintf("/internal/%s/status.txt", pluginName)
+	filePath := fmt.Sprintf("/%s/%s/status.txt", pluginInternalDir, pluginName)
 
 	// Ensure the directory exists
 	dir := filepath.Dir(filePath)
