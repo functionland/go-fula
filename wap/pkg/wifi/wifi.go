@@ -519,33 +519,65 @@ func activateHotspot(ctx context.Context) {
 
 func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 	var interfaces []string
+	var useIw bool
+
+	// Check which command is available
+	if _, err := exec.LookPath("iwconfig"); err != nil {
+		if _, err := exec.LookPath("iw"); err != nil {
+			return fmt.Errorf("neither iwconfig nor iw commands found")
+		}
+		useIw = true
+	}
 
 	if interfaceName == "" {
 		// Get all available wireless network interfaces
 		ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
 		defer cl()
 
-		// Stage 1: Run iwconfig
-		stdout, _, err := runCommand(ctx, "iwconfig")
-		if err != nil {
-			return err
-		}
+		var stdout string
+		var err error
 
-		// Stage 2: Filter output with grep-like functionality
-		var filteredLines []string
-		scanner := bufio.NewScanner(strings.NewReader(stdout))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
-				filteredLines = append(filteredLines, line)
+		if useIw {
+			// Get interfaces using iw
+			stdout, _, err = runCommand(ctx, "iw dev")
+			if err != nil {
+				return err
 			}
-		}
 
-		// Stage 3: Run awk-like functionality to print the first field of each line
-		for _, line := range filteredLines {
-			fields := strings.Fields(line)
-			if len(fields) > 0 {
-				interfaces = append(interfaces, fields[0])
+			// Parse iw output for interfaces
+			scanner := bufio.NewScanner(strings.NewReader(stdout))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(line, "Interface") {
+					fields := strings.Fields(line)
+					if len(fields) > 1 {
+						interfaces = append(interfaces, fields[1])
+					}
+				}
+			}
+		} else {
+			// Use existing logic for iwconfig
+			stdout, _, err = runCommand(ctx, "iwconfig")
+			if err != nil {
+				return err
+			}
+
+			// Filter output with grep-like functionality
+			var filteredLines []string
+			scanner := bufio.NewScanner(strings.NewReader(stdout))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
+					filteredLines = append(filteredLines, line)
+				}
+			}
+
+			// Run awk-like functionality to print the first field of each line
+			for _, line := range filteredLines {
+				fields := strings.Fields(line)
+				if len(fields) > 0 {
+					interfaces = append(interfaces, fields[0])
+				}
 			}
 		}
 	} else {
@@ -554,19 +586,40 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 
 	// Iterate over interfaces and check the connection
 	for _, iface := range interfaces {
-		stdout, stderr, err := runCommand(ctx, fmt.Sprintf("iw %s link", iface))
-		if err != nil {
-			return err
+		var stdout, stderr string
+		var err error
+
+		if useIw {
+			stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iw dev %s link", iface))
+		} else {
+			stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iwconfig %s", iface))
 		}
-		// If connection is not "FxBlox" and is connected, return nil (no error)
-		if !strings.Contains(string(stdout), "FxBlox") &&
-			!strings.Contains(string(stdout), "Not connected") &&
-			!strings.Contains(string(stderr), "Not connected") {
-			return nil
+
+		if err != nil {
+			continue // Try next interface if this one fails
+		}
+
+		// Check connection status based on the tool being used
+		if useIw {
+			// iw shows "connected" when connected
+			if !strings.Contains(stdout, "FxBlox") &&
+				strings.Contains(stdout, "connected") &&
+				!strings.Contains(stderr, "Not connected") {
+				return nil
+			}
+		} else {
+			// Use existing logic for iwconfig
+			if !strings.Contains(stdout, "FxBlox") &&
+				!strings.Contains(stdout, "ESSID:\"\"") &&
+				!strings.Contains(stdout, "Not connected") &&
+				!strings.Contains(stderr, "Not connected") {
+				return nil
+			}
 		}
 	}
+
 	// If no connected interface is found, return error
-	return errors.New("Wifi not connected on any interface")
+	return errors.New("WiFi not connected on any interface")
 }
 
 // TODO: unused, complete the c1 command

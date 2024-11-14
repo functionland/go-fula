@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -88,41 +89,123 @@ func parseDarwin(output string) (wifis []Wifi, err error) {
 }
 
 func parseLinux(output string) (wifis []Wifi, err error) {
+	// Check which command is available
+	useIw := false
+	if _, err := exec.LookPath("iwlist"); err != nil {
+		if _, err := exec.LookPath("iw"); err != nil {
+			return nil, fmt.Errorf("neither iwlist nor iw commands found")
+		}
+		useIw = true
+	}
+
+	if output == "" {
+		return nil, fmt.Errorf("empty output received")
+	}
+
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	w := Wifi{}
 	wifis = []Wifi{}
-	for scanner.Scan() {
-		line := scanner.Text()
-		if w.SSID == "" {
-			if strings.Contains(line, "Address") {
-				fs := strings.Fields(line)
-				if len(fs) == 5 {
-					w.SSID = strings.ToLower(fs[4])
-				}
-			} else {
+
+	if useIw {
+		// Parse iw output
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
 				continue
 			}
-		} else {
-			if strings.Contains(line, "ESSID") {
-				essid := strings.Split(line, ":")[1]
-				w.ESSID = essid
-			} else if strings.Contains(line, "Signal level=") {
-				level, errParse := strconv.Atoi(strings.Split(strings.Split(strings.Split(line, "level=")[1], "/")[0], " dB")[0])
-				if errParse != nil {
-					continue
+
+			if strings.Contains(line, "BSS") {
+				// If we have a complete wifi entry, append it
+				if w.SSID != "" && w.RSSI != 0 {
+					// Copy SSID to ESSID if ESSID is empty
+					if w.ESSID == "" {
+						w.ESSID = w.SSID
+					}
+					wifis = append(wifis, w)
+					w = Wifi{} // Reset for next entry
 				}
-				if level > 0 {
-					level = (level / 2) - 100
+			} else if strings.Contains(line, "SSID:") {
+				fs := strings.Fields(line)
+				if len(fs) > 1 {
+					ssid := strings.Join(fs[1:], " ")
+					if ssid != "" {
+						w.SSID = ssid
+						w.ESSID = ssid // In iw, SSID is what we want for both fields
+					}
 				}
-				w.RSSI = level
+			} else if strings.Contains(line, "signal:") {
+				fs := strings.Fields(line)
+				if len(fs) > 1 {
+					levelStr := strings.TrimSpace(strings.TrimSuffix(fs[1], " dBm"))
+					level, errParse := strconv.ParseFloat(levelStr, 64)
+					if errParse == nil && level < 0 { // Signal strength should be negative
+						w.RSSI = int(level) // Already in dBm
+					}
+				}
 			}
 		}
-		if w.SSID != "" && w.RSSI != 0 && w.ESSID != "" {
+		// Don't forget the last entry
+		if w.SSID != "" && w.RSSI != 0 {
+			if w.ESSID == "" {
+				w.ESSID = w.SSID
+			}
 			wifis = append(wifis, w)
-			w = Wifi{}
+		}
+	} else {
+		// Original iwlist parsing logic
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+
+			if w.SSID == "" {
+				if strings.Contains(line, "Address") {
+					fs := strings.Fields(line)
+					if len(fs) >= 5 { // Changed from == 5 to >= 5 for more flexibility
+						w.SSID = strings.ToLower(fs[4])
+					}
+				} else {
+					continue
+				}
+			} else {
+				if strings.Contains(line, "ESSID") {
+					parts := strings.Split(line, ":")
+					if len(parts) > 1 {
+						essid := strings.Trim(parts[1], "\"")
+						if essid != "" {
+							w.ESSID = essid
+						}
+					}
+				} else if strings.Contains(line, "Signal level=") {
+					parts := strings.Split(line, "level=")
+					if len(parts) > 1 {
+						levelParts := strings.Split(parts[1], "/")
+						if len(levelParts) > 0 {
+							levelStr := strings.Split(levelParts[0], " dB")[0]
+							level, errParse := strconv.Atoi(strings.TrimSpace(levelStr))
+							if errParse == nil {
+								if level > 0 {
+									level = (level / 2) - 100
+								}
+								w.RSSI = level
+							}
+						}
+					}
+				}
+			}
+			if w.SSID != "" && w.RSSI != 0 && w.ESSID != "" {
+				wifis = append(wifis, w)
+				w = Wifi{}
+			}
 		}
 	}
-	return
+
+	if err := scanner.Err(); err != nil {
+		return wifis, fmt.Errorf("error scanning output: %v", err)
+	}
+
+	return wifis, nil
 }
 
 // Scan can be used to get the list of available wifis and their strength
@@ -140,35 +223,70 @@ func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error
 		ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
 		defer cl()
 
-		// Stage 1: Run iwconfig
-		stdout, stderr, err = runCommand(ctx, "iwconfig")
-		if err != nil {
-			log.Errorw("failed to run iwconfig", "err", err, "stderr", stderr)
-			return nil, err // Here we return nil for wifilist
-		}
-
-		// Stage 2: Filter output with grep-like functionality
-		var filteredLines []string
-		scanner := bufio.NewScanner(strings.NewReader(stdout))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
-				filteredLines = append(filteredLines, line)
+		// Check which command is available
+		useIw := false
+		if _, err := exec.LookPath("iwlist"); err != nil {
+			if _, err := exec.LookPath("iw"); err != nil {
+				return nil, fmt.Errorf("neither iwlist nor iw commands found")
 			}
+			useIw = true
 		}
 
-		// Stage 3: Run awk-like functionality to print the first field of each line
 		var interfaces []string
-		for _, line := range filteredLines {
-			fields := strings.Fields(line)
-			if len(fields) > 0 {
-				interfaces = append(interfaces, fields[0])
+		if useIw {
+			// Get interfaces using iw
+			stdout, stderr, err = runCommand(ctx, "iw dev")
+			if err != nil {
+				log.Errorw("failed to run iw dev", "err", err, "stderr", stderr)
+				return nil, err
+			}
+
+			// Parse iw output for interfaces
+			scanner := bufio.NewScanner(strings.NewReader(stdout))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(line, "Interface") {
+					fields := strings.Fields(line)
+					if len(fields) > 1 {
+						interfaces = append(interfaces, fields[1])
+					}
+				}
+			}
+		} else {
+			// Use existing logic for iwconfig/iwlist
+			stdout, stderr, err = runCommand(ctx, "iwconfig")
+			if err != nil {
+				log.Errorw("failed to run iwconfig", "err", err, "stderr", stderr)
+				return nil, err
+			}
+
+			// Filter output with grep-like functionality
+			var filteredLines []string
+			scanner := bufio.NewScanner(strings.NewReader(stdout))
+			for scanner.Scan() {
+				line := scanner.Text()
+				if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
+					filteredLines = append(filteredLines, line)
+				}
+			}
+
+			// Run awk-like functionality to print the first field of each line
+			for _, line := range filteredLines {
+				fields := strings.Fields(line)
+				if len(fields) > 0 {
+					interfaces = append(interfaces, fields[0])
+				}
 			}
 		}
 
-		// Loop over interfaces
+		// Loop over interfaces and perform scan
 		for _, iface := range interfaces {
-			command = fmt.Sprintf("iwlist %s scan", iface)
+			if useIw {
+				command = fmt.Sprintf("iw dev %s scan", iface)
+			} else {
+				command = fmt.Sprintf("iwlist %s scan", iface)
+			}
+
 			stdout, _, err = runCommand(ctx, command)
 			if err == nil {
 				// Break the loop when the scan command is successful
