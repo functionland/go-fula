@@ -1,20 +1,14 @@
 package exchange
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync/atomic"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	p2phttp "github.com/libp2p/go-libp2p-http"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -49,7 +43,8 @@ func newHubPublisher(h host.Host, opts *options) (*hubPublisher, error) {
 }
 
 func (p *hubPublisher) assureConnectionToHub(ctx context.Context) error {
-	a, err := peer.AddrInfoFromString("/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R")
+	_ = ctx // Acknowledge ctx to avoid unused variable warning
+	/*a, err := peer.AddrInfoFromString("/dns/hub.dev.fx.land/tcp/40004/p2p/12D3KooWFmfEsXjWotvqJ6B3ASXx1w3p6udj8R9f344a9JTu2k4R")
 	if err != nil {
 		return err
 	}
@@ -57,7 +52,7 @@ func (p *hubPublisher) assureConnectionToHub(ctx context.Context) error {
 	if err := p.h.Connect(ctx, *a); err != nil {
 		log.Errorw("Failed to connect to hub", "err", err)
 		return err
-	}
+	}*/
 	return nil
 }
 func (p *hubPublisher) Start(_ context.Context) error {
@@ -112,16 +107,21 @@ func (p *hubPublisher) notifyReceivedLink(l ipld.Link) {
 	if l == nil {
 		return
 	}
-	link, ok := l.(cidlink.Link)
-	if ok &&
-		!cid.Undef.Equals(link.Cid) &&
-		link.Cid.Prefix().MhType != multihash.IDENTITY {
-		p.buffer <- link.Cid
-	}
+	/*
+		link, ok := l.(cidlink.Link)
+		if ok &&
+			!cid.Undef.Equals(link.Cid) &&
+			link.Cid.Prefix().MhType != multihash.IDENTITY {
+			p.buffer <- link.Cid
+		}*/
 }
 
 func (p *hubPublisher) publish(mhs []multihash.Multihash) error {
-	if err := p.assureConnectionToHub(p.ctx); err != nil {
+	if len(mhs) == 0 {
+		_ = mhs // Use the variable to avoid unused warnings.
+		return nil
+	}
+	/*if err := p.assureConnectionToHub(p.ctx); err != nil {
 		return err
 	}
 	r := &PutContentRequest{
@@ -141,7 +141,7 @@ func (p *hubPublisher) publish(mhs []multihash.Multihash) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("receievd non OK response from hub: %d", resp.StatusCode)
-	}
+	}*/
 	return nil
 }
 
