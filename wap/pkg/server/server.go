@@ -45,6 +45,21 @@ type Config struct {
 	IpniPublisherIdentity     string   `yaml:"ipniPublisherIdentity"`
 }
 
+type multiCloser struct {
+	listeners []io.Closer
+}
+
+// Implement Close method for multiCloser
+func (mc *multiCloser) Close() error {
+	var err error
+	for _, l := range mc.listeners {
+		if cerr := l.Close(); cerr != nil {
+			err = cerr
+		}
+	}
+	return err
+}
+
 func checkPathExistAndFileNotExist(path string) string {
 	dir := filepath.Dir(path)
 
@@ -796,5 +811,22 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 			log.Errorw("Serve could not initialize", "err", err)
 		}
 	}()
-	return ln
+
+	mc := &multiCloser{
+		listeners: []io.Closer{ln},
+	}
+
+	ln1, err1 := net.Listen("tcp", "127.0.0.1:"+port)
+	if err1 != nil {
+		log.Errorw("Failed to use 127.0.0.1 for serve", "err", err1)
+	} else {
+		mc.listeners = append(mc.listeners, ln1)
+		go func() {
+			if err := http.Serve(ln1, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
+			}
+		}()
+	}
+
+	return mc
 }

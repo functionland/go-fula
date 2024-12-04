@@ -4,8 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os/exec"
-	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -89,121 +88,74 @@ func parseDarwin(output string) (wifis []Wifi, err error) {
 }
 
 func parseLinux(output string) (wifis []Wifi, err error) {
-	// Check which command is available
-	useIw := false
-	if _, err := exec.LookPath("iwlist"); err != nil {
-		if _, err := exec.LookPath("iw"); err != nil {
-			return nil, fmt.Errorf("neither iwlist nor iw commands found")
-		}
-		useIw = true
-	}
-
-	if output == "" {
-		return nil, fmt.Errorf("empty output received")
-	}
-
 	scanner := bufio.NewScanner(strings.NewReader(output))
-	w := Wifi{}
-	wifis = []Wifi{}
 
-	if useIw {
-		// Parse iw output
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line == "" {
-				continue
-			}
+	// Skip header line
+	if !scanner.Scan() {
+		return nil, fmt.Errorf("empty output")
+	}
 
-			if strings.Contains(line, "BSS") {
-				// If we have a complete wifi entry, append it
-				if w.SSID != "" && w.RSSI != 0 {
-					// Copy SSID to ESSID if ESSID is empty
-					if w.ESSID == "" {
-						w.ESSID = w.SSID
-					}
-					wifis = append(wifis, w)
-					w = Wifi{} // Reset for next entry
-				}
-			} else if strings.Contains(line, "SSID:") {
-				fs := strings.Fields(line)
-				if len(fs) > 1 {
-					ssid := strings.Join(fs[1:], " ")
-					if ssid != "" {
-						w.SSID = ssid
-						w.ESSID = ssid // In iw, SSID is what we want for both fields
-					}
-				}
-			} else if strings.Contains(line, "signal:") {
-				fs := strings.Fields(line)
-				if len(fs) > 1 {
-					levelStr := strings.TrimSpace(strings.TrimSuffix(fs[1], " dBm"))
-					level, errParse := strconv.ParseFloat(levelStr, 64)
-					if errParse == nil && level < 0 { // Signal strength should be negative
-						w.RSSI = int(level) // Already in dBm
-					}
-				}
-			}
+	// Use map to track strongest signal for each SSID
+	uniqueWifi := make(map[string]Wifi)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		if len(fields) < 8 {
+			continue
 		}
-		// Don't forget the last entry
-		if w.SSID != "" && w.RSSI != 0 {
-			if w.ESSID == "" {
-				w.ESSID = w.SSID
-			}
-			wifis = append(wifis, w)
-		}
-	} else {
-		// Original iwlist parsing logic
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line == "" {
-				continue
-			}
 
-			if w.SSID == "" {
-				if strings.Contains(line, "Address") {
-					fs := strings.Fields(line)
-					if len(fs) >= 5 { // Changed from == 5 to >= 5 for more flexibility
-						w.SSID = strings.ToLower(fs[4])
-					}
-				} else {
-					continue
-				}
-			} else {
-				if strings.Contains(line, "ESSID") {
-					parts := strings.Split(line, ":")
-					if len(parts) > 1 {
-						essid := strings.Trim(parts[1], "\"")
-						if essid != "" {
-							w.ESSID = essid
-						}
-					}
-				} else if strings.Contains(line, "Signal level=") {
-					parts := strings.Split(line, "level=")
-					if len(parts) > 1 {
-						levelParts := strings.Split(parts[1], "/")
-						if len(levelParts) > 0 {
-							levelStr := strings.Split(levelParts[0], " dB")[0]
-							level, errParse := strconv.Atoi(strings.TrimSpace(levelStr))
-							if errParse == nil {
-								if level > 0 {
-									level = (level / 2) - 100
-								}
-								w.RSSI = level
-							}
-						}
-					}
+		var startIndex int
+		if fields[0] == "*" {
+			startIndex = 1
+		}
+
+		// Skip networks with "--" as SSID
+		if fields[startIndex+1] == "--" {
+			continue
+		}
+
+		ssid := fields[startIndex+1]
+		signal, err := strconv.Atoi(fields[startIndex+6])
+		if err != nil {
+			continue
+		}
+
+		rssi := (signal / 2) - 100
+
+		// If SSID exists, only update if new signal is stronger
+		if existing, exists := uniqueWifi[ssid]; exists {
+			if rssi > existing.RSSI {
+				uniqueWifi[ssid] = Wifi{
+					SSID:  ssid,
+					ESSID: ssid,
+					RSSI:  rssi,
 				}
 			}
-			if w.SSID != "" && w.RSSI != 0 && w.ESSID != "" {
-				wifis = append(wifis, w)
-				w = Wifi{}
+		} else {
+			uniqueWifi[ssid] = Wifi{
+				SSID:  ssid,
+				ESSID: ssid,
+				RSSI:  rssi,
 			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return wifis, fmt.Errorf("error scanning output: %v", err)
+		return nil, fmt.Errorf("error scanning output: %v", err)
 	}
+
+	// Convert map to slice
+	wifis = make([]Wifi, 0, len(uniqueWifi))
+	for _, wifi := range uniqueWifi {
+		wifis = append(wifis, wifi)
+	}
+
+	// Sort by signal strength (RSSI), strongest first
+	sort.Slice(wifis, func(i, j int) bool {
+		return wifis[i].RSSI > wifis[j].RSSI
+	})
 
 	return wifis, nil
 }
@@ -212,90 +164,14 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 // If forceReload is set to true it resets the network adapter to make sure it fetches the latest list, otherwise it reads from cache
 // wifiInterface is the name of interface that it should look for in Linux.
 func Scan(forceReload bool, wifiInterface ...string) (wifilist []Wifi, err error) {
-	var command, stdout, stderr string
-	switch runtime.GOOS {
-	case "windows":
-		// Your windows related code
-	case "darwin":
-		// Your darwin related code
-	default:
-		// Get all available wireless network interfaces
-		ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
-		defer cl()
+	ctx, cl := context.WithTimeout(context.Background(), TimeLimit)
+	defer cl()
 
-		// Check which command is available
-		useIw := false
-		if _, err := exec.LookPath("iwlist"); err != nil {
-			if _, err := exec.LookPath("iw"); err != nil {
-				return nil, fmt.Errorf("neither iwlist nor iw commands found")
-			}
-			useIw = true
-		}
-
-		var interfaces []string
-		if useIw {
-			// Get interfaces using iw
-			stdout, stderr, err = runCommand(ctx, "iw dev")
-			if err != nil {
-				log.Errorw("failed to run iw dev", "err", err, "stderr", stderr)
-				return nil, err
-			}
-
-			// Parse iw output for interfaces
-			scanner := bufio.NewScanner(strings.NewReader(stdout))
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.Contains(line, "Interface") {
-					fields := strings.Fields(line)
-					if len(fields) > 1 {
-						interfaces = append(interfaces, fields[1])
-					}
-				}
-			}
-		} else {
-			// Use existing logic for iwconfig/iwlist
-			stdout, stderr, err = runCommand(ctx, "iwconfig")
-			if err != nil {
-				log.Errorw("failed to run iwconfig", "err", err, "stderr", stderr)
-				return nil, err
-			}
-
-			// Filter output with grep-like functionality
-			var filteredLines []string
-			scanner := bufio.NewScanner(strings.NewReader(stdout))
-			for scanner.Scan() {
-				line := scanner.Text()
-				if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
-					filteredLines = append(filteredLines, line)
-				}
-			}
-
-			// Run awk-like functionality to print the first field of each line
-			for _, line := range filteredLines {
-				fields := strings.Fields(line)
-				if len(fields) > 0 {
-					interfaces = append(interfaces, fields[0])
-				}
-			}
-		}
-
-		// Loop over interfaces and perform scan
-		for _, iface := range interfaces {
-			if useIw {
-				command = fmt.Sprintf("iw dev %s scan", iface)
-			} else {
-				command = fmt.Sprintf("iwlist %s scan", iface)
-			}
-
-			stdout, _, err = runCommand(ctx, command)
-			if err == nil {
-				// Break the loop when the scan command is successful
-				wifilist, err = parse(stdout, "linux")
-				if err == nil {
-					break
-				}
-			}
-		}
+	stdout, stderr, err := runCommand(ctx, "nmcli dev wifi list --rescan yes")
+	if err != nil {
+		log.Errorw("failed to run nmcli scan", "err", err, "stderr", stderr)
+		return nil, err
 	}
-	return
+
+	return parse(stdout, "linux")
 }
