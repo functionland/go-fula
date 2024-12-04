@@ -157,6 +157,11 @@ func parseLinux(output string) (wifis []Wifi, err error) {
 		return wifis[i].RSSI > wifis[j].RSSI
 	})
 
+	// Keep only the first 3 records
+	if len(wifis) > 3 {
+		wifis = wifis[:3]
+	}
+
 	return wifis, nil
 }
 
