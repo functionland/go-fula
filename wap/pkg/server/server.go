@@ -772,6 +772,9 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		listeners: []io.Closer{},
 	}
 
+	// Track successful addresses
+	var successfulAddresses []string
+
 	// Try first listener
 	listenAddr := ""
 	if ip == "" {
@@ -801,6 +804,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 
 	if err == nil {
 		mc.listeners = append(mc.listeners, ln)
+		successfulAddresses = append(successfulAddresses, listenAddr)
 		log.Info("Starting server at " + listenAddr)
 		go func() {
 			if err := http.Serve(ln, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
@@ -810,9 +814,11 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	}
 
 	// Try second listener (localhost)
-	ln1, err1 := net.Listen("tcp", "127.0.0.1:"+port)
+	localhostAddr := "127.0.0.1:" + port
+	ln1, err1 := net.Listen("tcp", localhostAddr)
 	if err1 == nil {
 		mc.listeners = append(mc.listeners, ln1)
+		successfulAddresses = append(successfulAddresses, localhostAddr)
 		go func() {
 			if err := http.Serve(ln1, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
@@ -822,6 +828,12 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		log.Errorw("Failed to use 127.0.0.1 for serve", "err", err1)
 	}
 
-	// Return even if no listeners were successful
+	// Print summary of successful listeners
+	if len(successfulAddresses) > 0 {
+		log.Infof("Server successfully listening on: %s", strings.Join(successfulAddresses, ", "))
+	} else {
+		log.Error("Failed to start server on any address")
+	}
+
 	return mc
 }
