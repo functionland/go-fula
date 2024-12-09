@@ -45,6 +45,21 @@ type Config struct {
 	IpniPublisherIdentity     string   `yaml:"ipniPublisherIdentity"`
 }
 
+type multiCloser struct {
+	listeners []io.Closer
+}
+
+// Implement Close method for multiCloser
+func (mc *multiCloser) Close() error {
+	var err error
+	for _, l := range mc.listeners {
+		if cerr := l.Close(); cerr != nil {
+			err = cerr
+		}
+	}
+	return err
+}
+
 func checkPathExistAndFileNotExist(path string) string {
 	dir := filepath.Dir(path)
 
@@ -753,16 +768,21 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	mux.HandleFunc("/account/id", accountIdHandler)
 	mux.HandleFunc("/account/seed", accountSeedHandler)
 
-	listenAddr := ""
+	mc := &multiCloser{
+		listeners: []io.Closer{},
+	}
 
+	// Track successful addresses
+	var successfulAddresses []string
+
+	// Try first listener
+	listenAddr := ""
 	if ip == "" {
 		ip = config.IPADDRESS
 	}
-
 	if port == "" {
 		port = config.API_PORT
 	}
-
 	listenAddr = ip + ":" + port
 
 	ln, err := net.Listen("tcp", listenAddr)
@@ -771,11 +791,6 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		ip, err = getIPFromSpecificNetwork(ctx, config.HOTSPOT_SSID)
 		if err != nil {
 			log.Errorw("Failed to use IP of hotspot", "err", err)
-			/*ip, err = getNonLoopbackIP()
-			if err != nil {
-				log.Errorw("Failed to get non-loopback IP address for serve", "err", err)
-				ip = "0.0.0.0"
-			}*/
 			ip = "0.0.0.0"
 		}
 		listenAddr = ip + ":" + port
@@ -784,17 +799,41 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		if err != nil {
 			listenAddr = "0.0.0.0:" + port
 			ln, err = net.Listen("tcp", listenAddr)
-			if err != nil {
-				log.Errorw("Listen could not initialize for serve", "err", err)
-			}
 		}
 	}
 
-	log.Info("Starting server at " + listenAddr)
-	go func() {
-		if err := http.Serve(ln, mux); err != nil {
-			log.Errorw("Serve could not initialize", "err", err)
-		}
-	}()
-	return ln
+	if err == nil {
+		mc.listeners = append(mc.listeners, ln)
+		successfulAddresses = append(successfulAddresses, listenAddr)
+		log.Info("Starting server at " + listenAddr)
+		go func() {
+			if err := http.Serve(ln, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Errorw("Serve could not initialize", "err", err)
+			}
+		}()
+	}
+
+	// Try second listener (localhost)
+	localhostAddr := "127.0.0.1:" + port
+	ln1, err1 := net.Listen("tcp", localhostAddr)
+	if err1 == nil {
+		mc.listeners = append(mc.listeners, ln1)
+		successfulAddresses = append(successfulAddresses, localhostAddr)
+		go func() {
+			if err := http.Serve(ln1, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
+			}
+		}()
+	} else {
+		log.Errorw("Failed to use 127.0.0.1 for serve", "err", err1)
+	}
+
+	// Print summary of successful listeners
+	if len(successfulAddresses) > 0 {
+		log.Infof("Server successfully listening on: %s", strings.Join(successfulAddresses, ", "))
+	} else {
+		log.Error("Failed to start server on any address")
+	}
+
+	return mc
 }

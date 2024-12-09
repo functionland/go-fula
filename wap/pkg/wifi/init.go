@@ -15,7 +15,7 @@ var log = logging.Logger("fula/wap/wifi")
 
 const maxRetries = 4
 
-var TimeLimit = 10 * time.Second
+var TimeLimit = 25 * time.Second
 
 func init() {
 	// Working Directory
