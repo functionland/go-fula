@@ -519,15 +519,6 @@ func activateHotspot(ctx context.Context) {
 
 func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 	var interfaces []string
-	var useIw bool
-
-	// Check which command is available
-	if _, err := exec.LookPath("iwconfig"); err != nil {
-		if _, err := exec.LookPath("iw"); err != nil {
-			return fmt.Errorf("neither iwconfig nor iw commands found")
-		}
-		useIw = true
-	}
 
 	if interfaceName == "" {
 		// Get all available wireless network interfaces
@@ -537,46 +528,20 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 		var stdout string
 		var err error
 
-		if useIw {
-			// Get interfaces using iw
-			stdout, _, err = runCommand(ctx, "iw dev")
-			if err != nil {
-				return err
-			}
+		// Get interfaces using iw
+		stdout, _, err = runCommand(ctx, "iw dev")
+		if err != nil {
+			return err
+		}
 
-			// Parse iw output for interfaces
-			scanner := bufio.NewScanner(strings.NewReader(stdout))
-			for scanner.Scan() {
-				line := scanner.Text()
-				if strings.Contains(line, "Interface") {
-					fields := strings.Fields(line)
-					if len(fields) > 1 {
-						interfaces = append(interfaces, fields[1])
-					}
-				}
-			}
-		} else {
-			// Use existing logic for iwconfig
-			stdout, _, err = runCommand(ctx, "iwconfig")
-			if err != nil {
-				return err
-			}
-
-			// Filter output with grep-like functionality
-			var filteredLines []string
-			scanner := bufio.NewScanner(strings.NewReader(stdout))
-			for scanner.Scan() {
-				line := scanner.Text()
-				if len(line) > 0 && (line[0] >= 'a' && line[0] <= 'z' || line[0] >= 'A' && line[0] <= 'Z') {
-					filteredLines = append(filteredLines, line)
-				}
-			}
-
-			// Run awk-like functionality to print the first field of each line
-			for _, line := range filteredLines {
+		// Parse iw output for interfaces
+		scanner := bufio.NewScanner(strings.NewReader(stdout))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "Interface") {
 				fields := strings.Fields(line)
-				if len(fields) > 0 {
-					interfaces = append(interfaces, fields[0])
+				if len(fields) > 1 {
+					interfaces = append(interfaces, fields[1])
 				}
 			}
 		}
@@ -589,32 +554,18 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 		var stdout, stderr string
 		var err error
 
-		if useIw {
-			stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iw dev %s link", iface))
-		} else {
-			stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iwconfig %s", iface))
-		}
+		stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iw dev %s link", iface))
 
 		if err != nil {
 			continue // Try next interface if this one fails
 		}
 
 		// Check connection status based on the tool being used
-		if useIw {
-			// iw shows "connected" when connected
-			if !strings.Contains(stdout, "FxBlox") &&
-				strings.Contains(stdout, "connected") &&
-				!strings.Contains(stderr, "Not connected") {
-				return nil
-			}
-		} else {
-			// Use existing logic for iwconfig
-			if !strings.Contains(stdout, "FxBlox") &&
-				!strings.Contains(stdout, "ESSID:\"\"") &&
-				!strings.Contains(stdout, "Not connected") &&
-				!strings.Contains(stderr, "Not connected") {
-				return nil
-			}
+		// iw shows "connected" when connected
+		if !strings.Contains(stdout, "FxBlox") &&
+			strings.Contains(stdout, "connected") &&
+			!strings.Contains(stderr, "Not connected") {
+			return nil
 		}
 	}
 

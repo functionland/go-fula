@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -550,22 +549,9 @@ func getIPFromSpecificNetwork(ctx context.Context, ssid string) (string, error) 
 		return "", err
 	}
 
-	// Check which command is available
-	useIw := false
-	if _, err := exec.LookPath("iwconfig"); err != nil {
-		if _, err := exec.LookPath("iw"); err != nil {
-			return "", fmt.Errorf("neither iwconfig nor iw commands found")
-		}
-		useIw = true
-	}
-
 	for _, iface := range ifaces {
 		var cmdString string
-		if useIw {
-			cmdString = "iw dev " + iface.Name + " link"
-		} else {
-			cmdString = "iwconfig " + iface.Name
-		}
+		cmdString = "iw dev " + iface.Name + " link"
 
 		out, _, err := wifi.RunCommand(ctx, cmdString)
 
