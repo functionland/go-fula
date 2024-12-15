@@ -152,7 +152,7 @@ type Child struct {
 	ShardFunc   string `json:"shardFunc,omitempty"` // Include omitempty to omit the field if empty
 	Sync        bool   `json:"sync,omitempty"`      // Include omitempty for optional fields
 	Type        string `json:"type"`
-	Compression string `json:"compression,omitempty"` // For levelds type child
+	Compression string `json:"compression,omitempty"` // For pebbleds type child
 }
 
 type ApiResponse struct {
@@ -373,8 +373,8 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
 		if mount.Child.Type == "flatfs" {
 			ipfsCfg.Datastore.Spec.Mounts[i].Child.Path = newPath + "/blocks"
 		}
-		// Update the path for levelds
-		if mount.Child.Type == "levelds" {
+		// Update the path for pebbleds
+		if mount.Child.Type == "pebbleds" {
 			ipfsCfg.Datastore.Spec.Mounts[i].Child.Path = newPath + "/datastore"
 		}
 	}
@@ -443,7 +443,7 @@ func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
 			{
 				Mountpoint: "/",
 				Path:       ipfsDatastorePath + "/datastore",
-				Type:       "levelds",
+				Type:       "pebbleds",
 			},
 		},
 		Type: "mount",
