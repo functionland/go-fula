@@ -58,16 +58,16 @@ func main() {
 	relayOpts := []relayv2.Option{
 		relayv2.WithResources(relayv2.Resources{
 			Limit: &relayv2.RelayLimit{
-				Duration: 120 * time.Second, // Duration in seconds
-				Data:     17179869184,       // Data limit in bytes (16 GiB)
+				Duration: 480000000 * time.Second, // Duration in seconds
+				Data:     171798691840,       // Data limit in bytes (160 GiB)
 			},
-			MaxReservations:        512,
-			MaxCircuits:            512,
-			MaxReservationsPerPeer: 16,
-			MaxReservationsPerIP:   32,
-			MaxReservationsPerASN:  64,
-			ReservationTTL:         360 * time.Hour, // TTL in hours
-			BufferSize:             8192,
+			MaxReservations:        2048,
+			MaxCircuits:            2048,
+			MaxReservationsPerPeer: 2048,
+			MaxReservationsPerIP:   2048,
+			MaxReservationsPerASN:  2048,
+			ReservationTTL:         360000 * time.Hour, // TTL in hours
+			BufferSize:             81920,
 		}),
 	}
 
@@ -75,6 +75,7 @@ func main() {
 		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.Identity(privKey), // Use the private key for identity
 		libp2p.EnableRelayService(relayOpts...),
+		libp2p.ForceReachabilityPublic(),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create libp2p host: %v", err)
