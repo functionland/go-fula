@@ -13,6 +13,7 @@ import (
 	relayv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/libp2p/go-libp2p/core/network"
+	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 )
 
 // ReadIdentity reads a private key from the given path and returns it.
@@ -72,11 +73,22 @@ func main() {
 		}),
 	}
 
+	announceAddrs := []multiaddr.Multiaddr{
+		multiaddr.StringCast("/ip4/46.249.38.183/tcp/4001"),
+		multiaddr.StringCast("/ip6/2a10:1fc0:c::fc0b:1ac3/tcp/4001"),
+		multiaddr.StringCast("/ip6/2a10:1fc0:c::954a:2386/tcp/4001"),
+		multiaddr.StringCast("/ip6/2a10:1fc0:c::918c:b2a8/tcp/4001"),
+	}
+
 	h, err := libp2p.New(
 		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.Identity(privKey), // Use the private key for identity
 		libp2p.EnableRelayService(relayOpts...),
 		libp2p.ForceReachabilityPublic(),
+		libp2p.Security(noise.ID, noise.New),
+		libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			return announceAddrs // Override the announced addresses
+		}),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create libp2p host: %v", err)
