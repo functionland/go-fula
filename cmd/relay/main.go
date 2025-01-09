@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	relayv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/libp2p/go-libp2p/core/network"
 )
 
 // ReadIdentity reads a private key from the given path and returns it.
@@ -84,6 +85,15 @@ func main() {
 	for _, addr := range h.Addrs() {
 		fmt.Printf("Listening on %s/p2p/%s\n", addr, h.ID().String())
 	}
+
+	h.Network().Notify(&network.NotifyBundle{
+		ConnectedF: func(n network.Network, conn network.Conn) {
+			fmt.Printf("Peer connected: %s\n", conn.RemotePeer().String())
+		},
+		DisconnectedF: func(n network.Network, conn network.Conn) {
+			fmt.Printf("Peer disconnected: %s\n", conn.RemotePeer().String())
+		},
+	})
 
 	select {}
 }
