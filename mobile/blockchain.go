@@ -10,6 +10,7 @@ import (
 
 	"github.com/functionland/go-fula/blockchain"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
+	"github.com/google/uuid"
 )
 
 type PluginParam struct {
@@ -254,6 +255,58 @@ func (c *Client) GetAccount() ([]byte, error) {
 func (c *Client) FetchContainerLogs(ContainerName string, TailCount string) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.FetchContainerLogs(ctx, c.bloxPid, wifi.FetchContainerLogsRequest{ContainerName: ContainerName, TailCount: TailCount})
+}
+
+func (c *Client) ChatWithAI(aiModel string, userMessage string) ([]byte, error) {
+	ctx := context.TODO()
+
+	buffer, err := c.bl.ChatWithAI(ctx, c.bloxPid, wifi.ChatWithAIRequest{
+		AIModel:     aiModel,
+		UserMessage: userMessage,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error starting ChatWithAI: %v", err)
+	}
+
+	streamID := uuid.New().String() // Generate a unique stream ID
+	c.mu.Lock()
+	c.streams[streamID] = buffer // Store the StreamBuffer in the map
+	c.mu.Unlock()
+
+	return []byte(streamID), nil // Return the stream ID as a byte slice
+}
+
+func (c *Client) GetChatChunk(streamID string) (string, error) {
+	c.mu.Lock()
+	buffer, ok := c.streams[streamID]
+	c.mu.Unlock()
+
+	if !ok {
+		return "", fmt.Errorf("invalid stream ID")
+	}
+
+	chunk, err := buffer.GetChunk()
+	if chunk == "" && err == nil {
+		return "", nil // No chunk available yet
+	}
+	if err != nil { // Stream closed or errored out
+		c.mu.Lock()
+		delete(c.streams, streamID)
+		c.mu.Unlock()
+	}
+	return chunk, err
+}
+
+func (c *Client) GetStreamIterator(streamID string) (*StreamIterator, error) {
+	c.mu.Lock()
+	buffer, ok := c.streams[streamID]
+	c.mu.Unlock()
+
+	if !ok {
+		return nil, fmt.Errorf("invalid stream ID")
+	}
+
+	return &StreamIterator{buffer: buffer}, nil
 }
 
 // GetAccount requests blox at Config.BloxAddr to get the balance of the account.

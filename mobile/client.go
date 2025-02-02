@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/exchange"
@@ -51,6 +52,9 @@ type Client struct {
 	bl      blockchain.Blockchain
 	bloxPid peer.ID
 	relays  []string
+
+	streams map[string]*blockchain.StreamBuffer // Map of active streams
+	mu      sync.Mutex               // Mutex for thread-safe access
 }
 
 func NewClient(cfg *Config) (*Client, error) {
@@ -58,6 +62,10 @@ func NewClient(cfg *Config) (*Client, error) {
 	if err := cfg.init(&mc); err != nil {
 		return nil, err
 	}
+
+	// Initialize the streams map for managing active streaming sessions
+	mc.streams = make(map[string]*blockchain.StreamBuffer)
+
 	return &mc, nil
 }
 

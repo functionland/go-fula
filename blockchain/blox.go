@@ -1,12 +1,14 @@
 package blockchain
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/functionland/go-fula/wap/pkg/wifi"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -19,6 +21,49 @@ const (
 	MB = 1024 * KB
 	GB = 1024 * MB
 )
+
+type StreamBuffer struct {
+	mu     sync.Mutex
+	chunks []string
+	closed bool
+	err    error
+}
+
+func NewStreamBuffer() *StreamBuffer {
+	return &StreamBuffer{
+		chunks: make([]string, 0),
+	}
+}
+
+func (b *StreamBuffer) AddChunk(chunk string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return
+	}
+	b.chunks = append(b.chunks, chunk)
+}
+
+func (b *StreamBuffer) Close(err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	b.err = err
+}
+
+func (b *StreamBuffer) GetChunk() (string, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.chunks) > 0 {
+		chunk := b.chunks[0]
+		b.chunks = b.chunks[1:]
+		return chunk, nil
+	}
+	if b.closed {
+		return "", b.err
+	}
+	return "", nil // No chunk available yet
+}
 
 func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
@@ -245,6 +290,55 @@ func (bl *FxBlockchain) FetchContainerLogs(ctx context.Context, to peer.ID, r wi
 	}
 }
 
+func (bl *FxBlockchain) ChatWithAI(ctx context.Context, to peer.ID, r wifi.ChatWithAIRequest) (*StreamBuffer, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	// Encode the request into JSON
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(r); err != nil {
+		return nil, fmt.Errorf("failed to encode request: %v", err)
+	}
+
+	// Create the HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionChatWithAI, &buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	resp, err := bl.c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected response: %d; body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	buffer := NewStreamBuffer() // Create a new StreamBuffer
+
+	go func() {
+		defer resp.Body.Close()
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n') // Read each chunk line by line
+			if err != nil {
+				if err == io.EOF {
+					buffer.Close(nil) // Close buffer with no error
+				} else {
+					buffer.Close(fmt.Errorf("error reading response stream: %v", err))
+				}
+				break
+			}
+			buffer.AddChunk(line) // Add each chunk to the buffer
+		}
+	}()
+
+	return buffer, nil // Return the StreamBuffer
+}
+
 func (bl *FxBlockchain) FindBestAndTargetInLogs(ctx context.Context, to peer.ID, r wifi.FindBestAndTargetInLogsRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
@@ -466,6 +560,64 @@ func (bl *FxBlockchain) handleFetchContainerLogs(ctx context.Context, from peer.
 		return
 	}
 
+}
+
+func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionChatWithAI, "from", from)
+
+	var req wifi.ChatWithAIRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error("failed to decode request: %v", err)
+		http.Error(w, "failed to decode request", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted) // Use StatusAccepted for consistency
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	chunks, err := wifi.FetchAIResponse(ctx, req.AIModel, req.UserMessage)
+	if err != nil {
+		log.Error("error in fetchAIResponse: %v", err)
+		http.Error(w, fmt.Sprintf("Error fetching AI response: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Debugw("Streaming AI response started", "ai_model", req.AIModel)
+	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel)
+
+	for {
+		select {
+		case <-ctx.Done(): // Handle client disconnect or cancellation
+			log.Warn("client disconnected")
+			return
+		case chunk, ok := <-chunks:
+			if !ok {
+				return // Channel closed
+			}
+			response := wifi.ChatWithAIResponse{
+				Status: true,
+				Msg:    chunk,
+			}
+
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				log.Error("failed to write response: %v", err)
+				errorResponse := wifi.ChatWithAIResponse{
+					Status: false,
+					Msg:    fmt.Sprintf("Error writing response: %v", err),
+				}
+				json.NewEncoder(w).Encode(errorResponse) // Send error as part of stream
+				flusher.Flush()
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (bl *FxBlockchain) handleFindBestAndTargetInLogs(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {

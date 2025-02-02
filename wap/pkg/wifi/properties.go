@@ -1,6 +1,7 @@
 package wifi
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -9,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -101,6 +103,16 @@ type SyncInfo struct {
 	Target    string
 	Finalized string
 	Speed     string
+}
+
+type ChatWithAIRequest struct {
+	AIModel     string `json:"ai_model"`
+	UserMessage string `json:"user_message"`
+}
+
+type ChatWithAIResponse struct {
+	Status bool   `json:"status"`
+	Msg    string `json:"msg"`
 }
 
 const (
@@ -335,6 +347,59 @@ func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (str
 	default:
 		return fetchLogsFromDocker(ctx, req.ContainerName, req.TailCount)
 	}
+}
+
+func FetchAIResponse(ctx context.Context, aiModel string, userMessage string) (<-chan string, error) {
+	url := "http://127.0.0.1:8080/get_RKLLM_output"
+
+	payload := map[string]string{
+		"ai_model":     aiModel,
+		"user_message": userMessage,
+	}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %v", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("received non-OK status code: %d; body: %s", resp.StatusCode, bodyBytes)
+	}
+
+	responseChannel := make(chan string)
+
+	go func() {
+		defer close(responseChannel)
+		defer resp.Body.Close()
+
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				fmt.Printf("Error reading response stream: %v\n", err)
+				break
+			}
+			responseChannel <- line // Send each chunk of data as it arrives
+		}
+	}()
+
+	return responseChannel, nil
 }
 
 func fetchLogsFromDocker(ctx context.Context, containerName string, tailCount string) (string, error) {
