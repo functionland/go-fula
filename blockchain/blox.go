@@ -565,6 +565,7 @@ func (bl *FxBlockchain) handleFetchContainerLogs(ctx context.Context, from peer.
 func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", actionChatWithAI, "from", from)
 
+	// Decode the incoming request
 	var req wifi.ChatWithAIRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error("failed to decode request: %v", err)
@@ -572,8 +573,9 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 		return
 	}
 
+	// Set up headers for streaming response
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted) // Use StatusAccepted for consistency
+	w.WriteHeader(http.StatusAccepted)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -581,6 +583,7 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 		return
 	}
 
+	// Fetch AI response using FetchAIResponse
 	chunks, err := wifi.FetchAIResponse(ctx, req.AIModel, req.UserMessage)
 	if err != nil {
 		log.Error("error in fetchAIResponse: %v", err)
@@ -591,6 +594,7 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 	log.Debugw("Streaming AI response started", "ai_model", req.AIModel)
 	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel)
 
+	// Stream chunks to the client
 	for {
 		select {
 		case <-ctx.Done(): // Handle client disconnect or cancellation
@@ -600,6 +604,7 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 			if !ok {
 				return // Channel closed
 			}
+
 			response := wifi.ChatWithAIResponse{
 				Status: true,
 				Msg:    chunk,
@@ -607,15 +612,10 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 
 			if err := json.NewEncoder(w).Encode(response); err != nil {
 				log.Error("failed to write response: %v", err)
-				errorResponse := wifi.ChatWithAIResponse{
-					Status: false,
-					Msg:    fmt.Sprintf("Error writing response: %v", err),
-				}
-				json.NewEncoder(w).Encode(errorResponse) // Send error as part of stream
-				flusher.Flush()
+				http.Error(w, fmt.Sprintf("Error writing response: %v", err), http.StatusInternalServerError)
 				return
 			}
-			flusher.Flush()
+			flusher.Flush() // Flush each chunk to ensure real-time streaming
 		}
 	}
 }
