@@ -115,6 +115,17 @@ type ChatWithAIResponse struct {
 	Msg    string `json:"msg"`
 }
 
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type Payload struct {
+	Model    string    `json:"model"`
+	Messages []Message `json:"messages"`
+	Stream   bool      `json:"stream"`
+}
+
 const (
 	B  = 1
 	KB = 1024 * B
@@ -350,17 +361,22 @@ func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (str
 }
 
 func FetchAIResponse(ctx context.Context, aiModel string, userMessage string) (<-chan string, error) {
-	url := "http://127.0.0.1:8080/get_RKLLM_output"
+	url := "http://127.0.0.1:8080/rkllm_chat"
 
-	payload := map[string]string{
-		"ai_model":     aiModel,
-		"user_message": userMessage,
+	// Prepare payload
+	payload := Payload{
+		Model: aiModel,
+		Messages: []Message{
+			{Role: "user", Content: userMessage},
+		},
+		Stream: true,
 	}
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
+	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
@@ -395,7 +411,8 @@ func FetchAIResponse(ctx context.Context, aiModel string, userMessage string) (<
 				fmt.Printf("Error reading response stream: %v\n", err)
 				break
 			}
-			responseChannel <- line // Send each chunk of data as it arrives
+			line = line[:len(line)-1] // Remove newline character
+			responseChannel <- line   // Send each chunk of data as it arrives
 		}
 	}()
 
