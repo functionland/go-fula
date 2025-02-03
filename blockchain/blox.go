@@ -595,9 +595,8 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 	log.Debugw("Streaming AI response started", "ai_model", req.AIModel, "user_message", req.UserMessage)
 	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel, "user_message", req.UserMessage)
 
-	var lastChunk string // Keep track of the last chunk sent
+	var lastChunk string // Track the last chunk sent
 
-	// Stream chunks to the client
 	for {
 		select {
 		case <-ctx.Done(): // Handle client disconnect or cancellation
@@ -610,17 +609,38 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 
 			chunk = strings.TrimSpace(chunk) // Remove leading/trailing whitespace
 
-			// Skip empty or duplicate chunks
-			if chunk == "" || chunk == lastChunk {
+			// Parse the JSON chunk to extract new content only
+			var parsedChunk struct {
+				ID      string `json:"id"`
+				Object  string `json:"object"`
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+				} `json:"choices"`
+			}
+			if err := json.Unmarshal([]byte(chunk), &parsedChunk); err != nil {
+				log.Error("failed to parse chunk: %v", err)
+				continue // Skip invalid chunks
+			}
+
+			var newContent string
+			for _, choice := range parsedChunk.Choices {
+				newContent += choice.Delta.Content
+			}
+
+			newContent = strings.TrimSpace(newContent) // Remove whitespace
+
+			if newContent == "" || newContent == lastChunk { // Skip empty or duplicate content
 				continue
 			}
-			lastChunk = chunk
+			lastChunk = newContent
 
 			response := wifi.ChatWithAIResponse{
 				Status: true,
-				Msg:    chunk,
+				Msg:    newContent,
 			}
-			log.Debugw("Streaming AI response chunk", "chunk", chunk)
+			log.Debugw("Streaming AI response chunk", "chunk", newContent)
 
 			if err := json.NewEncoder(w).Encode(response); err != nil {
 				log.Error("failed to write response: %v", err)
