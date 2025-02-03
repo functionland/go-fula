@@ -282,19 +282,21 @@ func (c *Client) GetChatChunk(streamID string) (string, error) {
 	c.mu.Unlock()
 
 	if !ok {
+		fmt.Printf("GetChatChunk: Invalid stream ID: %s", streamID)
 		return "", fmt.Errorf("invalid stream ID")
 	}
 
 	chunk, err := buffer.GetChunk()
-	if chunk == "" && err == nil {
-		return "", nil // No chunk available yet
-	}
 	if err != nil { // Stream closed or errored out
+		fmt.Printf("GetChatChunk: Stream closed for ID: %s", streamID)
 		c.mu.Lock()
-		delete(c.streams, streamID)
+		delete(c.streams, streamID) // Remove the stream from the map
 		c.mu.Unlock()
+		return "", err
 	}
-	return chunk, err
+
+	fmt.Printf("GetChatChunk: Returning chunk: %s", chunk)
+	return chunk, nil
 }
 
 func (c *Client) GetStreamIterator(streamID string) (*StreamIterator, error) {
