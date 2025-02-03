@@ -591,8 +591,8 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 		return
 	}
 
-	log.Debugw("Streaming AI response started", "ai_model", req.AIModel)
-	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel)
+	log.Debugw("Streaming AI response started", "ai_model", req.AIModel, "user_message", req.UserMessage)
+	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel, "user_message", req.UserMessage)
 
 	// Stream chunks to the client
 	for {
