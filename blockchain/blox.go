@@ -609,6 +609,7 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 				Status: true,
 				Msg:    chunk,
 			}
+			log.Debugw("Streaming AI response chunk", "chunk", chunk)
 
 			if err := json.NewEncoder(w).Encode(response); err != nil {
 				log.Error("failed to write response: %v", err)
