@@ -285,20 +285,20 @@ func (c *Client) GetChatChunk(streamID string) (string, error) {
 		return "", fmt.Errorf("invalid stream ID")
 	}
 
-	chunk, err := buffer.GetChunk()
-	if err != nil { // Stream closed or errored out
-		c.mu.Lock()
-		delete(c.streams, streamID) // Remove the stream from the map
-		c.mu.Unlock()
-		return "", err
-	}
+	for {
+		chunk, err := buffer.GetChunk()
+		if err != nil { // Stream closed or errored out
+			c.mu.Lock()
+			delete(c.streams, streamID) // Remove the stream from the map
+			c.mu.Unlock()
+			return "", err
+		}
 
-	// Ensure empty chunks are not returned
-	if chunk == "" {
-		return "", nil // Return nil error for empty chunk
+		// Skip empty chunks and wait for a valid chunk
+		if chunk != "" {
+			return chunk, nil
+		}
 	}
-
-	return chunk, nil
 }
 
 func (c *Client) GetStreamIterator(streamID string) (*StreamIterator, error) {

@@ -24,46 +24,48 @@ const (
 )
 
 type StreamBuffer struct {
-	mu     sync.Mutex
-	chunks []string
-	closed bool
-	err    error
+	Chunks    chan string
+	closed    bool
+	mu        sync.Mutex
+	closeOnce sync.Once
+	err       error
 }
 
 func NewStreamBuffer() *StreamBuffer {
 	return &StreamBuffer{
-		chunks: make([]string, 0),
+		Chunks: make(chan string, 100), // Buffered channel to prevent blocking
 	}
+}
+
+func (b *StreamBuffer) GetChunk() (string, error) {
+	chunk, ok := <-b.Chunks
+	if !ok {
+		return "", b.err
+	}
+	return chunk, nil
 }
 
 func (b *StreamBuffer) AddChunk(chunk string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.closed {
-		return
+	if !b.closed {
+		b.Chunks <- chunk
 	}
-	b.chunks = append(b.chunks, chunk)
 }
 
 func (b *StreamBuffer) Close(err error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.closed = true
-	b.err = err
+	b.closeOnce.Do(func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		b.closed = true
+		close(b.Chunks)
+	})
 }
 
-func (b *StreamBuffer) GetChunk() (string, error) {
+func (b *StreamBuffer) IsClosed() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if len(b.chunks) > 0 {
-		chunk := b.chunks[0]
-		b.chunks = b.chunks[1:]
-		return chunk, nil
-	}
-	if b.closed {
-		return "", b.err
-	}
-	return "", nil // No chunk available yet
+	return b.closed
 }
 
 func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
@@ -296,48 +298,78 @@ func (bl *FxBlockchain) ChatWithAI(ctx context.Context, to peer.ID, r wifi.ChatW
 		ctx = network.WithUseTransient(ctx, "fx.blockchain")
 	}
 
-	// Encode the request into JSON
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(r); err != nil {
-		return nil, fmt.Errorf("failed to encode request: %v", err)
+		return nil, fmt.Errorf("failed to encode request: %w", err)
 	}
 
-	// Create the HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionChatWithAI, &buf)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := bl.c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("unexpected response: %d; body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	buffer := NewStreamBuffer() // Create a new StreamBuffer
+	buffer := NewStreamBuffer()
 
 	go func() {
-		defer resp.Body.Close()
-		reader := bufio.NewReader(resp.Body)
-		for {
-			line, err := reader.ReadString('\n') // Read each chunk line by line
-			if err != nil {
-				if err == io.EOF {
-					buffer.Close(nil) // Close buffer with no error
-				} else {
-					buffer.Close(fmt.Errorf("error reading response stream: %v", err))
-				}
-				break
+		defer func() {
+			resp.Body.Close()
+			if !buffer.IsClosed() {
+				buffer.Close(nil)
 			}
-			buffer.AddChunk(line) // Add each chunk to the buffer
+		}()
+
+		reader := bufio.NewReader(resp.Body)
+		var accum []byte
+
+		for {
+			select {
+			case <-ctx.Done():
+				buffer.Close(fmt.Errorf("request canceled: %w", ctx.Err()))
+				return
+			default:
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					if err == io.EOF {
+						if len(accum) > 0 {
+							buffer.AddChunk(string(accum))
+						}
+						buffer.Close(nil)
+					} else {
+						buffer.Close(fmt.Errorf("error reading response: %w", err))
+					}
+					return
+				}
+
+				// Check for completion marker
+				if bytes.HasPrefix(line, []byte("!COMPLETION!")) {
+					buffer.Close(nil)
+					return
+				}
+
+				accum = append(accum, line...)
+
+				// Try to parse as JSON to verify chunk completeness
+				var temp interface{}
+				if json.Unmarshal(accum, &temp) == nil {
+					buffer.AddChunk(string(accum))
+					accum = accum[:0] // Reset accumulator
+				}
+			}
 		}
 	}()
 
-	return buffer, nil // Return the StreamBuffer
+	return buffer, nil
 }
 
 func (bl *FxBlockchain) FindBestAndTargetInLogs(ctx context.Context, to peer.ID, r wifi.FindBestAndTargetInLogsRequest) ([]byte, error) {
