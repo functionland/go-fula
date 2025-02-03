@@ -595,7 +595,7 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 	log.Debugw("Streaming AI response started", "ai_model", req.AIModel, "user_message", req.UserMessage)
 	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel, "user_message", req.UserMessage)
 
-	var lastChunk string // Track the last chunk sent
+	var buffer string // Buffer to store incomplete chunks
 
 	for {
 		select {
@@ -609,7 +609,12 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 
 			chunk = strings.TrimSpace(chunk) // Remove leading/trailing whitespace
 
-			// Parse the JSON chunk to extract new content only
+			if chunk == "" { // Skip empty chunks
+				continue
+			}
+
+			buffer += chunk // Append chunk to buffer
+
 			var parsedChunk struct {
 				ID      string `json:"id"`
 				Object  string `json:"object"`
@@ -619,10 +624,13 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 					} `json:"delta"`
 				} `json:"choices"`
 			}
-			if err := json.Unmarshal([]byte(chunk), &parsedChunk); err != nil {
+
+			if err := json.Unmarshal([]byte(buffer), &parsedChunk); err != nil {
 				log.Error("failed to parse chunk: %v", err)
-				continue // Skip invalid chunks
+				continue // Wait for more data to complete the JSON object
 			}
+
+			buffer = "" // Clear buffer after successful parsing
 
 			var newContent string
 			for _, choice := range parsedChunk.Choices {
@@ -630,11 +638,6 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 			}
 
 			newContent = strings.TrimSpace(newContent) // Remove whitespace
-
-			if newContent == "" || newContent == lastChunk { // Skip empty or duplicate content
-				continue
-			}
-			lastChunk = newContent
 
 			response := wifi.ChatWithAIResponse{
 				Status: true,
