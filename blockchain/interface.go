@@ -64,6 +64,9 @@ const (
 	actionGetInstallOutput  = "get-install-output"
 	actionGetInstallStatus  = "get-install-status"
 	actionUpdatePlugin      = "update-plugin"
+
+	// AI
+	actionChatWithAI = "chat-ai"
 )
 
 type ReplicateRequest struct {
@@ -520,6 +523,9 @@ type Blockchain interface {
 	GetInstallOutput(context.Context, peer.ID, string, string) ([]byte, error)
 	GetInstallStatus(context.Context, peer.ID, string) ([]byte, error)
 	UpdatePlugin(context.Context, peer.ID, string) ([]byte, error)
+
+	// AI
+	ChatWithAI(context.Context, peer.ID, wifi.ChatWithAIRequest) (*StreamBuffer, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -574,6 +580,9 @@ var requestTypes = map[string]reflect.Type{
 	actionGetInstallOutput:  reflect.TypeOf(GetInstallOutputRequest{}),
 	actionGetInstallStatus:  reflect.TypeOf(GetInstallStatusRequest{}),
 	actionUpdatePlugin:      reflect.TypeOf(UpdatePluginRequest{}),
+
+	// AI
+	actionChatWithAI: reflect.TypeOf(wifi.ChatWithAIRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -628,4 +637,7 @@ var responseTypes = map[string]reflect.Type{
 	actionGetInstallOutput:  reflect.TypeOf(GetInstallOutputResponse{}),
 	actionGetInstallStatus:  reflect.TypeOf(GetInstallStatusResponse{}),
 	actionUpdatePlugin:      reflect.TypeOf(UpdatePluginResponse{}),
+
+	// AI
+	actionChatWithAI: reflect.TypeOf(wifi.ChatWithAIResponse{}),
 }
