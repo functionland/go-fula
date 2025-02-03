@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/functionland/go-fula/wap/pkg/wifi"
@@ -594,6 +595,8 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 	log.Debugw("Streaming AI response started", "ai_model", req.AIModel, "user_message", req.UserMessage)
 	defer log.Debugw("Streaming AI response ended", "ai_model", req.AIModel, "user_message", req.UserMessage)
 
+	var lastChunk string // Keep track of the last chunk sent
+
 	// Stream chunks to the client
 	for {
 		select {
@@ -604,6 +607,14 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 			if !ok {
 				return // Channel closed
 			}
+
+			chunk = strings.TrimSpace(chunk) // Remove leading/trailing whitespace
+
+			// Skip empty or duplicate chunks
+			if chunk == "" || chunk == lastChunk {
+				continue
+			}
+			lastChunk = chunk
 
 			response := wifi.ChatWithAIResponse{
 				Status: true,
