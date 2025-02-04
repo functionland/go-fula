@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/functionland/go-fula/wap/pkg/wifi"
@@ -639,8 +638,6 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 				return // Channel closed
 			}
 
-			chunk = strings.TrimSpace(chunk) // Remove leading/trailing whitespace
-
 			if chunk == "" { // Skip empty chunks
 				continue
 			}
@@ -668,8 +665,6 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 			for _, choice := range parsedChunk.Choices {
 				newContent += choice.Delta.Content
 			}
-
-			newContent = strings.TrimSpace(newContent) // Remove whitespace
 
 			response := wifi.ChatWithAIResponse{
 				Status: true,
