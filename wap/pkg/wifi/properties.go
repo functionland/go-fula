@@ -361,7 +361,7 @@ func FetchContainerLogs(ctx context.Context, req FetchContainerLogsRequest) (str
 }
 
 func FetchAIResponse(ctx context.Context, aiModel string, userMessage string) (<-chan string, error) {
-	url := "http://127.0.0.1:8080/rkllm_chat"
+	url := "http://127.0.0.1:8083/rkllm_chat"
 
 	// Prepare payload
 	payload := Payload{
