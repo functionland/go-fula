@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -630,8 +631,12 @@ func (bl *FxBlockchain) handleChatWithAI(ctx context.Context, from peer.ID, w ht
 
 	for {
 		select {
-		case <-ctx.Done(): // Handle client disconnect or cancellation
-			log.Warn("client disconnected")
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.Canceled) {
+				log.Warn("Client disconnected")
+			} else {
+				log.Warn("Context done due to: ", ctx.Err())
+			}
 			return
 		case chunk, ok := <-chunks:
 			if !ok {
