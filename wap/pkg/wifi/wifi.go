@@ -559,22 +559,27 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 
 	// Iterate over interfaces and check the connection
 	for _, iface := range interfaces {
-		var stdout, stderr string
+		var stdout string
 		var err error
 
-		stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iw dev %s link", iface))
+		stdout, _, err = runCommand(ctx, fmt.Sprintf("iw dev %s link", iface))
 		if err != nil {
 			continue // Try next interface if this one fails
 		}
 
-		// Check if the output contains "Not connected"
+		// When connected, iw shows "Connected to XX:XX:XX:XX:XX:XX" in stdout
+		// When not connected, it shows "Not connected." in stdout
+
 		if strings.Contains(stdout, "Not connected") {
-			continue // This interface is not connected
+			// This interface is not connected
+			log.Debugf("Interface %s is not connected", iface)
+			continue
 		}
 
-		// Check if the output contains "connected" and not "FxBlox"
-		if strings.Contains(stdout, "connected") && !strings.Contains(stdout, "FxBlox") {
-			return nil // Found a connected interface that's not FxBlox
+		if strings.Contains(stdout, "Connected to") && !strings.Contains(stdout, "FxBlox") {
+			// Found a connected interface that's not connected to FxBlox
+			log.Infof("Interface %s is connected to external network", iface)
+			return nil
 		}
 	}
 
