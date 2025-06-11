@@ -563,17 +563,18 @@ func checkIfIsConnectedLinux(ctx context.Context, interfaceName string) error {
 		var err error
 
 		stdout, stderr, err = runCommand(ctx, fmt.Sprintf("iw dev %s link", iface))
-
 		if err != nil {
 			continue // Try next interface if this one fails
 		}
 
-		// Check connection status based on the tool being used
-		// iw shows "connected" when connected
-		if !strings.Contains(stdout, "FxBlox") &&
-			strings.Contains(stdout, "connected") &&
-			!strings.Contains(stderr, "Not connected") {
-			return nil
+		// Check if the output contains "Not connected"
+		if strings.Contains(stdout, "Not connected") {
+			continue // This interface is not connected
+		}
+
+		// Check if the output contains "connected" and not "FxBlox"
+		if strings.Contains(stdout, "connected") && !strings.Contains(stdout, "FxBlox") {
+			return nil // Found a connected interface that's not FxBlox
 		}
 	}
 
