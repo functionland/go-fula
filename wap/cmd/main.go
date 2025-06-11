@@ -30,7 +30,6 @@ var (
 	isHotspotStarted   bool
 	currentServer      io.Closer
 	serverMutex        sync.Mutex
-	restartServer      = make(chan struct{}, 1)
 )
 
 var versionFilePath = config.VERSION_FILE_PATH
@@ -305,6 +304,7 @@ func main() {
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
 	serverReady := make(chan struct{}, 1)
+	restartServer := make(chan struct{}, 1) // Make sure this is defined locally
 
 	atomic.StoreInt32(&currentIsConnected, int32(2))
 	isConnected := false
@@ -341,30 +341,78 @@ func main() {
 	// Start the http server in a separate goroutine
 	go func() {
 		for {
+			log.Info("Starting HTTP server...")
 			connectedCh := make(chan bool, 1)
+
+			// Close any existing server before starting a new one
 			serverMutex.Lock()
 			if currentServer != nil {
-				currentServer.Close()
+				log.Info("Closing existing server before restart")
+				err := currentServer.Close()
+				if err != nil {
+					log.Errorw("Error closing server", "err", err)
+				}
 				currentServer = nil
 			}
+
+			// Start a new server
+			log.Info("Calling server.Serve to start HTTP server")
 			closer := server.Serve(blox.BloxCommandInitOnly, "", "", connectedCh)
 			currentServer = closer
 			serverMutex.Unlock()
-			serverCloser <- closer
 
-			// Signal that the server is ready (only first time)
+			// Store the closer for shutdown
 			select {
-			case serverReady <- struct{}{}:
-				// Successfully sent ready signal
+			case serverCloser <- closer:
+				log.Info("Stored server closer")
 			default:
-				// Channel already has a value, do nothing
+				// Channel is full, remove old value and add new one
+				<-serverCloser
+				serverCloser <- closer
+				log.Info("Replaced server closer in channel")
 			}
 
-			// Handle events until server is stopped
-			running := true
-			for running {
+			// Signal server is ready
+			select {
+			case serverReady <- struct{}{}:
+				log.Info("Signaled server is ready")
+			default:
+				log.Info("Server ready signal already sent")
+			}
+
+			// Wait for events
+			log.Info("Entering event loop")
+			select {
+			case <-stopServer:
+				log.Info("Received stop signal")
+				serverMutex.Lock()
+				if currentServer != nil {
+					log.Info("Closing server due to stop signal")
+					currentServer.Close()
+					currentServer = nil
+				}
+				isHotspotStarted = false
+				serverMutex.Unlock()
+				return // Exit goroutine
+
+			case <-restartServer:
+				log.Info("Received restart signal, will restart server")
+				serverMutex.Lock()
+				if currentServer != nil {
+					log.Info("Closing server due to restart signal")
+					currentServer.Close()
+					currentServer = nil
+				}
+				serverMutex.Unlock()
+				// Continue to next iteration of for loop to restart
+
+			case isConnected = <-connectedCh:
+				log.Infow("Connection state changed", "isConnected", isConnected)
+				handleAppState(ctx, isConnected, stopServer)
+				// Continue waiting for more events
 				select {
 				case <-stopServer:
+					log.Info("Received stop signal after connection change")
 					serverMutex.Lock()
 					if currentServer != nil {
 						currentServer.Close()
@@ -372,31 +420,18 @@ func main() {
 					}
 					isHotspotStarted = false
 					serverMutex.Unlock()
-					running = false
+					return // Exit goroutine
+
 				case <-restartServer:
-					// Break out of inner loop to restart server
+					log.Info("Received restart signal after connection change")
 					serverMutex.Lock()
 					if currentServer != nil {
 						currentServer.Close()
 						currentServer = nil
 					}
 					serverMutex.Unlock()
-					log.Info("Restarting HTTP server...")
-					running = false // Set running to false to break out of the inner loop
-				case isConnected = <-connectedCh:
-					log.Infow("called handleAppState in go routine with ", isConnected)
-					handleAppState(ctx, isConnected, stopServer)
+					break // Break out of this select to continue outer loop
 				}
-			}
-
-			// If we're not supposed to restart, exit the goroutine
-			select {
-			case <-restartServer:
-				// Continue the outer loop to restart the server
-				log.Info("Restarting server after receiving restart signal")
-			default:
-				// No restart signal, exit the goroutine
-				return
 			}
 		}
 	}()
