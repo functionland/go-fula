@@ -394,6 +394,19 @@ func main() {
 					// Give the hotspot some time to initialize
 					log.Info("Waiting for hotspot to initialize...")
 					time.Sleep(5 * time.Second)
+
+					// Restart the server to bind to the new hotspot interface
+					serverMutex.Lock()
+					if currentServer != nil {
+						currentServer.Close()
+						currentServer = nil
+					}
+					serverMutex.Unlock()
+
+					// Signal to start a new server
+					go func() {
+						connectedCh <- false
+					}()
 				}
 
 				break loop2
