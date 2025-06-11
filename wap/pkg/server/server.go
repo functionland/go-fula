@@ -729,7 +729,10 @@ func accountSeedHandler(w http.ResponseWriter, r *http.Request) {
 // This function accepts an ip and port that it runs the webserver on. Default is 10.42.0.1:3500 and if it fails reverts to 0.0.0.0:3500
 // - /wifi/list endpoint: shows the list of available wifis
 func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip string, port string, connectedCh chan bool) io.Closer {
-	ctx := context.Background()
+	// Create a context with a reasonable timeout (e.g., 10 minutes)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel() // Ensure resources are cleaned up
+
 	peerFunction = peerFn
 	mux := http.NewServeMux()
 	mux.HandleFunc("/readiness", readinessHandler)
@@ -761,7 +764,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	// Track successful addresses
 	var successfulAddresses []string
 
-	// Try first listener
+	// Set up the target address
 	listenAddr := ""
 	if ip == "" {
 		ip = config.IPADDRESS
@@ -771,24 +774,98 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 	}
 	listenAddr = ip + ":" + port
 
+	// Try to listen on the target address
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Errorw("Failed to use default IP address for serve", "err", err)
-		ip, err = getIPFromSpecificNetwork(ctx, config.HOTSPOT_SSID)
-		if err != nil {
-			log.Errorw("Failed to use IP of hotspot", "err", err)
-			ip = "0.0.0.0"
-		}
-		listenAddr = ip + ":" + port
 
-		ln, err = net.Listen("tcp", listenAddr)
+		// If the error is "cannot assign requested address", it means the interface doesn't exist
+		// This happens when the FxBlox hotspot is not yet ready
+		if strings.Contains(err.Error(), "cannot assign requested address") {
+			log.Info("Waiting for FxBlox hotspot interface to become available...")
+
+			// Maximum number of attempts to wait for the hotspot
+			maxAttempts := 60 // 60 attempts with 10 second delay = up to 10 minute of waiting
+			attemptDelay := 10 * time.Second
+
+			for attempt := 0; attempt < maxAttempts; attempt++ {
+				// Check if we've exceeded the context timeout
+				if ctx.Err() != nil {
+					log.Warnw("Context timeout while waiting for hotspot", "err", ctx.Err())
+					break
+				}
+
+				// Check if the interface with the target IP exists
+				interfaces, err := net.Interfaces()
+				if err != nil {
+					log.Warnw("Failed to get network interfaces", "err", err)
+					time.Sleep(attemptDelay)
+					continue
+				}
+
+				interfaceFound := false
+				for _, iface := range interfaces {
+					addrs, err := iface.Addrs()
+					if err != nil {
+						log.Warnw("Failed to get addresses for interface", "interface", iface.Name, "err", err)
+						continue
+					}
+
+					for _, addr := range addrs {
+						ipNet, ok := addr.(*net.IPNet)
+						if !ok {
+							continue
+						}
+
+						if ipNet.IP.String() == ip {
+							log.Infof("Found interface with IP %s: %s (attempt %d)",
+								ip, iface.Name, attempt+1)
+							interfaceFound = true
+							break
+						}
+					}
+					if interfaceFound {
+						break
+					}
+				}
+
+				// If interface is found, try to bind
+				if interfaceFound {
+					ln, err = net.Listen("tcp", listenAddr)
+					if err == nil {
+						log.Infof("Successfully bound to %s after waiting", listenAddr)
+						break
+					} else {
+						log.Warnw("Interface found but binding failed", "err", err)
+					}
+				}
+
+				// If still waiting and not the last attempt
+				if attempt < maxAttempts-1 {
+					log.Infof("Still waiting for FxBlox hotspot (attempt %d/%d)...",
+						attempt+1, maxAttempts)
+
+					// Use a timer that respects context cancellation
+					select {
+					case <-ctx.Done():
+						log.Warnw("Context cancelled while waiting", "err", ctx.Err())
+						break
+					case <-time.After(attemptDelay):
+						// Continue with next attempt
+					}
+				}
+			}
+		}
+
+		// If we still can't bind to the target IP after waiting, return without starting the server
 		if err != nil {
-			listenAddr = "0.0.0.0:" + port
-			ln, err = net.Listen("tcp", listenAddr)
+			log.Errorf("Failed to bind to %s after waiting. Server will not start.", listenAddr)
+			return mc // Return empty closer
 		}
 	}
 
-	if err == nil {
+	// Start the server on the main interface
+	if ln != nil {
 		mc.listeners = append(mc.listeners, ln)
 		successfulAddresses = append(successfulAddresses, listenAddr)
 		log.Info("Starting server at " + listenAddr)

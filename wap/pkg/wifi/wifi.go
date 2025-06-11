@@ -588,3 +588,26 @@ func disconnectLinux(ctx context.Context) error {
 	}
 	return nil
 }
+
+// EnsureHotspotActive makes sure the hotspot is active, even if it was already started
+// This is used as a fallback when Wi-Fi connection fails
+func EnsureHotspotActive(ctx context.Context) error {
+	// Check if FxBlox connection exists and is active
+	stdout, _, err := runCommand(ctx, "nmcli -t -f NAME,STATE connection show --active")
+	if err == nil && strings.Contains(stdout, "FxBlox:activated") {
+		log.Info("FxBlox hotspot is already active")
+		return nil
+	}
+
+	// Try to activate existing FxBlox connection
+	_, _, err = runCommand(ctx, "nmcli connection up FxBlox")
+	if err != nil {
+		log.Warnf("Failed to activate existing FxBlox hotspot: %v", err)
+
+		// If activation fails, try to recreate the hotspot
+		return StartHotspot(ctx, true)
+	}
+
+	log.Info("FxBlox hotspot activated successfully")
+	return nil
+}

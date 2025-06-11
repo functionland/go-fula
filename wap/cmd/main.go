@@ -383,6 +383,19 @@ func main() {
 			case <-timeout2:
 				log.Info("Waiting for the system to connect to saved Wi-Fi timeout passed")
 				ticker2.Stop()
+
+				// Ensure hotspot is active as fallback
+				if err := wifi.EnsureHotspotActive(ctx); err != nil {
+					log.Errorw("Failed to ensure hotspot is active", "err", err)
+				} else {
+					isHotspotStarted = true
+					log.Info("Hotspot activated as fallback after Wi-Fi connection failure")
+
+					// Give the hotspot some time to initialize
+					log.Info("Waiting for hotspot to initialize...")
+					time.Sleep(5 * time.Second)
+				}
+
 				break loop2
 			case <-ticker2.C:
 				log.Info("Waiting for the system to connect to saved Wi-Fi periodic check")
