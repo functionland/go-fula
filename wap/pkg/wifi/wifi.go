@@ -68,6 +68,7 @@ type Credentials struct {
 func CheckIfIsConnected(ctx context.Context, interfaceName string) error {
 	switch runtime.GOOS {
 	case "linux":
+		// First check if connected to any WiFi network
 		err := CheckIfIsConnectedWifi(ctx, interfaceName)
 		if err != nil {
 			// If not connected via WiFi, try to ping a well-known website
@@ -76,6 +77,13 @@ func CheckIfIsConnected(ctx context.Context, interfaceName string) error {
 				return fmt.Errorf("wifi not connected and unable to reach internet: %v", err)
 			}
 			log.Info("Not connected to WiFi, but can access internet via other means")
+		} else {
+			// Check if connected to FxBlox hotspot
+			stdout, _, err := runCommand(ctx, "nmcli -t -f NAME connection show --active")
+			if err == nil && strings.Contains(stdout, "FxBlox") {
+				// If connected to FxBlox hotspot, we're not connected to external WiFi
+				return fmt.Errorf("connected to FxBlox hotspot, not external WiFi")
+			}
 		}
 		return nil
 	default:

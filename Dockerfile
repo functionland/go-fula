@@ -1,14 +1,42 @@
-FROM golang:1.22 AS builder
+# Build stage
+FROM golang:1.23 AS buildstage
 
-WORKDIR /go/src/go-fula
+WORKDIR /go-fula
 
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy go module files and download dependencies
+COPY ./go-fula/go.mod ./go-fula/go.sum ./
+RUN go mod download -x
 
-COPY . .
-RUN CGO_ENABLED=0 go build -o /go/bin/blox ./cmd/blox
+# Copy the rest of the application source code
+COPY ./go-fula/ .
 
-FROM gcr.io/distroless/static-debian11
-COPY --from=builder /go/bin/blox /usr/bin/
+# Build binaries with CGO disabled for static binaries
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app ./cmd/blox && \
+    CGO_ENABLED=0 GOOS=linux go build -o /wap ./wap/cmd && \
+    CGO_ENABLED=0 GOOS=linux go build -o /initipfs ./modules/initipfs && \
+    CGO_ENABLED=0 GOOS=linux go build -o /initipfscluster ./modules/initipfscluster
 
-ENTRYPOINT ["/usr/bin/blox"]
+# Final stage
+FROM alpine:3.17
+
+# Install necessary packages
+RUN apk update && \
+    apk add --no-cache hostapd iw wireless-tools networkmanager-wifi networkmanager-cli dhcp iptables curl mergerfs --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing
+
+WORKDIR /
+
+# Copy binaries from the build stage
+COPY --from=buildstage /app /app
+COPY --from=buildstage /wap /wap
+COPY --from=buildstage /initipfs /initipfs
+COPY --from=buildstage /initipfscluster /initipfscluster
+
+# Copy and set permissions for the startup script
+COPY ./go-fula.sh /go-fula.sh
+RUN chmod +x /go-fula.sh
+
+# Expose necessary ports
+EXPOSE 40001 5001
+
+# Set the entrypoint command
+CMD ["/go-fula.sh"]
