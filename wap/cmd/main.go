@@ -302,6 +302,7 @@ func main() {
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
 	serverReady := make(chan struct{}, 1)
+	restartServer := make(chan struct{}, 1)
 
 	atomic.StoreInt32(&currentIsConnected, int32(2))
 	isConnected := false
@@ -337,31 +338,63 @@ func main() {
 
 	// Start the http server in a separate goroutine
 	go func() {
-		connectedCh := make(chan bool, 1)
-		serverMutex.Lock()
-		if currentServer != nil {
-			currentServer.Close()
-			currentServer = nil
-		}
-		closer := server.Serve(blox.BloxCommandInitOnly, "", "", connectedCh)
-		currentServer = closer
-		serverMutex.Unlock()
-		serverCloser <- closer
-		serverReady <- struct{}{} // Signal that the server is ready
 		for {
+			connectedCh := make(chan bool, 1)
+			serverMutex.Lock()
+			if currentServer != nil {
+				currentServer.Close()
+				currentServer = nil
+			}
+			closer := server.Serve(blox.BloxCommandInitOnly, "", "", connectedCh)
+			currentServer = closer
+			serverMutex.Unlock()
+			serverCloser <- closer
+
+			// Signal that the server is ready (only first time)
 			select {
-			case <-stopServer:
-				serverMutex.Lock()
-				if currentServer != nil {
-					currentServer.Close()
-					currentServer = nil
+			case serverReady <- struct{}{}:
+				// Successfully sent ready signal
+			default:
+				// Channel already has a value, do nothing
+			}
+
+			// Handle events until server is stopped
+			running := true
+			for running {
+				select {
+				case <-stopServer:
+					serverMutex.Lock()
+					if currentServer != nil {
+						currentServer.Close()
+						currentServer = nil
+					}
+					isHotspotStarted = false
+					serverMutex.Unlock()
+					running = false
+				case <-restartServer:
+					// Break out of inner loop to restart server
+					serverMutex.Lock()
+					if currentServer != nil {
+						currentServer.Close()
+						currentServer = nil
+					}
+					serverMutex.Unlock()
+					log.Info("Restarting HTTP server...")
+					break
+				case isConnected = <-connectedCh:
+					log.Infow("called handleAppState in go routine with ", isConnected)
+					handleAppState(ctx, isConnected, stopServer)
 				}
-				isHotspotStarted = false
-				serverMutex.Unlock()
-				return // Exit the goroutine
-			case isConnected = <-connectedCh:
-				log.Infow("called handleAppState in go routine1 with ", isConnected)
-				handleAppState(ctx, isConnected, stopServer)
+			}
+
+			// If we're not supposed to restart, exit the goroutine
+			select {
+			case <-restartServer:
+				// Continue the outer loop to restart the server
+				log.Info("Restarting server after receiving restart signal")
+			default:
+				// No restart signal, exit the goroutine
+				return
 			}
 		}
 	}()
@@ -395,16 +428,8 @@ func main() {
 					log.Info("Waiting for hotspot to initialize...")
 					time.Sleep(5 * time.Second)
 
-					// Restart the server to bind to the new hotspot interface
-					serverMutex.Lock()
-					if currentServer != nil {
-						currentServer.Close()
-						currentServer = nil
-					}
-					serverMutex.Unlock()
-
-					// Signal to start a new server by stopping the current one
-					stopServer <- struct{}{}
+					// Signal to restart the server
+					restartServer <- struct{}{}
 				}
 
 				break loop2
