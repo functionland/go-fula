@@ -25,10 +25,13 @@ import (
 var log = logging.Logger("fula/wap/main")
 
 // The state of the application.
-var currentIsConnected int32
-var isHotspotStarted = false
-var currentServer io.Closer = nil
-var serverMutex sync.Mutex
+var (
+	currentIsConnected int32
+	isHotspotStarted   bool
+	currentServer      io.Closer
+	serverMutex        sync.Mutex
+	restartServer      = make(chan struct{}, 1)
+)
 
 var versionFilePath = config.VERSION_FILE_PATH
 var restartNeededPath = config.RESTART_NEEDED_PATH
@@ -302,7 +305,6 @@ func main() {
 	serverCloser := make(chan io.Closer, 1)
 	stopServer := make(chan struct{}, 1)
 	serverReady := make(chan struct{}, 1)
-	restartServer := make(chan struct{}, 1)
 
 	atomic.StoreInt32(&currentIsConnected, int32(2))
 	isConnected := false
