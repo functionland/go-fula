@@ -382,7 +382,7 @@ func main() {
 					}
 					serverMutex.Unlock()
 					log.Info("Restarting HTTP server...")
-					break
+					running = false // Set running to false to break out of the inner loop
 				case isConnected = <-connectedCh:
 					log.Infow("called handleAppState in go routine with ", isConnected)
 					handleAppState(ctx, isConnected, stopServer)
