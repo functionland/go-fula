@@ -403,10 +403,8 @@ func main() {
 					}
 					serverMutex.Unlock()
 
-					// Signal to start a new server
-					go func() {
-						connectedCh <- false
-					}()
+					// Signal to start a new server by stopping the current one
+					stopServer <- struct{}{}
 				}
 
 				break loop2
