@@ -218,29 +218,7 @@ func prependProtocol(addr string) string {
 // checkHealth checks the health of the blockchain by querying the /health endpoint.
 // It returns an error if the blockchain is currently syncing.
 func (bl *FxBlockchain) checkHealth(ctx context.Context) error {
-	endpoint := prependProtocol(bl.blockchainEndPoint)
-	healthAddr := endpoint + "/health"
-	healthReq, err := http.NewRequestWithContext(ctx, "POST", healthAddr, nil)
-	if err != nil {
-		return err
-	}
-	healthResp, err := bl.ch.Do(healthReq)
-	if err != nil {
-		return err
-	}
-	defer healthResp.Body.Close()
-
-	var healthCheckResponse struct {
-		IsSyncing       bool `json:"is_syncing"`
-		Peers           int  `json:"peers"`
-		ShouldHavePeers bool `json:"should_have_peers"`
-	}
-	if err := json.NewDecoder(healthResp.Body).Decode(&healthCheckResponse); err != nil {
-		return err
-	}
-	if healthCheckResponse.IsSyncing {
-		return fmt.Errorf("the chain is syncing, you can see the progress in pools screen")
-	}
+	// Removed Health check as it is not needed
 	return nil
 }
 
@@ -251,51 +229,6 @@ func (bl *FxBlockchain) callBlockchain(ctx context.Context, method string, actio
 	}
 
 	endpoint := prependProtocol(bl.blockchainEndPoint)
-	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
-
-	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
-	buf := bl.bufPool.Get().(*bytes.Buffer)
-	req := bl.reqPool.Get().(*http.Request)
-	defer func() {
-		bl.putBuf(buf)
-		bl.putReq(req)
-	}()
-
-	preparedRequest := bl.PlugSeedIfNeeded(ctx, action, p)
-	if err := json.NewEncoder(buf).Encode(preparedRequest); err != nil {
-		return nil, 0, err
-	}
-	req, err := http.NewRequestWithContext(ctx, method, addr, buf)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := bl.ch.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-
-	var bufRes bytes.Buffer
-	_, err = io.Copy(&bufRes, resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, err
-	}
-	b := bufRes.Bytes()
-
-	return b, resp.StatusCode, nil
-}
-
-// TODO: The below method should be removed after fixing hte syncing issue with blockchain
-func (bl *FxBlockchain) callBlockchainWithSeedTemporary(ctx context.Context, method string, action string, p interface{}) ([]byte, int, error) {
-	// Check blockchain health before proceeding
-	if err := bl.checkHealth(ctx); err != nil {
-		return nil, http.StatusFailedDependency, err // Use 424 as the status code for a syncing blockchain
-	}
-
-	endpoint := prependProtocol("api.node3.functionyard.fula.network")
 	addr := endpoint + "/" + strings.Replace(action, "-", "/", -1)
 
 	// Use the bufPool and reqPool to reuse bytes.Buffer and http.Request objects
@@ -525,7 +458,7 @@ func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
 			bl.handleDisconnectWifi(r.Context(), from, w, r)
 		},
 		actionGetAccount: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
-			bl.HandleGetAccount(r.Context(), from, w, r)
+			// To be removed
 		},
 		actionEraseBlData: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleEraseBlData(r.Context(), from, w, r)
@@ -1239,6 +1172,7 @@ func (bl *FxBlockchain) FetchUsersAndPopulateSets(ctx context.Context, topicStri
 
 	if initiate {
 		clusterEndpoint, err := bl.getClusterEndpoint(ctx, topic)
+
 		if err == nil {
 			// Create a regular expression to match everything before the first period
 			re := regexp.MustCompile(`^(.*?)\.`)
@@ -1559,26 +1493,14 @@ func (bl *FxBlockchain) getClusterEndpoint(ctx context.Context, poolID int) (str
 		return strconv.Itoa(poolID) + ".pools.functionyard.fula.network", nil
 	}
 
-	// 2. Fetch pool details
-	poolDetails, err := fetchPoolDetails(ctx, bl, poolID)
-	if err != nil {
-		return "", err
-	}
-
-	// 3. Extract creatorClusterPeerID
-	creatorClusterPeerID := poolDetails.Creator
-
-	// 4. Fetch user details
-	userDetails, err := bl.fetchUserDetails(ctx, poolID)
-	if err != nil {
-		return "", err
-	}
-
 	// 5. Find the peer_id
-	peerID := bl.findPeerID(creatorClusterPeerID, userDetails)
+	peerID := "12D3KooWS79EhkPU7ESUwgG4vyHHzW9FDNZLoWVth9b5N5NSrvaj"
+	if poolID == 1 {
+		peerID = ""
+	}
 
 	// 6. Save creator peer ID
-	err = saveCreatorPeerID(poolID, peerID)
+	err := saveCreatorPeerID(poolID, peerID)
 	if err != nil {
 		log.Debugf("Error saving creator peer ID to file: %v", err)
 	}
@@ -1680,45 +1602,29 @@ func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action st
 	//TODO: Ensure it is optimized for long-running calls
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
-	response, statusCode, err := bl.callBlockchain(ctx, method, action, req)
-	if err != nil {
-		log.Error("failed to call blockchain: %v", err)
-		if statusCode == 0 {
-			statusCode = http.StatusBadGateway
-		}
-		w.WriteHeader(statusCode)
-		// Try to parse the error and format it as JSON
-		var errMsg map[string]interface{}
-		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr != nil {
-			// If the response isn't JSON or can't be parsed, use a generic message
-			errMsg = map[string]interface{}{
-				"message":     "An error occurred",
-				"description": err.Error(),
-			}
-		}
-		json.NewEncoder(w).Encode(errMsg)
-		return
-	}
-	// If status code is not 200, attempt to format the response as JSON
-	if statusCode != http.StatusOK {
-		w.WriteHeader(statusCode)
-		var errMsg map[string]interface{}
-		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr == nil {
-			// If it's already a JSON, write it as is
-			w.Write(response)
-		} else {
-			// If it's not JSON, wrap the response in the expected format
-			errMsg = map[string]interface{}{
+	if req.PoolID != 0 {
+		// Call ipfs-cluster of the pool with replication request
+		clusterEndPoint, err := bl.getClusterEndpoint(ctx, req.PoolID)
+		if err != nil {
+			w.WriteHeader(http.StatusFailedDependency)
+			errMsg := map[string]interface{}{
 				"message":     "Error",
-				"description": string(response),
+				"description": string(err.Error()),
 			}
 			json.NewEncoder(w).Encode(errMsg)
+			return
 		}
-		return
-	} else {
-		if req.PoolID != 0 {
-			// Call ipfs-cluster of the pool with replication request
-			clusterEndPoint, err := bl.getClusterEndpoint(ctx, req.PoolID)
+		if clusterEndPoint != "" {
+			// Construct the request for the cluster endpoint
+			replicationRequest := struct {
+				PoolID int      `json:"pool_id"`
+				Cids   []string `json:"cids"`
+			}{
+				PoolID: req.PoolID,
+				Cids:   req.Cid,
+			}
+
+			reqBody, err := json.Marshal(replicationRequest)
 			if err != nil {
 				w.WriteHeader(http.StatusFailedDependency)
 				errMsg := map[string]interface{}{
@@ -1728,68 +1634,48 @@ func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action st
 				json.NewEncoder(w).Encode(errMsg)
 				return
 			}
-			if clusterEndPoint != "" {
-				// Construct the request for the cluster endpoint
-				replicationRequest := struct {
-					PoolID int      `json:"pool_id"`
-					Cids   []string `json:"cids"`
-				}{
-					PoolID: req.PoolID,
-					Cids:   req.Cid,
-				}
 
-				reqBody, err := json.Marshal(replicationRequest)
-				if err != nil {
-					w.WriteHeader(http.StatusFailedDependency)
-					errMsg := map[string]interface{}{
-						"message":     "Error",
-						"description": string(err.Error()),
-					}
-					json.NewEncoder(w).Encode(errMsg)
-					return
-				}
-
-				// Make the HTTP request to the cluster endpoint
-				clusterURL := fmt.Sprintf("%s/pins", clusterEndPoint)
-				log.Debugw("Pinning on ipfs-cluster", "url", clusterURL)
-				resp, err := http.Post(clusterURL, "application/json", bytes.NewBuffer(reqBody))
-				if err != nil {
-					w.WriteHeader(http.StatusFailedDependency)
-					errMsg := map[string]interface{}{
-						"message":     "Error",
-						"description": string(err.Error()),
-					}
-					json.NewEncoder(w).Encode(errMsg)
-					return
-				}
-				defer resp.Body.Close()
-
-				if resp.StatusCode != http.StatusAccepted {
-					// Replication request was not accepted
-					w.WriteHeader(resp.StatusCode) // Set the appropriate status code
-					responseBody, _ := io.ReadAll(resp.Body)
-					errMsg := map[string]interface{}{
-						"message":     "Replication Error",
-						"description": string(responseBody),
-					}
-					json.NewEncoder(w).Encode(errMsg)
-					return
-				}
-
-				// Replication request was accepted - continue with existing response handling
-			} else {
+			// Make the HTTP request to the cluster endpoint
+			clusterURL := fmt.Sprintf("%s/pins", clusterEndPoint)
+			log.Debugw("Pinning on ipfs-cluster", "url", clusterURL)
+			resp, err := http.Post(clusterURL, "application/json", bytes.NewBuffer(reqBody))
+			if err != nil {
 				w.WriteHeader(http.StatusFailedDependency)
 				errMsg := map[string]interface{}{
 					"message":     "Error",
-					"description": "Wrong cluster endpoint",
+					"description": string(err.Error()),
 				}
 				json.NewEncoder(w).Encode(errMsg)
 				return
 			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusAccepted {
+				// Replication request was not accepted
+				w.WriteHeader(resp.StatusCode) // Set the appropriate status code
+				responseBody, _ := io.ReadAll(resp.Body)
+				errMsg := map[string]interface{}{
+					"message":     "Replication Error",
+					"description": string(responseBody),
+				}
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			}
+
+			// Replication request was accepted - continue with existing response handling
+		} else {
+			w.WriteHeader(http.StatusFailedDependency)
+			errMsg := map[string]interface{}{
+				"message":     "Error",
+				"description": "Wrong cluster endpoint",
+			}
+			json.NewEncoder(w).Encode(errMsg)
+			return
 		}
 	}
+
 	w.WriteHeader(http.StatusAccepted)
-	err1 := json.Unmarshal(response, &res)
+	err1 := json.Unmarshal([]byte(`{}`), &res)
 	if err1 != nil {
 		log.Error("failed to format response: %v", err1)
 	}
