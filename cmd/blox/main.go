@@ -104,6 +104,7 @@ var (
 			Identity                  string        `yaml:"identity"`
 			StoreDir                  string        `yaml:"storeDir"`
 			PoolName                  string        `yaml:"poolName"`
+			ChainName                 string        `yaml:"chainName"`
 			LogLevel                  string        `yaml:"logLevel"`
 			ListenAddrs               []string      `yaml:"listenAddrs"`
 			Authorizer                string        `yaml:"authorizer"`
@@ -560,6 +561,52 @@ func getPoolNameFromConfig() string {
 		return "0"
 	}
 	return app.config.PoolName
+}
+
+func getChainNameFromConfig() string {
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return ""
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return ""
+	}
+	return app.config.ChainName
+}
+
+func updateChainName(newChainName string) error {
+	// Load existing config file
+	configData, err := os.ReadFile(app.configPath)
+	if err != nil {
+		return err
+	}
+
+	// Parse the existing config file
+	if err := yaml.Unmarshal(configData, &app.config); err != nil {
+		return err
+	}
+
+	// Update the chain name
+	if app.config.ChainName != newChainName {
+		app.config.ChainName = newChainName
+
+		logger.Infof("Updated chain name to: %s", app.config.ChainName)
+
+		// Marshal the updated config back to YAML
+		configData, err = yaml.Marshal(app.config)
+		if err != nil {
+			return err
+		}
+
+		// Write the updated config back to the file
+		if err := os.WriteFile(app.configPath, configData, 0760); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func updateConfig(p []peer.ID) error {
@@ -1248,6 +1295,8 @@ func action(ctx *cli.Context) error {
 		blox.WithRelays(app.config.StaticRelays),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithGetPoolName(getPoolNameFromConfig),
+		blox.WithUpdateChainName(updateChainName),
+		blox.WithGetChainName(getChainNameFromConfig),
 		blox.WithBlockchainEndPoint(app.blockchainEndpoint),
 		blox.WithSecretsPath(app.secretsPath),
 		blox.WithPingCount(5),

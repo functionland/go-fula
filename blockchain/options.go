@@ -22,9 +22,12 @@ type (
 		minPingSuccessCount      int
 		maxPingTime              int
 		topicName                string
+		chainName                string
 		relays                   []string
 		updatePoolName           func(string) error
 		getPoolName              func() string
+		updateChainName          func(string) error
+		getChainName             func() string
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 		rpc                      *rpc.HttpApi
 		ipfsClusterApi           ipfsCluster.Client
@@ -37,21 +40,30 @@ func defaultUpdatePoolName(newPoolName string) error {
 func defaultGetPoolName() string {
 	return "0"
 }
+func defaultUpdateChainName(newChainName string) error {
+	return nil
+}
+func defaultGetChainName() string {
+	return ""
+}
 func newOptions(o ...Option) (*options, error) {
 	opts := options{
-		authorizer:               "",                    // replace with an appropriate default peer.ID
-		authorizedPeers:          []peer.ID{},           // default to an empty slice
-		allowTransientConnection: true,                  // or false, as per your default
-		blockchainEndPoint:       "api.node3.functionyard.fula.network",      // default endpoint
-		secretsPath:              "",                    //path to secrets dir
-		timeout:                  30,                    // default timeout in seconds
-		wg:                       nil,                   // initialized WaitGroup
-		minPingSuccessCount:      7,                     // default minimum success count
-		maxPingTime:              900,                   // default maximum ping time in miliseconds
-		topicName:                "0",                   // default topic name
-		relays:                   []string{},            // default to an empty slice
-		updatePoolName:           defaultUpdatePoolName, // set a default function or leave nil
+		authorizer:               "",                                    // replace with an appropriate default peer.ID
+		authorizedPeers:          []peer.ID{},                           // default to an empty slice
+		allowTransientConnection: true,                                  // or false, as per your default
+		blockchainEndPoint:       "api.node3.functionyard.fula.network", // default endpoint
+		secretsPath:              "",                                    //path to secrets dir
+		timeout:                  30,                                    // default timeout in seconds
+		wg:                       nil,                                   // initialized WaitGroup
+		minPingSuccessCount:      7,                                     // default minimum success count
+		maxPingTime:              900,                                   // default maximum ping time in miliseconds
+		topicName:                "0",                                   // default topic name
+		chainName:                "",                                    // default chain name (empty means auto-detect)
+		relays:                   []string{},                            // default to an empty slice
+		updatePoolName:           defaultUpdatePoolName,                 // set a default function or leave nil
 		getPoolName:              defaultGetPoolName,
+		updateChainName:          defaultUpdateChainName, // set a default function or leave nil
+		getChainName:             defaultGetChainName,
 		fetchFrequency:           time.Hour * 1, // default frequency, e.g., 1 hour
 		rpc:                      nil,
 		ipfsClusterApi:           nil,
@@ -168,6 +180,27 @@ func WithUpdatePoolName(updatePoolName func(string) error) Option {
 func WithGetPoolName(getPoolName func() string) Option {
 	return func(o *options) error {
 		o.getPoolName = getPoolName
+		return nil
+	}
+}
+
+func WithChainName(n string) Option {
+	return func(o *options) error {
+		o.chainName = n
+		return nil
+	}
+}
+
+func WithUpdateChainName(updateChainName func(string) error) Option {
+	return func(o *options) error {
+		o.updateChainName = updateChainName
+		return nil
+	}
+}
+
+func WithGetChainName(getChainName func() string) Option {
+	return func(o *options) error {
+		o.getChainName = getChainName
 		return nil
 	}
 }

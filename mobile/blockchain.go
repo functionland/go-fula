@@ -114,6 +114,18 @@ func (c *Client) PoolJoin(poolID int) ([]byte, error) {
 	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{PoolID: poolID, PeerID: c.bloxPid.String()})
 }
 
+// PoolJoinWithChain requests blox at Config.BloxAddr to join a pool with the id on a specific chain.
+// the addr must be a valid multiaddr that includes peer ID.
+// Note that this call is only allowed on a user's own blox
+func (c *Client) PoolJoinWithChain(poolID int, chainName string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{
+		PoolID:    poolID,
+		PeerID:    c.bloxPid.String(),
+		ChainName: chainName,
+	})
+}
+
 // PoolJoin requests blox at Config.BloxAddr to cancel a join request for a pool with the id.
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
@@ -149,6 +161,17 @@ func (c *Client) PoolUserList(poolID int) ([]byte, error) {
 func (c *Client) PoolLeave(poolID int) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{PoolID: poolID})
+}
+
+// PoolLeaveWithChain requests blox at Config.BloxAddr to leave a pool with the id on a specific chain.
+// the addr must be a valid multiaddr that includes peer ID.
+// Note that this call is only allowed on a user's own blox
+func (c *Client) PoolLeaveWithChain(poolID int, chainName string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{
+		PoolID:    poolID,
+		ChainName: chainName,
+	})
 }
 
 // ManifestAvailable requests blox at Config.BloxAddr to list manifests

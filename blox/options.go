@@ -29,6 +29,7 @@ type (
 		h                     host.Host
 		name                  string
 		topicName             string
+		chainName             string
 		storeDir              string
 		announceInterval      time.Duration
 		ds                    datastore.Batching
@@ -39,6 +40,8 @@ type (
 		relays                []string
 		updatePoolName        PoolNameUpdater
 		getPoolName           PoolNameGetter
+		updateChainName       func(string) error
+		getChainName          func() string
 		pingCount             int
 		maxPingTime           int
 		minSuccessRate        int
@@ -270,6 +273,27 @@ func WithSecretsPath(b string) Option {
 func WithWg(wg *sync.WaitGroup) Option {
 	return func(o *options) error {
 		o.wg = wg
+		return nil
+	}
+}
+
+func WithChainName(n string) Option {
+	return func(o *options) error {
+		o.chainName = n
+		return nil
+	}
+}
+
+func WithUpdateChainName(updateChainName func(string) error) Option {
+	return func(o *options) error {
+		o.updateChainName = updateChainName
+		return nil
+	}
+}
+
+func WithGetChainName(getChainName func() string) Option {
+	return func(o *options) error {
+		o.getChainName = getChainName
 		return nil
 	}
 }

@@ -183,13 +183,15 @@ type PoolCreateResponse struct {
 }
 
 type PoolJoinRequest struct {
-	PoolID int    `json:"pool_id"`
-	PeerID string `json:"peer_id"`
+	PoolID    int    `json:"pool_id"`
+	PeerID    string `json:"peer_id"`
+	ChainName string `json:"chain_name,omitempty"` // Optional for backward compatibility
 }
 
 type PoolJoinResponse struct {
-	Account string `json:"account"`
-	PoolID  int    `json:"pool_id"`
+	Account   string `json:"account"`
+	PoolID    int    `json:"pool_id"`
+	ChainName string `json:"chain_name,omitempty"` // Optional for backward compatibility
 }
 
 type PoolCancelJoinRequest struct {
@@ -249,6 +251,41 @@ type PoolListResponse struct {
 	Pools []Pool `json:"pools"`
 }
 
+// EVM Chain specific structures
+type EVMPoolListRequest struct {
+	ChainName string `json:"chain_name"`
+}
+
+type EVMPool struct {
+	Creator                    string `json:"creator"`
+	ID                         uint32 `json:"id"`
+	MaxChallengeResponsePeriod uint32 `json:"maxChallengeResponsePeriod"`
+	MemberCount                uint32 `json:"memberCount"`
+	MaxMembers                 uint32 `json:"maxMembers"`
+	RequiredTokens             string `json:"requiredTokens"` // Using string for big numbers
+	MinPingTime                string `json:"minPingTime"`    // Using string for big numbers
+	Name                       string `json:"name"`
+	Region                     string `json:"region"`
+	ChainName                  string `json:"chainName"`
+}
+
+type EVMPoolListResponse struct {
+	Pools []EVMPool `json:"pools"`
+}
+
+type IsMemberOfPoolRequest struct {
+	PeerID    string `json:"peer_id"`
+	PoolID    uint32 `json:"pool_id"`
+	ChainName string `json:"chain_name"`
+}
+
+type IsMemberOfPoolResponse struct {
+	IsMember      bool   `json:"is_member"`
+	MemberAddress string `json:"member_address"`
+	ChainName     string `json:"chain_name"`
+	PoolID        uint32 `json:"pool_id"`
+}
+
 type PoolUserListResponse struct {
 	Users []User `json:"users"`
 }
@@ -267,12 +304,14 @@ type PoolVoteResponse struct {
 }
 
 type PoolLeaveRequest struct {
-	PoolID int `json:"pool_id"`
+	PoolID    int    `json:"pool_id"`
+	ChainName string `json:"chain_name,omitempty"` // Optional for backward compatibility
 }
 
 type PoolLeaveResponse struct {
-	Account string `json:"account"`
-	PoolID  int    `json:"pool_id"`
+	Account   string `json:"account"`
+	PoolID    int    `json:"pool_id"`
+	ChainName string `json:"chain_name,omitempty"` // Optional for backward compatibility
 }
 
 type ManifestJob struct {
