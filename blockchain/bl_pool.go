@@ -825,12 +825,6 @@ func (bl *FxBlockchain) HandleIsMemberOfPool(ctx context.Context, req IsMemberOf
 		return IsMemberOfPoolResponse{}, fmt.Errorf("failed to convert PeerID to bytes32: %w", err)
 	}
 
-	// Remove 0x prefix for the contract call data
-	peerIDHex := peerIDBytes32
-	if strings.HasPrefix(peerIDHex, "0x") {
-		peerIDHex = peerIDHex[2:]
-	}
-
 	// Call isPeerIdMemberOfPool(uint32,bytes32) method using proper ABI encoding
 	callData := abi.EncodeIsPeerIdMemberOfPoolCall(req.PoolID, peerIDBytes32)
 
