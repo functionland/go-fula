@@ -9,11 +9,11 @@ import (
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	relayv2 "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/libp2p/go-libp2p/core/network"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
+	"github.com/multiformats/go-multiaddr"
 )
 
 // ReadIdentity reads a private key from the given path and returns it.
@@ -61,7 +61,7 @@ func main() {
 		relayv2.WithResources(relayv2.Resources{
 			Limit: &relayv2.RelayLimit{
 				Duration: 480000000 * time.Second, // Duration in seconds
-				Data:     171798691840,       // Data limit in bytes (160 GiB)
+				Data:     171798691840,            // Data limit in bytes (160 GiB)
 			},
 			MaxReservations:        2048,
 			MaxCircuits:            2048,
