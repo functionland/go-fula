@@ -111,8 +111,11 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithWg(p.wg),
 		blockchain.WithFetchFrequency(1*time.Minute),
 		blockchain.WithTopicName(p.topicName),
+		blockchain.WithChainName(p.chainName),
 		blockchain.WithUpdatePoolName(p.updatePoolName),
 		blockchain.WithGetPoolName(p.getPoolName),
+		blockchain.WithUpdateChainName(p.updateChainName),
+		blockchain.WithGetChainName(p.getChainName),
 		blockchain.WithRelays(p.relays),
 		blockchain.WithMaxPingTime(p.maxPingTime),
 		blockchain.WithIpfsClient(p.rpc),
@@ -585,57 +588,107 @@ func (p *Blox) Start(ctx context.Context) error {
 		nodeAccount = string(data)
 	}
 
-	if p.topicName == "0" {
-		// First read account from /internal/.secrets/account.txt
-		if nodeAccount != "" {
-			found := false
+	// Check if we need to discover pool membership (either no pool name or no chain name)
+	needsDiscovery := p.topicName == "0" || (p.getChainName != nil && p.getChainName() == "")
 
-			// Initial delay in seconds
-			delay := time.Duration(60) * time.Second
-			// Maximum number of retries
-			maxRetries := 5
-			// Attempt counter
-			attempt := 0
+	if needsDiscovery && nodeAccount != "" {
+		found := false
+		foundChain := ""
 
-			for {
-				attempt++
-				poolList, err := p.bl.HandlePoolList(ctx)
-				if err != nil {
-					log.Errorw("Error getting pool list", "err", err, "attempt", attempt)
-					if attempt >= maxRetries {
-						// Handle the case when max retries are reached, maybe log or break
-						log.Errorw("Max retries reached. Giving up.", "maxRetries", maxRetries)
-						break
-					}
-					// Wait for the current delay before retrying
-					time.Sleep(delay)
-					// Increase the delay for the next attempt, e.g., double it
-					delay *= 2
-					continue
+		// Initial delay in seconds
+		delay := time.Duration(60) * time.Second
+		// Maximum number of retries
+		maxRetries := 5
+		// Attempt counter
+		attempt := 0
+
+		// List of chains to check (skale first as default)
+		chainList := []string{"skale", "base"}
+
+		for {
+			attempt++
+			log.Infow("Starting pool discovery", "attempt", attempt, "nodeAccount", nodeAccount)
+
+			// Try each chain
+			for _, chainName := range chainList {
+				if found {
+					break
 				}
 
-				//Iterate through the pool list if no error
+				log.Debugw("Checking chain for pools", "chain", chainName, "attempt", attempt)
+
+				// Get pool list for this chain
+				poolList, err := p.bl.HandleEVMPoolList(ctx, chainName)
+				if err != nil {
+					log.Errorw("Error getting pool list from chain", "chain", chainName, "err", err, "attempt", attempt)
+					continue // Try next chain
+				}
+
+				// Check each pool to see if our peerID is a member
 				for _, pool := range poolList.Pools {
 					if found {
 						break
 					}
-					for _, participant := range pool.Participants {
-						if found {
-							break
+
+					// Convert nodeAccount to peerID format for membership check
+					membershipReq := blockchain.IsMemberOfPoolRequest{
+						PeerID:    p.h.ID().String(), // Use the host's peer ID
+						PoolID:    pool.ID,
+						ChainName: chainName,
+					}
+
+					membershipResp, err := p.bl.HandleIsMemberOfPool(ctx, membershipReq)
+					if err != nil {
+						log.Errorw("Error checking pool membership", "chain", chainName, "poolID", pool.ID, "err", err)
+						continue // Try next pool
+					}
+
+					if membershipResp.IsMember {
+						topicStr := strconv.Itoa(int(pool.ID))
+						log.Infow("Found pool membership", "chain", chainName, "poolID", pool.ID, "memberAddress", membershipResp.MemberAddress)
+
+						// Update pool name
+						if p.updatePoolName != nil {
+							if err := p.updatePoolName(topicStr); err != nil {
+								log.Errorw("Failed to update pool name", "poolName", topicStr, "err", err)
+							}
 						}
-						if participant == nodeAccount {
-							topicStr := strconv.Itoa(pool.PoolID)
-							p.updatePoolName(topicStr)
-							p.topicName = topicStr
-							found = true
-							break
+						p.topicName = topicStr
+
+						// Update chain name
+						if p.updateChainName != nil {
+							if err := p.updateChainName(chainName); err != nil {
+								log.Errorw("Failed to update chain name", "chainName", chainName, "err", err)
+							}
 						}
+						p.chainName = chainName
+
+						found = true
+						foundChain = chainName
+						break
 					}
 				}
-				if found || err == nil {
-					break
-				}
 			}
+
+			if found {
+				log.Infow("Pool discovery completed successfully", "poolName", p.topicName, "chainName", foundChain, "attempt", attempt)
+				break
+			}
+
+			if attempt >= maxRetries {
+				log.Errorw("Max retries reached for pool discovery. Giving up.", "maxRetries", maxRetries)
+				break
+			}
+
+			// Wait before retrying
+			log.Debugw("Pool discovery attempt failed, retrying", "attempt", attempt, "delay", delay)
+			time.Sleep(delay)
+			// Increase the delay for the next attempt
+			delay *= 2
+		}
+
+		if !found {
+			log.Warnw("Could not find pool membership on any chain", "nodeAccount", nodeAccount, "chains", chainList)
 		}
 	}
 

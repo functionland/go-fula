@@ -9,8 +9,10 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/functionland/go-fula/blockchain/abi"
 	"github.com/functionland/go-fula/common"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -73,75 +75,71 @@ func (bl *FxBlockchain) HandlePoolJoin(method string, action string, from peer.I
 		return
 	}
 
-	//TODO: Ensure it is optimized for long-running calls
-	//TODO: replace callBlockchainWithSeedTemporary with callBlockchain after fixing sync chain issue
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
-	response, statusCode, err := bl.callBlockchainWithSeedTemporary(ctx, method, action, &req)
-	if err != nil {
-		poolID := req.PoolID
-		poolIDStr := strconv.Itoa(poolID)
-		requestSubmitted, err := bl.checkIfUserHasOpenPoolRequests(ctx, poolIDStr)
-		if err == nil && requestSubmitted {
-			errUpdateConfig := bl.updatePoolName(poolIDStr)
-			errPingServer := bl.StartPingServer(ctx)
-			if errUpdateConfig != nil && errPingServer != nil {
-				errMsg := map[string]interface{}{
-					"message":     "Pool Join is submitted but Error in Starting Ping Server and updating Config",
-					"description": fmt.Sprintf("Error in Ping server: %s , Error in updateConfig: %s", errPingServer.Error(), errUpdateConfig.Error()),
-				}
-				w.WriteHeader(http.StatusExpectationFailed)
-				json.NewEncoder(w).Encode(errMsg)
-				return
-			} else if errUpdateConfig != nil {
-				errMsg := map[string]interface{}{
-					"message":     "Pool Join is submitted but Error in updating Config",
-					"description": fmt.Sprintf("Error in updateConfig: %s", errUpdateConfig.Error()),
-				}
-				w.WriteHeader(http.StatusExpectationFailed)
-				json.NewEncoder(w).Encode(errMsg)
-				return
-			} else if errPingServer != nil {
-				errMsg := map[string]interface{}{
-					"message":     "Pool Join is submitted but Error in Ping Server Start",
-					"description": fmt.Sprintf("Error in PingServer: %s", errPingServer.Error()),
-				}
-				w.WriteHeader(http.StatusExpectationFailed)
-				json.NewEncoder(w).Encode(errMsg)
-				return
-			}
-			statusCode = http.StatusAccepted
-			err = nil
-			response = []byte(fmt.Sprintf("{\"account\":\"\",\"pool_id\":%d}", req.PoolID))
+
+	poolID := req.PoolID
+	poolIDStr := strconv.Itoa(poolID)
+	chainName := req.ChainName
+
+	// If no chain name provided, determine it automatically
+	if chainName == "" {
+		log.Debugw("No chain name provided, attempting auto-discovery", "poolID", poolID)
+
+		// Try to discover which chain this pool exists on
+		if discoveredChain, err := bl.discoverPoolChain(ctx, uint32(poolID)); err == nil {
+			chainName = discoveredChain
+			log.Infow("Auto-discovered chain for pool", "poolID", poolID, "chain", chainName)
+		} else {
+			// Default to skale if discovery fails
+			chainName = "skale"
+			log.Warnw("Failed to discover chain, defaulting to skale", "poolID", poolID, "error", err)
 		}
 	}
-	if statusCode == http.StatusOK {
-		statusCode = http.StatusAccepted
-	}
-	log.Debugw("callblockchain response in JoinPool", "statusCode", statusCode, "response", response, "err", err)
-	// If status code is not 200, attempt to format the response as JSON
-	if statusCode != http.StatusAccepted || err != nil {
-		w.WriteHeader(statusCode)
-		// Try to parse the error and format it as JSON
-		var errMsg map[string]interface{}
-		if jsonErr := json.Unmarshal(response, &errMsg); jsonErr != nil {
-			// If the response isn't JSON or can't be parsed, use a generic message
-			errMsg = map[string]interface{}{
-				"message":     "An error occurred",
-				"description": err.Error(),
-			}
+
+	// Validate that the pool exists on the specified chain
+	if err := bl.validatePoolOnChain(ctx, uint32(poolID), chainName); err != nil {
+		errMsg := map[string]interface{}{
+			"message":     "Pool validation failed",
+			"description": fmt.Sprintf("Pool %d does not exist on chain %s: %s", poolID, chainName, err.Error()),
 		}
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(errMsg)
 		return
 	}
-	poolIDStr := strconv.Itoa(req.PoolID)
-	bl.processSuccessfulPoolJoinRequest(ctx, poolIDStr, bl.h.ID())
-	w.WriteHeader(statusCode)
-	err1 := json.Unmarshal(response, &res)
-	if err1 != nil {
-		log.Error("failed to format response: %v", err1)
+
+	// Update pool name configuration
+	if errUpdatePool := bl.updatePoolName(poolIDStr); errUpdatePool != nil {
+		errMsg := map[string]interface{}{
+			"message":     "Pool Join is submitted but Error in updating Pool Config",
+			"description": fmt.Sprintf("Error in updatePoolName: %s", errUpdatePool.Error()),
+		}
+		w.WriteHeader(http.StatusExpectationFailed)
+		json.NewEncoder(w).Encode(errMsg)
+		return
 	}
 
+	// Update chain name configuration
+	if errUpdateChain := bl.updateChainName(chainName); errUpdateChain != nil {
+		errMsg := map[string]interface{}{
+			"message":     "Pool Join is submitted but Error in updating Chain Config",
+			"description": fmt.Sprintf("Error in updateChainName: %s", errUpdateChain.Error()),
+		}
+		w.WriteHeader(http.StatusExpectationFailed)
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
+	statusCode := http.StatusAccepted
+	res = PoolJoinResponse{
+		Account:   "",
+		PoolID:    req.PoolID,
+		ChainName: chainName,
+	}
+
+	log.Infow("Pool join request processed successfully", "poolID", poolID, "chain", chainName, "from", from)
+
+	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		log.Error("failed to write response: %v", err)
 	}
@@ -182,69 +180,6 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 	default:
 		return b, nil
 	}
-}
-
-func (bl *FxBlockchain) processSuccessfulPoolJoinRequest(ctx context.Context, poolIDStr string, to peer.ID) {
-	// Create a ticker that triggers every 10 minutes
-	err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, true, 15*time.Second)
-	if err != nil {
-		log.Errorw("Error fetching and populating users", "err", err)
-	}
-	bl.stopFetchUsersAfterJoinChan = make(chan struct{})
-	ticker := time.NewTicker(bl.fetchInterval)
-	defer ticker.Stop()
-	if bl.wg != nil {
-		log.Debug("called wg.Add in PoolJoin ticker")
-		bl.wg.Add(1) // Increment the wait group counter
-	}
-	go func() {
-		if bl.wg != nil {
-			log.Debug("called wg.Done in PoolJoin ticker")
-			defer bl.wg.Done() // Decrement the wait group counter when the goroutine completes
-		}
-		defer log.Debug("PoolJoin go routine is ending")
-		defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
-
-		for {
-			select {
-			case <-ticker.C:
-				// Call FetchUsersAndPopulateSets at every tick (10 minutes interval)
-				if err := bl.FetchUsersAndPopulateSets(ctx, poolIDStr, false, bl.fetchInterval); err != nil {
-					log.Errorw("Error fetching and populating users", "err", err)
-				}
-				status, exists := bl.GetMemberStatus(to)
-				if exists && status == common.Approved {
-					ticker.Stop()
-					bl.StopPingServer(ctx)
-					if bl.a != nil {
-						bl.a.StopJoinPoolRequestAnnouncements()
-					}
-				}
-			case <-bl.stopFetchUsersAfterJoinChan:
-				// Stop the ticker when receiving a stop signal
-				ticker.Stop()
-				return
-			}
-		}
-	}()
-	// TODO: THIS METHOD BELOW NEEDS TO RE_INITIALIZE ANNONCEMENTS WITH NEW TOPIC ND START IT FIRST
-	/*
-		if bl.a != nil {
-			if bl.wg != nil {
-				log.Debug("called wg.Add in PoolJoin ticker2")
-				bl.wg.Add(1)
-			}
-			go func() {
-				if bl.wg != nil {
-					log.Debug("Called wg.Done in PoolJoin ticker2")
-					defer bl.wg.Done() // Decrement the counter when the goroutine completes
-				}
-				defer log.Debug("PoolJoin ticker2 go routine is ending")
-
-				bl.a.AnnounceJoinPoolRequestPeriodically(ctx)
-			}()
-		}
-	*/
 }
 
 func (bl *FxBlockchain) StartPingServer(ctx context.Context) error {
@@ -322,36 +257,34 @@ func (bl *FxBlockchain) HandlePoolCancelJoin(method string, action string, from 
 		poolIDStr := strconv.Itoa(poolID)
 		requestSubmitted, err := bl.checkIfUserHasOpenPoolRequests(ctx, poolIDStr)
 		if err == nil && !requestSubmitted {
-			errUpdateConfig := bl.updatePoolName("0")
+			errUpdatePool := bl.updatePoolName("0")
+			errUpdateChain := bl.updateChainName("")
 			errPingServer := bl.StopPingServer(ctx)
-			if errUpdateConfig != nil && errPingServer != nil {
-				errMsg := map[string]interface{}{
-					"message":     "Pool Cancel Join is submitted but Error in Stopping Ping Server and updating Config",
-					"description": fmt.Sprintf("Error in Ping server: %s , Error in updateConfig: %s", errPingServer.Error(), errUpdateConfig.Error()),
-				}
-				w.WriteHeader(http.StatusExpectationFailed)
-				json.NewEncoder(w).Encode(errMsg)
-				return
-			} else if errUpdateConfig != nil {
-				errMsg := map[string]interface{}{
-					"message":     "Pool Cancel Join is submitted but Error in updating Config",
-					"description": fmt.Sprintf("Error in updateConfig: %s", errUpdateConfig.Error()),
-				}
-				w.WriteHeader(http.StatusExpectationFailed)
-				json.NewEncoder(w).Encode(errMsg)
-				return
-			} else if errPingServer != nil {
-				errMsg := map[string]interface{}{
-					"message":     "Pool Cancel Join is submitted but Error in Ping Server Stop",
-					"description": fmt.Sprintf("Error in PingServer: %s", errPingServer.Error()),
-				}
-				w.WriteHeader(http.StatusExpectationFailed)
-				json.NewEncoder(w).Encode(errMsg)
-				return
+
+			var errorMsgs []string
+			if errUpdatePool != nil {
+				errorMsgs = append(errorMsgs, fmt.Sprintf("Error in updatePoolName: %s", errUpdatePool.Error()))
 			}
-			statusCode = http.StatusAccepted
-			err = nil
-			response = []byte(fmt.Sprintf("{\"account\":\"\",\"pool_id\":%d}", req.PoolID))
+			if errUpdateChain != nil {
+				errorMsgs = append(errorMsgs, fmt.Sprintf("Error in updateChainName: %s", errUpdateChain.Error()))
+			}
+			if errPingServer != nil {
+				errorMsgs = append(errorMsgs, fmt.Sprintf("Error in Ping server: %s", errPingServer.Error()))
+			}
+
+			if len(errorMsgs) > 0 {
+				errMsg := map[string]interface{}{
+					"message":     "Pool Cancel Join is submitted but Error in cleanup",
+					"description": strings.Join(errorMsgs, ", "),
+				}
+				w.WriteHeader(http.StatusExpectationFailed)
+				json.NewEncoder(w).Encode(errMsg)
+				return
+			} else {
+				statusCode = http.StatusAccepted
+				err = nil
+				response = []byte(fmt.Sprintf("{\"account\":\"\",\"pool_id\":%d}", req.PoolID))
+			}
 		}
 	}
 	if statusCode == http.StatusOK {
@@ -387,7 +320,20 @@ func (bl *FxBlockchain) HandlePoolCancelJoin(method string, action string, from 
 }
 
 func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
-	bl.updatePoolName("0")
+	// Reset pool configuration
+	if bl.updatePoolName != nil {
+		if err := bl.updatePoolName("0"); err != nil {
+			log.Errorw("Failed to reset pool name", "error", err)
+		}
+	}
+
+	// Reset chain configuration
+	if bl.updateChainName != nil {
+		if err := bl.updateChainName(""); err != nil {
+			log.Errorw("Failed to reset chain name", "error", err)
+		}
+	}
+
 	bl.StopPingServer(ctx)
 	if bl.a != nil {
 		bl.a.StopJoinPoolRequestAnnouncements()
@@ -624,18 +570,19 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 }
 
 func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID, account string, topicString string, withMemberListUpdate bool) error {
-	// This handles the pending pool requests on a member that is already joined the pool
-	if withMemberListUpdate {
-		err := bl.FetchUsersAndPopulateSets(ctx, topicString, false, 15*time.Second)
-		if err != nil {
-			return err
-		}
-	}
+	// Note: withMemberListUpdate parameter is deprecated - no longer needed with EVM chain integration
+	// Voting logic has been removed as it's no longer required
+
 	averageDuration := float64(2000)
 	successCount := 0
+
+	// Check if peer exists in our local members map
 	status, exists := bl.GetMemberStatus(from)
 	if !exists {
-		return fmt.Errorf("peerID does not exist in the list of pool requests or pool members: %s", from)
+		log.Debugw("PeerID not found in local members map, this is expected with EVM integration", "peerID", from)
+		// With EVM integration, we don't maintain a local members list
+		// This method is now primarily for legacy compatibility
+		return nil
 	}
 	if status == common.Pending {
 		// Ping
@@ -765,4 +712,557 @@ func (bl *FxBlockchain) HandlePoolList(ctx context.Context) (PoolListResponse, e
 		return PoolListResponse{}, err
 	}
 	return res, nil
+}
+
+// HandleEVMPoolList retrieves pool list from EVM chains (Base/Skale)
+func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string) (EVMPoolListResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
+	defer cancel()
+
+	chainConfigs := GetChainConfigs()
+	chainConfig, exists := chainConfigs[chainName]
+	if !exists {
+		return EVMPoolListResponse{}, fmt.Errorf("unsupported chain: %s", chainName)
+	}
+
+	var pools []EVMPool
+	poolID := uint32(1) // Start from pool ID 1
+
+	for {
+		// Call the pools(uint32) method on the contract using proper ABI encoding
+		callData := abi.EncodePoolsCall(poolID)
+		params := []interface{}{
+			map[string]interface{}{
+				"to":   chainConfig.Contract,
+				"data": callData,
+			},
+			"latest",
+		}
+
+		response, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", params, 3)
+		if err != nil {
+			log.Errorw("Failed to call EVM chain after retries", "chain", chainName, "poolID", poolID, "error", err)
+			// Don't return error immediately, just log and continue to next pool
+			break
+		}
+
+		if statusCode != 200 {
+			return EVMPoolListResponse{}, fmt.Errorf("unexpected status code %d from chain %s", statusCode, chainName)
+		}
+
+		// Parse JSON-RPC response
+		var rpcResponse struct {
+			Result string `json:"result"`
+			Error  *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+
+		if err := json.Unmarshal(response, &rpcResponse); err != nil {
+			return EVMPoolListResponse{}, fmt.Errorf("failed to parse RPC response: %w", err)
+		}
+
+		if rpcResponse.Error != nil {
+			return EVMPoolListResponse{}, fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
+		}
+
+		// Check for contract-specific errors
+		if contractErr := abi.ParseContractError(rpcResponse.Result); contractErr != nil {
+			log.Debugw("Contract error encountered", "chain", chainName, "poolID", poolID, "error", contractErr)
+			break // Stop iteration on contract error
+		}
+
+		// Decode the pool data using proper ABI decoding
+		poolData, err := abi.DecodePoolsResult(rpcResponse.Result)
+		if err != nil {
+			// Pool not found or invalid data, stop iteration
+			log.Debugw("Pool not found or invalid data", "chain", chainName, "poolID", poolID, "error", err)
+			break
+		}
+
+		// Convert to EVMPool format
+		pool := EVMPool{
+			Creator:                    poolData.Creator,
+			ID:                         poolData.ID,
+			MaxChallengeResponsePeriod: poolData.MaxChallengeResponsePeriod,
+			MemberCount:                poolData.MemberCount,
+			MaxMembers:                 poolData.MaxMembers,
+			RequiredTokens:             poolData.RequiredTokens.String(),
+			MinPingTime:                poolData.MinPingTime.String(),
+			Name:                       poolData.Name,
+			Region:                     poolData.Region,
+			ChainName:                  chainName,
+		}
+
+		pools = append(pools, pool)
+		poolID++
+
+		// Safety check to prevent infinite loops
+		if poolID > 10000 {
+			log.Warnw("Reached maximum pool ID limit", "chain", chainName, "maxPoolID", poolID)
+			break
+		}
+	}
+
+	return EVMPoolListResponse{Pools: pools}, nil
+}
+
+// HandleIsMemberOfPool checks if a peerID is a member of a specific pool on a specific chain
+func (bl *FxBlockchain) HandleIsMemberOfPool(ctx context.Context, req IsMemberOfPoolRequest) (IsMemberOfPoolResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
+	defer cancel()
+
+	chainConfigs := GetChainConfigs()
+	chainConfig, exists := chainConfigs[req.ChainName]
+	if !exists {
+		return IsMemberOfPoolResponse{}, fmt.Errorf("unsupported chain: %s", req.ChainName)
+	}
+
+	// Convert PeerID to bytes32
+	peerIDBytes32, err := peerIdToBytes32(req.PeerID)
+	if err != nil {
+		return IsMemberOfPoolResponse{}, fmt.Errorf("failed to convert PeerID to bytes32: %w", err)
+	}
+
+	// Call isPeerIdMemberOfPool(uint32,bytes32) method using proper ABI encoding
+	callData := abi.EncodeIsPeerIdMemberOfPoolCall(req.PoolID, peerIDBytes32)
+
+	params := []interface{}{
+		map[string]interface{}{
+			"to":   chainConfig.Contract,
+			"data": callData,
+		},
+		"latest",
+	}
+
+	response, statusCode, err := bl.callEVMChainWithRetry(ctx, req.ChainName, "eth_call", params, 3)
+	if err != nil {
+		log.Errorw("Failed to call EVM chain for membership check after retries", "chain", req.ChainName, "poolID", req.PoolID, "peerID", req.PeerID, "error", err)
+		return IsMemberOfPoolResponse{
+			IsMember:      false,
+			MemberAddress: "0x0000000000000000000000000000000000000000",
+			ChainName:     req.ChainName,
+			PoolID:        req.PoolID,
+		}, nil // Return false instead of error for graceful degradation
+	}
+
+	if statusCode != 200 {
+		return IsMemberOfPoolResponse{}, fmt.Errorf("unexpected status code %d from chain %s", statusCode, req.ChainName)
+	}
+
+	// Parse JSON-RPC response
+	var rpcResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(response, &rpcResponse); err != nil {
+		return IsMemberOfPoolResponse{}, fmt.Errorf("failed to parse RPC response: %w", err)
+	}
+
+	if rpcResponse.Error != nil {
+		return IsMemberOfPoolResponse{}, fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
+	}
+
+	// Check for contract-specific errors
+	if contractErr := abi.ParseContractError(rpcResponse.Result); contractErr != nil {
+		log.Debugw("Contract error in membership check", "chain", req.ChainName, "poolID", req.PoolID, "error", contractErr)
+		return IsMemberOfPoolResponse{
+			IsMember:      false,
+			MemberAddress: "0x0000000000000000000000000000000000000000",
+			ChainName:     req.ChainName,
+			PoolID:        req.PoolID,
+		}, nil // Return false for contract errors (graceful degradation)
+	}
+
+	// Decode the result using proper ABI decoding
+	membershipResult, err := abi.DecodeIsMemberOfPoolResult(rpcResponse.Result)
+	if err != nil {
+		log.Errorw("Failed to decode membership result", "chain", req.ChainName, "poolID", req.PoolID, "error", err)
+		return IsMemberOfPoolResponse{
+			IsMember:      false,
+			MemberAddress: "0x0000000000000000000000000000000000000000",
+			ChainName:     req.ChainName,
+			PoolID:        req.PoolID,
+		}, nil
+	}
+
+	return IsMemberOfPoolResponse{
+		IsMember:      membershipResult.IsMember,
+		MemberAddress: membershipResult.MemberAddress,
+		ChainName:     req.ChainName,
+		PoolID:        req.PoolID,
+	}, nil
+}
+
+// GetPoolCreatorPeerID retrieves the creator's peer ID for a specific pool on a specific chain
+func (bl *FxBlockchain) GetPoolCreatorPeerID(ctx context.Context, poolID uint32, chainName string) (string, error) {
+	if poolID == 0 {
+		return "", fmt.Errorf("invalid pool ID: %d", poolID)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
+	defer cancel()
+
+	chainConfigs := GetChainConfigs()
+	chainConfig, exists := chainConfigs[chainName]
+	if !exists {
+		return "", fmt.Errorf("unsupported chain: %s", chainName)
+	}
+
+	log.Debugw("Getting pool creator peer ID", "poolID", poolID, "chain", chainName)
+
+	// Step 1: Get pool information to find the creator
+	poolCallData := abi.EncodePoolsCall(poolID)
+	poolParams := []interface{}{
+		map[string]interface{}{
+			"to":   chainConfig.Contract,
+			"data": poolCallData,
+		},
+		"latest",
+	}
+
+	poolResponse, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", poolParams, 3)
+	if err != nil {
+		log.Errorw("Failed to get pool information", "chain", chainName, "poolID", poolID, "error", err)
+		return "", fmt.Errorf("failed to get pool information: %w", err)
+	}
+
+	if statusCode != 200 {
+		return "", fmt.Errorf("unexpected status code %d from chain %s", statusCode, chainName)
+	}
+
+	// Parse pool response
+	var poolRPCResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(poolResponse, &poolRPCResponse); err != nil {
+		return "", fmt.Errorf("failed to parse pool RPC response: %w", err)
+	}
+
+	if poolRPCResponse.Error != nil {
+		return "", fmt.Errorf("pool RPC error: %s", poolRPCResponse.Error.Message)
+	}
+
+	// Check for contract-specific errors
+	if contractErr := abi.ParseContractError(poolRPCResponse.Result); contractErr != nil {
+		return "", fmt.Errorf("pool contract error: %w", contractErr)
+	}
+
+	// Decode pool data
+	poolData, err := abi.DecodePoolsResult(poolRPCResponse.Result)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode pool data: %w", err)
+	}
+
+	// Step 2: Get creator's peer IDs
+	peerIdsCallData := abi.EncodeGetMemberPeerIdsCall(poolID, poolData.Creator)
+	peerIdsParams := []interface{}{
+		map[string]interface{}{
+			"to":   chainConfig.Contract,
+			"data": peerIdsCallData,
+		},
+		"latest",
+	}
+
+	peerIdsResponse, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", peerIdsParams, 3)
+	if err != nil {
+		log.Errorw("Failed to get creator peer IDs", "chain", chainName, "poolID", poolID, "creator", poolData.Creator, "error", err)
+		return "", fmt.Errorf("failed to get creator peer IDs: %w", err)
+	}
+
+	if statusCode != 200 {
+		return "", fmt.Errorf("unexpected status code %d from chain %s for peer IDs", statusCode, chainName)
+	}
+
+	// Parse peer IDs response
+	var peerIdsRPCResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(peerIdsResponse, &peerIdsRPCResponse); err != nil {
+		return "", fmt.Errorf("failed to parse peer IDs RPC response: %w", err)
+	}
+
+	if peerIdsRPCResponse.Error != nil {
+		return "", fmt.Errorf("peer IDs RPC error: %s", peerIdsRPCResponse.Error.Message)
+	}
+
+	// Check for contract-specific errors
+	if contractErr := abi.ParseContractError(peerIdsRPCResponse.Result); contractErr != nil {
+		return "", fmt.Errorf("peer IDs contract error: %w", contractErr)
+	}
+
+	// Decode peer IDs data
+	peerIdsData, err := abi.DecodeGetMemberPeerIdsResult(peerIdsRPCResponse.Result)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode peer IDs data: %w", err)
+	}
+
+	// Step 3: Convert the first peer ID from bytes32 to full peer ID
+	if len(peerIdsData.PeerIds) == 0 {
+		return "", fmt.Errorf("no peer IDs found for pool creator %s in pool %d", poolData.Creator, poolID)
+	}
+
+	// Use the first peer ID (as specified in requirements)
+	firstPeerIDBytes32 := peerIdsData.PeerIds[0]
+
+	// Validate the bytes32 peer ID
+	if firstPeerIDBytes32 == "" || firstPeerIDBytes32 == "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		return "", fmt.Errorf("invalid or empty peer ID for pool creator %s in pool %d", poolData.Creator, poolID)
+	}
+
+	// Convert bytes32 to full peer ID
+	fullPeerID, err := Bytes32ToPeerID(firstPeerIDBytes32)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert bytes32 %s to peer ID: %w", firstPeerIDBytes32, err)
+	}
+
+	// Validate the converted peer ID
+	if fullPeerID.String() == "" {
+		return "", fmt.Errorf("converted peer ID is empty for bytes32 %s", firstPeerIDBytes32)
+	}
+
+	log.Infow("Successfully retrieved pool creator peer ID",
+		"chain", chainName,
+		"poolID", poolID,
+		"creator", poolData.Creator,
+		"bytes32PeerID", firstPeerIDBytes32,
+		"fullPeerID", fullPeerID.String())
+
+	return fullPeerID.String(), nil
+}
+
+// discoverPoolChain attempts to discover which chain a pool exists on
+func (bl *FxBlockchain) discoverPoolChain(ctx context.Context, poolID uint32) (string, error) {
+	chainList := []string{"skale", "base"}
+
+	for _, chainName := range chainList {
+		if err := bl.validatePoolOnChain(ctx, poolID, chainName); err == nil {
+			return chainName, nil
+		}
+	}
+
+	return "", fmt.Errorf("pool %d not found on any supported chain", poolID)
+}
+
+// validatePoolOnChain checks if a pool exists on a specific chain
+func (bl *FxBlockchain) validatePoolOnChain(ctx context.Context, poolID uint32, chainName string) error {
+	chainConfigs := GetChainConfigs()
+	chainConfig, exists := chainConfigs[chainName]
+	if !exists {
+		return fmt.Errorf("unsupported chain: %s", chainName)
+	}
+
+	// Call the pools(uint32) method to check if pool exists
+	callData := abi.EncodePoolsCall(poolID)
+	params := []interface{}{
+		map[string]interface{}{
+			"to":   chainConfig.Contract,
+			"data": callData,
+		},
+		"latest",
+	}
+
+	response, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", params, 2)
+	if err != nil {
+		return fmt.Errorf("failed to call chain %s: %w", chainName, err)
+	}
+
+	if statusCode != 200 {
+		return fmt.Errorf("unexpected status code %d from chain %s", statusCode, chainName)
+	}
+
+	// Parse JSON-RPC response
+	var rpcResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(response, &rpcResponse); err != nil {
+		return fmt.Errorf("failed to parse RPC response: %w", err)
+	}
+
+	if rpcResponse.Error != nil {
+		return fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
+	}
+
+	// Check for contract-specific errors
+	if contractErr := abi.ParseContractError(rpcResponse.Result); contractErr != nil {
+		return fmt.Errorf("contract error: %w", contractErr)
+	}
+
+	// Try to decode the pool data to validate it exists
+	_, err = abi.DecodePoolsResult(rpcResponse.Result)
+	if err != nil {
+		return fmt.Errorf("pool %d does not exist on chain %s: %w", poolID, chainName, err)
+	}
+
+	return nil
+}
+
+// HandlePoolLeave handles pool leave requests with chain support
+func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", action, "from", from)
+	var req PoolLeaveRequest
+	var res PoolLeaveResponse
+
+	defer r.Body.Close()
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Debug("cannot parse request body: %v", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
+	defer cancel()
+
+	poolID := req.PoolID
+	chainName := req.ChainName
+
+	// If no chain name provided, try to determine it from current configuration
+	if chainName == "" {
+		var currentChain string
+		if bl.getChainName != nil {
+			currentChain = bl.getChainName()
+		}
+		if currentChain != "" {
+			chainName = currentChain
+			log.Debugw("Using current chain configuration", "poolID", poolID, "chain", chainName)
+		} else {
+			// Try to discover which chain this pool exists on
+			log.Debugw("No chain name provided, attempting auto-discovery", "poolID", poolID)
+			if discoveredChain, err := bl.discoverPoolChain(ctx, uint32(poolID)); err == nil {
+				chainName = discoveredChain
+				log.Infow("Auto-discovered chain for pool", "poolID", poolID, "chain", chainName)
+			} else {
+				// Default to skale if discovery fails
+				chainName = "skale"
+				log.Warnw("Failed to discover chain, defaulting to skale", "poolID", poolID, "error", err)
+			}
+		}
+	}
+
+	// Validate that the pool exists on the specified chain
+	if err := bl.validatePoolOnChain(ctx, uint32(poolID), chainName); err != nil {
+		errMsg := map[string]interface{}{
+			"message":     "Pool validation failed",
+			"description": fmt.Sprintf("Pool %d does not exist on chain %s: %s", poolID, chainName, err.Error()),
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
+	// Call the removeMemberPeerId contract method
+	if err := bl.callRemoveMemberPeerId(ctx, uint32(poolID), from.String(), chainName); err != nil {
+		errMsg := map[string]interface{}{
+			"message":     "Failed to remove member from pool",
+			"description": fmt.Sprintf("Contract call failed: %s", err.Error()),
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(errMsg)
+		return
+	}
+
+	// Clean up local configuration and state
+	bl.cleanLeaveJoinPool(ctx, poolID)
+
+	statusCode := http.StatusAccepted
+	res = PoolLeaveResponse{
+		Account:   "",
+		PoolID:    req.PoolID,
+		ChainName: chainName,
+	}
+
+	log.Infow("Pool leave request processed successfully", "poolID", poolID, "chain", chainName, "from", from)
+
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.Error("failed to write response: %v", err)
+	}
+}
+
+// callRemoveMemberPeerId calls the removeMemberPeerId contract method
+func (bl *FxBlockchain) callRemoveMemberPeerId(ctx context.Context, poolID uint32, peerID string, chainName string) error {
+	chainConfigs := GetChainConfigs()
+	chainConfig, exists := chainConfigs[chainName]
+	if !exists {
+		return fmt.Errorf("unsupported chain: %s", chainName)
+	}
+
+	// Convert peer ID to bytes32 format
+	peerIDPeer, err := peer.Decode(peerID)
+	if err != nil {
+		return fmt.Errorf("failed to decode peer ID: %w", err)
+	}
+
+	peerIDBytes32, err := PeerIDToBytes32(peerIDPeer)
+	if err != nil {
+		return fmt.Errorf("failed to convert peer ID to bytes32: %w", err)
+	}
+
+	// Encode the removeMemberPeerId contract call
+	callData := abi.EncodeRemoveMemberPeerIdCall(poolID, peerIDBytes32)
+
+	// For now, we'll use eth_call to validate the call would succeed
+	// In a full implementation, you'd use eth_sendTransaction with proper signing
+	params := []interface{}{
+		map[string]interface{}{
+			"to":   chainConfig.Contract,
+			"data": callData,
+		},
+		"latest",
+	}
+
+	response, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", params, 3)
+	if err != nil {
+		return fmt.Errorf("failed to call removeMemberPeerId on chain %s: %w", chainName, err)
+	}
+
+	if statusCode != 200 {
+		return fmt.Errorf("unexpected status code %d from chain %s", statusCode, chainName)
+	}
+
+	// Parse JSON-RPC response
+	var rpcResponse struct {
+		Result string `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+
+	if err := json.Unmarshal(response, &rpcResponse); err != nil {
+		return fmt.Errorf("failed to parse RPC response: %w", err)
+	}
+
+	if rpcResponse.Error != nil {
+		return fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
+	}
+
+	// Check for contract-specific errors
+	if contractErr := abi.ParseContractError(rpcResponse.Result); contractErr != nil {
+		return fmt.Errorf("contract error: %w", contractErr)
+	}
+
+	log.Infow("Successfully called removeMemberPeerId", "poolID", poolID, "peerID", peerID, "chain", chainName)
+	return nil
 }

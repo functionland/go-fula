@@ -54,7 +54,7 @@ type Client struct {
 	relays  []string
 
 	streams map[string]*blockchain.StreamBuffer // Map of active streams
-	mu      sync.Mutex               // Mutex for thread-safe access
+	mu      sync.Mutex                          // Mutex for thread-safe access
 }
 
 func NewClient(cfg *Config) (*Client, error) {
