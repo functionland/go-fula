@@ -1139,7 +1139,10 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 
 	// If no chain name provided, try to determine it from current configuration
 	if chainName == "" {
-		currentChain := bl.getChainName()
+		var currentChain string
+		if bl.getChainName != nil {
+			currentChain = bl.getChainName()
+		}
 		if currentChain != "" {
 			chainName = currentChain
 			log.Debugw("Using current chain configuration", "poolID", poolID, "chain", chainName)
