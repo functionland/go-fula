@@ -72,6 +72,11 @@ func TestClientAccountOperations(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, client)
 	require.NotNil(t, client.bl, "Blockchain should be initialized with fx exchange")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	testAccount := "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 
@@ -124,6 +129,11 @@ func TestClientAssetsBalance(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl, "Blockchain should be initialized")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	testAccount := "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 	assetId := 1
@@ -149,6 +159,11 @@ func TestClientPoolOperations(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl, "Blockchain should be initialized")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test PoolJoin
 	t.Run("PoolJoin", func(t *testing.T) {
@@ -190,6 +205,11 @@ func TestClientEVMChainPoolOperations(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl, "Blockchain should be initialized")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test PoolJoinWithChain - Base chain
 	t.Run("PoolJoinWithChain_Base", func(t *testing.T) {
@@ -276,6 +296,11 @@ func TestClientManifestOperations(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl, "Blockchain should be initialized")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test ManifestAvailable
 	t.Run("ManifestAvailable", func(t *testing.T) {
@@ -308,6 +333,11 @@ func TestClientSeeded(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test that client exists (Seeded method doesn't exist in mobile client)
 	assert.NotNil(t, client)
@@ -326,6 +356,11 @@ func TestClientBloxFreeSpace(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl, "Blockchain should be initialized")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test BloxFreeSpace
 	response, err := client.BloxFreeSpace()
@@ -347,6 +382,11 @@ func TestClientErrorHandling(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl, "Blockchain should be initialized")
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test with invalid account format
 	t.Run("InvalidAccount", func(t *testing.T) {
@@ -427,6 +467,11 @@ func TestClientConfigValidation(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, client)
 				assert.NotNil(t, client.bl) // Blockchain should be initialized
+				defer func() {
+					if shutdownErr := client.Shutdown(); shutdownErr != nil {
+						t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+					}
+				}()
 			}
 		})
 	}
@@ -445,6 +490,11 @@ func TestClientBlockchainIntegration(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client.bl)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test that blockchain instance is properly configured
 	assert.NotNil(t, client.bl)

@@ -56,6 +56,15 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := NewClient(tt.config)
 
+			// Always try to cleanup client if it was created, even on error
+			defer func() {
+				if client != nil {
+					if shutdownErr := client.Shutdown(); shutdownErr != nil {
+						t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+					}
+				}
+			}()
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				if tt.errString != "" {
@@ -88,6 +97,11 @@ func TestClientDataOperations(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 	require.NotNil(t, client)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test data storage and retrieval
 	testData := []byte("Hello, World!")
@@ -116,6 +130,11 @@ func TestClientDataOperationsWithDifferentCodecs(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	tests := []struct {
 		name  string
@@ -160,6 +179,11 @@ func TestClientPushPull(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Store some data first
 	testData := []byte("test data for push/pull")
@@ -186,6 +210,11 @@ func TestClientLargeData(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Create large test data (1MB)
 	largeData := make([]byte, 1024*1024)
@@ -214,6 +243,11 @@ func TestClientConcurrentOperations(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Number of concurrent operations
 	numOps := 10
@@ -269,6 +303,11 @@ func TestClientFlush(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Store some data
 	testData := []byte("test data for flush")
@@ -291,6 +330,11 @@ func TestClientSetAuth(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Generate test peer IDs
 	priv1, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
@@ -326,6 +370,11 @@ func TestClientInvalidOperations(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test Get with invalid link
 	invalidLink := []byte("invalid link data")
@@ -356,6 +405,11 @@ func TestClientID(t *testing.T) {
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
+	defer func() {
+		if shutdownErr := client.Shutdown(); shutdownErr != nil {
+			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
+		}
+	}()
 
 	// Test that ID returns a valid peer ID string
 	id := client.ID()
