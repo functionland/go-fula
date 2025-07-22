@@ -606,8 +606,24 @@ func getNonLoopbackIP() (string, error) {
 }
 
 func joinPoolHandler(w http.ResponseWriter, r *http.Request) {
-	// Read the poolID from the request
-	poolID := r.FormValue("poolID")
+	var poolID string
+
+	// Check content type and parse accordingly
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		// Parse JSON request
+		var req struct {
+			PoolID string `json:"poolID"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+		poolID = req.PoolID
+	} else {
+		// Read the poolID from form data
+		poolID = r.FormValue("poolID")
+	}
 
 	// Read the existing config.yaml file
 	configFilePath := "/internal/config.yaml"
@@ -648,14 +664,50 @@ func joinPoolHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func leavePoolHandler(w http.ResponseWriter, r *http.Request) {
-	poolID := r.FormValue("poolID")
+	var poolID string
+
+	// Check content type and parse accordingly
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		// Parse JSON request
+		var req struct {
+			PoolID string `json:"poolID"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+		poolID = req.PoolID
+	} else {
+		// Read the poolID from form data
+		poolID = r.FormValue("poolID")
+	}
+
 	// Leave pool logic
 	response := map[string]string{"status": "left", "poolID": poolID}
 	json.NewEncoder(w).Encode(response)
 }
 
 func cancelJoinPoolHandler(w http.ResponseWriter, r *http.Request) {
-	poolID := r.FormValue("poolID")
+	var poolID string
+
+	// Check content type and parse accordingly
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		// Parse JSON request
+		var req struct {
+			PoolID string `json:"poolID"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+		poolID = req.PoolID
+	} else {
+		// Read the poolID from form data
+		poolID = r.FormValue("poolID")
+	}
+
 	// Cancel join pool logic
 	response := map[string]string{"status": "cancelled", "poolID": poolID}
 	json.NewEncoder(w).Encode(response)
