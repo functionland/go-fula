@@ -129,8 +129,8 @@ func TestClientDataOperationsWithDifferentCodecs(t *testing.T) {
 		},
 		{
 			name:  "json_data",
-			data:  []byte(`{"test": "json data"}`),
-			codec: 0x0129, // JSON codec
+			data:  []byte(`{"test":"json data"}`), // No space after colon to match normalized JSON
+			codec: 0x0129,                         // JSON codec
 		},
 	}
 

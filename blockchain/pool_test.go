@@ -19,21 +19,21 @@ import (
 // TestPoolJoinRequest tests pool join functionality
 func TestPoolJoinRequest(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create test peers
 	priv1, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
 	priv2, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h1, err := libp2p.New(libp2p.Identity(priv1))
 	require.NoError(t, err)
 	defer h1.Close()
-	
+
 	h2, err := libp2p.New(libp2p.Identity(priv2))
 	require.NoError(t, err)
 	defer h2.Close()
-	
+
 	// Create blockchain instance
 	bl, err := NewFxBlockchain(h1, nil, nil,
 		NewSimpleKeyStorer(""),
@@ -41,55 +41,55 @@ func TestPoolJoinRequest(t *testing.T) {
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	// Test pool join request
 	joinReq := PoolJoinRequest{
 		PoolID: 1,
 	}
-	
+
 	// This will test the peer-to-peer communication aspect
 	// The actual EVM contract interaction would need a mock blockchain
 	response, err := bl.PoolJoin(ctx, h2.ID(), joinReq)
-	
+
 	// Since we don't have a real peer responding, this will likely fail
 	// But we can test that the method exists and handles the request structure
 	_ = response
 	_ = err
-	
+
 	assert.NotNil(t, bl)
 }
 
 // TestPoolLeaveRequest tests pool leave functionality
 func TestPoolLeaveRequest(t *testing.T) {
 	ctx := context.Background()
-	
+
 	priv1, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
 	priv2, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h1, err := libp2p.New(libp2p.Identity(priv1))
 	require.NoError(t, err)
 	defer h1.Close()
-	
+
 	h2, err := libp2p.New(libp2p.Identity(priv2))
 	require.NoError(t, err)
 	defer h2.Close()
-	
+
 	bl, err := NewFxBlockchain(h1, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	// Test pool leave request
 	leaveReq := PoolLeaveRequest{
 		PoolID: 1,
 	}
-	
+
 	response, err := bl.PoolLeave(ctx, h2.ID(), leaveReq)
-	
+
 	// Test that the method exists and can be called
 	_ = response
 	_ = err
@@ -103,7 +103,7 @@ func TestHandleEVMPoolList(t *testing.T) {
 		var req map[string]interface{}
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
-		
+
 		method := req["method"].(string)
 		if method == "eth_call" {
 			// Mock pool data response
@@ -117,26 +117,26 @@ func TestHandleEVMPoolList(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	
+
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h, err := libp2p.New(libp2p.Identity(priv))
 	require.NoError(t, err)
 	defer h.Close()
-	
+
 	bl, err := NewFxBlockchain(h, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	ctx := context.Background()
-	
+
 	// Test EVM pool list (this would need implementation changes to work with mock)
 	response, err := bl.HandleEVMPoolList(ctx, "base")
-	
+
 	// For now, we expect this to fail since we can't easily mock the chain configs
 	// But we test that the method exists
 	_ = response
@@ -148,29 +148,29 @@ func TestHandleEVMPoolList(t *testing.T) {
 func TestHandleIsMemberOfPool(t *testing.T) {
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h, err := libp2p.New(libp2p.Identity(priv))
 	require.NoError(t, err)
 	defer h.Close()
-	
+
 	bl, err := NewFxBlockchain(h, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	ctx := context.Background()
-	
+
 	// Test membership check
 	req := IsMemberOfPoolRequest{
 		PoolID:    1,
 		PeerID:    h.ID().String(),
 		ChainName: "base",
 	}
-	
+
 	response, err := bl.HandleIsMemberOfPool(ctx, req)
-	
+
 	// This will likely fail without proper chain setup, but tests the interface
 	_ = response
 	_ = err
@@ -200,7 +200,7 @@ func TestPoolRequestValidation(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test pool ID validation logic
@@ -216,21 +216,21 @@ func TestPoolRequestValidation(t *testing.T) {
 // TestPoolJoinErrorHandling tests error handling in pool join
 func TestPoolJoinErrorHandling(t *testing.T) {
 	ctx := context.Background()
-	
+
 	priv1, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h1, err := libp2p.New(libp2p.Identity(priv1))
 	require.NoError(t, err)
 	defer h1.Close()
-	
+
 	bl, err := NewFxBlockchain(h1, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(1), // Very short timeout
 	)
 	require.NoError(t, err)
-	
+
 	// Test with invalid peer ID
 	invalidPeerID, err := peer.Decode("12D3KooWInvalidPeerID")
 	if err != nil {
@@ -240,14 +240,14 @@ func TestPoolJoinErrorHandling(t *testing.T) {
 		invalidPeerID = h.ID()
 		h.Close()
 	}
-	
+
 	joinReq := PoolJoinRequest{
 		PoolID: 1,
 	}
-	
+
 	// This should fail due to network issues
 	_, err = bl.PoolJoin(ctx, invalidPeerID, joinReq)
-	
+
 	// We expect an error due to network connectivity
 	assert.Error(t, err)
 }
@@ -256,34 +256,34 @@ func TestPoolJoinErrorHandling(t *testing.T) {
 func TestPoolOperationTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	
+
 	priv1, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
 	priv2, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h1, err := libp2p.New(libp2p.Identity(priv1))
 	require.NoError(t, err)
 	defer h1.Close()
-	
+
 	h2, err := libp2p.New(libp2p.Identity(priv2))
 	require.NoError(t, err)
 	defer h2.Close()
-	
+
 	bl, err := NewFxBlockchain(h1, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	joinReq := PoolJoinRequest{
 		PoolID: 1,
 	}
-	
+
 	// This should timeout
 	_, err = bl.PoolJoin(ctx, h2.ID(), joinReq)
-	
+
 	// We expect a timeout or connection error
 	assert.Error(t, err)
 }
@@ -292,23 +292,23 @@ func TestPoolOperationTimeout(t *testing.T) {
 func TestFetchUsersAndPopulateSets(t *testing.T) {
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h, err := libp2p.New(libp2p.Identity(priv))
 	require.NoError(t, err)
 	defer h.Close()
-	
+
 	bl, err := NewFxBlockchain(h, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	ctx := context.Background()
-	
+
 	// Test fetching users for a pool
 	err = bl.FetchUsersAndPopulateSets(ctx, "1", true, 30*time.Second)
-	
+
 	// This may fail without proper setup, but tests the interface
 	// The method should handle the case gracefully
 	assert.NotNil(t, bl)
@@ -318,24 +318,24 @@ func TestFetchUsersAndPopulateSets(t *testing.T) {
 func TestDiscoverPoolAndChain(t *testing.T) {
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
 	require.NoError(t, err)
-	
+
 	h, err := libp2p.New(libp2p.Identity(priv))
 	require.NoError(t, err)
 	defer h.Close()
-	
+
 	bl, err := NewFxBlockchain(h, nil, nil,
 		NewSimpleKeyStorer(""),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
 	require.NoError(t, err)
-	
+
 	ctx := context.Background()
-	
+
 	// Test discovery functionality
 	// This is a private method, so we test it indirectly through FetchUsersAndPopulateSets
 	err = bl.FetchUsersAndPopulateSets(ctx, "0", true, 30*time.Second)
-	
+
 	// The method should handle discovery gracefully
 	assert.NotNil(t, bl)
 }
