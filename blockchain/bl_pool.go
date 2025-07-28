@@ -844,9 +844,10 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 		}
 
 		// Convert to EVMPool format
+		// IMPORTANT: Use the discovered poolID from poolIds() call, not poolData.ID which may be incorrectly parsed
 		pool := EVMPool{
 			Creator:                    poolData.Creator,
-			ID:                         poolData.ID,
+			ID:                         poolID, // Use the poolID we discovered from poolIds(), not poolData.ID
 			MaxChallengeResponsePeriod: poolData.MaxChallengeResponsePeriod,
 			MemberCount:                poolData.MemberCount,
 			MaxMembers:                 poolData.MaxMembers,
