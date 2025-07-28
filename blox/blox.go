@@ -788,7 +788,7 @@ func (p *Blox) Start(ctx context.Context) error {
 
 						// Call HandleManifestBatchStore method
 						if len(storedLinks) > 0 {
-							// Check if the manifests are available to be stored or not
+							// TODO: Check if the manifests are available to be stored or not
 							/*
 								This uses old substrate and we need to change to new EVM
 								availableLinks, err := p.bl.HandleManifestAvailableAllaccountsBatch(shortCtx, p.topicName, storedLinks)
