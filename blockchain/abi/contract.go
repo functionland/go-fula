@@ -79,12 +79,14 @@ type GetMemberPeerIdsResult struct {
 // MethodSignatures contains the 4-byte method signatures
 var MethodSignatures = struct {
 	Pools                string
+	PoolIds              string
 	IsPeerIdMemberOfPool string
 	GetMemberPeerIds     string
 	RemoveMemberPeerId   string
 }{
 	Pools:                "0xced08b2d", // pools(uint32) - updated signature
-	IsPeerIdMemberOfPool: "0x95c5eb1a", // isPeerIdMemberOfPool(uint32,bytes32)
+	PoolIds:              "0x69883b4e", // poolIds(uint256) - index-based pool discovery
+	IsPeerIdMemberOfPool: "0xb098a605", // isPeerIdMemberOfPool(uint32,bytes32) - corrected from block explorer
 	GetMemberPeerIds:     "0x31db3ae8", // getMemberPeerIds(uint32,address)
 	RemoveMemberPeerId:   "0x12345678", // removeMemberPeerId(uint32,bytes32) - TODO: Update with actual signature
 }
@@ -346,6 +348,32 @@ func DecodeGetMemberPeerIdsResult(data string) (*GetMemberPeerIdsResult, error) 
 // EncodePoolsCall encodes the pools(uint32) method call
 func EncodePoolsCall(poolID uint32) string {
 	return fmt.Sprintf("%s%064x", MethodSignatures.Pools, poolID)
+}
+
+// EncodePoolIdsCall encodes the poolIds(uint256) method call for index-based pool discovery
+func EncodePoolIdsCall(index uint32) string {
+	return fmt.Sprintf("%s%064x", MethodSignatures.PoolIds, index)
+}
+
+// DecodePoolIdResponse decodes the response from poolIds(uint256) call
+func DecodePoolIdResponse(result string) (uint32, error) {
+	// Remove 0x prefix
+	if strings.HasPrefix(result, "0x") {
+		result = result[2:]
+	}
+	
+	// Should be 64 hex characters (32 bytes)
+	if len(result) != 64 {
+		return 0, fmt.Errorf("invalid response length: expected 64 hex chars, got %d", len(result))
+	}
+	
+	// Parse as uint64 first, then convert to uint32
+	poolID, err := strconv.ParseUint(result, 16, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse pool ID: %w", err)
+	}
+	
+	return uint32(poolID), nil
 }
 
 // EncodeIsPeerIdMemberOfPoolCall encodes the isPeerIdMemberOfPool(uint32,bytes32) method call

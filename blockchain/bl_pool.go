@@ -726,11 +726,13 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 	}
 
 	var pools []EVMPool
-	poolID := uint32(1) // Start from pool ID 1
+	index := uint32(0) // Start from index 0 for poolIds enumeration
+
+	log.Debugw("Starting pool discovery using poolIds(index)", "chain", chainName, "startIndex", index)
 
 	for {
-		// Call the pools(uint32) method on the contract using proper ABI encoding
-		callData := abi.EncodePoolsCall(poolID)
+		// Call the poolIds(uint256) method on the contract using index-based enumeration
+		callData := abi.EncodePoolIdsCall(index)
 		params := []interface{}{
 			map[string]interface{}{
 				"to":   chainConfig.Contract,
@@ -741,9 +743,8 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 
 		response, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", params, 3)
 		if err != nil {
-			log.Errorw("Failed to call EVM chain after retries", "chain", chainName, "poolID", poolID, "error", err)
-			// Don't return error immediately, just log and continue to next pool
-			break
+			log.Debugw("Error calling poolIds - no more pools", "chain", chainName, "index", index, "error", err)
+			break // Stop on error - no more pools
 		}
 
 		if statusCode != 200 {
@@ -764,21 +765,82 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 		}
 
 		if rpcResponse.Error != nil {
-			return EVMPoolListResponse{}, fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
+			log.Debugw("RPC error calling poolIds - no more pools", "chain", chainName, "index", index, "error", rpcResponse.Error.Message)
+			break // Stop on RPC error - no more pools
 		}
 
-		// Check for contract-specific errors
-		if contractErr := abi.ParseContractError(rpcResponse.Result); contractErr != nil {
-			log.Debugw("Contract error encountered", "chain", chainName, "poolID", poolID, "error", contractErr)
-			break // Stop iteration on contract error
+		// Check if response indicates no pool at this index (empty or revert)
+		if rpcResponse.Result == "0x" || len(rpcResponse.Result) <= 2 {
+			log.Debugw("No pool at index - stopping discovery", "chain", chainName, "index", index)
+			break
+		}
+
+		// Decode the pool ID from the response
+		poolID, err := abi.DecodePoolIdResponse(rpcResponse.Result)
+		if err != nil {
+			log.Debugw("Error decoding poolIds response", "chain", chainName, "index", index, "error", err)
+			break
+		}
+
+		// Skip pool 0 if it somehow appears
+		if poolID == 0 {
+			log.Debugw("Skipping pool 0 as it doesn't exist", "chain", chainName, "index", index)
+			index++
+			continue
+		}
+
+		log.Debugw("Found pool ID at index", "chain", chainName, "poolID", poolID, "index", index)
+
+		// Now get the full pool data using pools(uint32) method
+		poolCallData := abi.EncodePoolsCall(poolID)
+		poolParams := []interface{}{
+			map[string]interface{}{
+				"to":   chainConfig.Contract,
+				"data": poolCallData,
+			},
+			"latest",
+		}
+
+		poolResponse, poolStatusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", poolParams, 3)
+		if err != nil {
+			log.Warnw("Failed to get pool data", "chain", chainName, "poolID", poolID, "error", err)
+			index++
+			continue // Skip this pool but continue with next index
+		}
+
+		if poolStatusCode != 200 {
+			log.Warnw("Unexpected status code getting pool data", "chain", chainName, "poolID", poolID, "statusCode", poolStatusCode)
+			index++
+			continue
+		}
+
+		// Parse pool data response
+		var poolRpcResponse struct {
+			Result string `json:"result"`
+			Error  *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+
+		if err := json.Unmarshal(poolResponse, &poolRpcResponse); err != nil {
+			log.Warnw("Failed to parse pool data response", "chain", chainName, "poolID", poolID, "error", err)
+			index++
+			continue
+		}
+
+		if poolRpcResponse.Error != nil {
+			log.Warnw("RPC error getting pool data", "chain", chainName, "poolID", poolID, "error", poolRpcResponse.Error.Message)
+			index++
+			continue
 		}
 
 		// Decode the pool data using proper ABI decoding
-		poolData, err := abi.DecodePoolsResult(rpcResponse.Result)
+		poolData, err := abi.DecodePoolsResult(poolRpcResponse.Result)
 		if err != nil {
-			// Pool not found or invalid data, stop iteration
-			log.Debugw("Pool not found or invalid data", "chain", chainName, "poolID", poolID, "error", err)
-			break
+			log.Warnw("Failed to decode pool data", "chain", chainName, "poolID", poolID, "error", err)
+			index++
+			continue
 		}
 
 		// Convert to EVMPool format
@@ -796,11 +858,11 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 		}
 
 		pools = append(pools, pool)
-		poolID++
+		index++
 
 		// Safety check to prevent infinite loops
-		if poolID > 10000 {
-			log.Warnw("Reached maximum pool ID limit", "chain", chainName, "maxPoolID", poolID)
+		if index > 20 {
+			log.Warnw("Reached maximum index limit", "chain", chainName, "maxIndex", index)
 			break
 		}
 	}
@@ -808,8 +870,19 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 	return EVMPoolListResponse{Pools: pools}, nil
 }
 
-// HandleIsMemberOfPool checks if a peerID is a member of a specific pool on a specific chain
+// HandleIsMemberOfPool checks if a peer is a member of a specific pool on a specific chain
 func (bl *FxBlockchain) HandleIsMemberOfPool(ctx context.Context, req IsMemberOfPoolRequest) (IsMemberOfPoolResponse, error) {
+	// Pool 0 doesn't exist, return false immediately
+	if req.PoolID == 0 {
+		log.Debugw("Pool 0 doesn't exist, returning false", "chain", req.ChainName, "peerID", req.PeerID)
+		return IsMemberOfPoolResponse{
+			IsMember:      false,
+			MemberAddress: "0x0000000000000000000000000000000000000000",
+			ChainName:     req.ChainName,
+			PoolID:        req.PoolID,
+		}, nil
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 

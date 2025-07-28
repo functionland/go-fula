@@ -607,7 +607,7 @@ func (p *Blox) Start(ctx context.Context) error {
 
 		for {
 			attempt++
-			log.Infow("Starting pool discovery", "attempt", attempt, "nodeAccount", nodeAccount)
+			log.Infow("Starting pool discovery", "attempt", attempt, "PeerID", p.h.ID().String())
 
 			// Try each chain
 			for _, chainName := range chainList {
@@ -630,7 +630,7 @@ func (p *Blox) Start(ctx context.Context) error {
 						break
 					}
 
-					// Convert nodeAccount to peerID format for membership check
+					// peerID format for membership check
 					membershipReq := blockchain.IsMemberOfPoolRequest{
 						PeerID:    p.h.ID().String(), // Use the host's peer ID
 						PoolID:    pool.ID,
