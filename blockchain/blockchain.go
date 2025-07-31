@@ -280,13 +280,13 @@ func GetChainConfigs() map[string]ChainConfig {
 			ChainID:   8453,
 			RPC:       "https://base-rpc.publicnode.com",
 			BackupRPC: "https://1rpc.io/base",
-			Contract:  "0xf293A6902662DcB09E310254A5e418cb28D71b6b",
+			Contract:  "0xb093fF4B3B3B87a712107B26566e0cCE5E752b4D",
 		},
 		"skale": {
 			Name:     "skale",
 			ChainID:  2046399126,
 			RPC:      "https://mainnet.skalenodes.com/v1/elated-tan-skat",
-			Contract: "0xf293A6902662DcB09E310254A5e418cb28D71b6b",
+			Contract: "0xf9176Ffde541bF0aa7884298Ce538c471Ad0F015",
 		},
 	}
 }

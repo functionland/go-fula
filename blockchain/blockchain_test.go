@@ -26,7 +26,7 @@ func TestGetChainConfigs(t *testing.T) {
 	assert.Equal(t, "base", baseConfig.Name)
 	assert.Equal(t, int64(8453), baseConfig.ChainID)
 	assert.Equal(t, "https://base-rpc.publicnode.com", baseConfig.RPC)
-	assert.Equal(t, "0xf293A6902662DcB09E310254A5e418cb28D71b6b", baseConfig.Contract)
+	assert.Equal(t, "0xb093fF4B3B3B87a712107B26566e0cCE5E752b4D", baseConfig.Contract)
 
 	// Test Skale chain configuration
 	skaleConfig, exists := configs["skale"]
@@ -34,7 +34,7 @@ func TestGetChainConfigs(t *testing.T) {
 	assert.Equal(t, "skale", skaleConfig.Name)
 	assert.Equal(t, int64(2046399126), skaleConfig.ChainID)
 	assert.Equal(t, "https://mainnet.skalenodes.com/v1/elated-tan-skat", skaleConfig.RPC)
-	assert.Equal(t, "0xf293A6902662DcB09E310254A5e418cb28D71b6b", skaleConfig.Contract)
+	assert.Equal(t, "0xf9176Ffde541bF0aa7884298Ce538c471Ad0F015", skaleConfig.Contract)
 }
 
 // TestFxBlockchainCreation tests the creation of FxBlockchain instance
