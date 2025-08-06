@@ -117,12 +117,20 @@ func DecodePoolsResult(data string) (*Pool, error) {
 
 	pool := &Pool{}
 
-	// According to the struct layout:
-	// Slot 0: creator (20 bytes) + id (4 bytes) + maxChallengeResponsePeriod (4 bytes) + memberCount (4 bytes)
-	slot0 := slots[0]
+	// Correct ABI layout for pools(uint32) response:
+	// Slot 0: creator (address)
+	// Slot 1: id (uint32)
+	// Slot 2: maxChallengeResponsePeriod (uint32)
+	// Slot 3: memberCount (uint32)
+	// Slot 4: maxMembers (uint32)
+	// Slot 5: requiredTokens (uint256)
+	// Slot 6: minPingTime (uint256)
+	// Slot 7: name offset
+	// Slot 8: region offset
+	// Slot 9+: string data
 
-	// Creator address (first 20 bytes, left-padded to 32 bytes)
-	creatorHex := slot0[24:64] // Last 40 hex chars = 20 bytes
+	// Slot 0: creator address
+	creatorHex := slots[0][24:64] // Last 40 hex chars = 20 bytes (address is right-aligned)
 	pool.Creator = "0x" + creatorHex
 
 	// Check if creator is zero address (pool doesn't exist)
@@ -137,73 +145,52 @@ func DecodePoolsResult(data string) (*Pool, error) {
 		return nil, fmt.Errorf("pool not found (zero creator address)")
 	}
 
-	// Parse packed fields from slot0 (before the address)
-	// id (4 bytes), maxChallengeResponsePeriod (4 bytes), memberCount (4 bytes)
-	packedFields := slot0[0:24] // First 24 hex chars = 12 bytes
-
-	// Parse ID (first 4 bytes)
-	if len(packedFields) >= 8 {
-		idHex := packedFields[0:8]
-		id, err := strconv.ParseUint(idHex, 16, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse pool ID: %w", err)
-		}
-		pool.ID = uint32(id)
+	// Slot 1: id (uint32)
+	id, err := strconv.ParseUint(slots[1][56:64], 16, 32) // Last 8 hex chars for uint32
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse pool ID: %w", err)
 	}
+	pool.ID = uint32(id)
 
-	// Parse maxChallengeResponsePeriod (next 4 bytes)
-	if len(packedFields) >= 16 {
-		maxChallengeHex := packedFields[8:16]
-		maxChallenge, err := strconv.ParseUint(maxChallengeHex, 16, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse maxChallengeResponsePeriod: %w", err)
-		}
-		pool.MaxChallengeResponsePeriod = uint32(maxChallenge)
+	// Slot 2: maxChallengeResponsePeriod (uint32)
+	maxChallenge, err := strconv.ParseUint(slots[2][56:64], 16, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse maxChallengeResponsePeriod: %w", err)
 	}
+	pool.MaxChallengeResponsePeriod = uint32(maxChallenge)
 
-	// Parse memberCount (next 4 bytes)
-	if len(packedFields) >= 24 {
-		memberCountHex := packedFields[16:24]
-		memberCount, err := strconv.ParseUint(memberCountHex, 16, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse memberCount: %w", err)
-		}
-		pool.MemberCount = uint32(memberCount)
+	// Slot 3: memberCount (uint32)
+	memberCount, err := strconv.ParseUint(slots[3][56:64], 16, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse memberCount: %w", err)
 	}
+	pool.MemberCount = uint32(memberCount)
 
-	// Slot 1: maxMembers (4 bytes) + padding
-	slot1 := slots[1]
-
-	// Parse maxMembers from first 8 hex chars (4 bytes) of slot1
-	maxMembersHex := slot1[56:64] // Last 8 hex chars for right-aligned uint32
-	maxMembers, err := strconv.ParseUint(maxMembersHex, 16, 32)
+	// Slot 4: maxMembers (uint32)
+	maxMembers, err := strconv.ParseUint(slots[4][56:64], 16, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse maxMembers: %w", err)
 	}
 	pool.MaxMembers = uint32(maxMembers)
 
-	// Slot 2: requiredTokens (uint256)
-	slot2 := slots[2]
+	// Slot 5: requiredTokens (uint256)
 	requiredTokens := new(big.Int)
-	requiredTokens.SetString(slot2, 16)
+	requiredTokens.SetString(slots[5], 16)
 	pool.RequiredTokens = requiredTokens
 
-	// Slot 3: minPingTime (uint256)
-	slot3 := slots[3]
+	// Slot 6: minPingTime (uint256)
 	minPingTime := new(big.Int)
-	minPingTime.SetString(slot3, 16)
+	minPingTime.SetString(slots[6], 16)
 	pool.MinPingTime = minPingTime
 
-	// Slot 4: offset to name string
-	slot4 := slots[4]
-	nameOffset, err := strconv.ParseUint(slot4, 16, 64)
+	// Slot 7: offset to name string
+	nameOffset, err := strconv.ParseUint(slots[7], 16, 64)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse name offset: %w", err)
 	}
 
-	// Slot 5: offset to region string
-	slot5 := slots[5]
-	regionOffset, err := strconv.ParseUint(slot5, 16, 64)
+	// Slot 8: offset to region string
+	regionOffset, err := strconv.ParseUint(slots[8], 16, 64)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse region offset: %w", err)
 	}
@@ -218,12 +205,15 @@ func DecodePoolsResult(data string) (*Pool, error) {
 
 		if nameLength > 0 && nameSlotIndex+1 < len(slots) {
 			nameHex := slots[nameSlotIndex+1]
+			// Only take the first nameLength*2 hex chars (each byte = 2 hex chars)
+			if int(nameLength*2) <= len(nameHex) {
+				nameHex = nameHex[:nameLength*2]
+			}
 			nameBytes, err := hex.DecodeString(nameHex)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode name: %w", err)
 			}
-			// Trim null bytes
-			pool.Name = strings.TrimRight(string(nameBytes), "\x00")
+			pool.Name = string(nameBytes)
 		}
 	}
 
@@ -237,21 +227,17 @@ func DecodePoolsResult(data string) (*Pool, error) {
 
 		if regionLength > 0 && regionSlotIndex+1 < len(slots) {
 			regionHex := slots[regionSlotIndex+1]
+			// Only take the first regionLength*2 hex chars (each byte = 2 hex chars)
+			if int(regionLength*2) <= len(regionHex) {
+				regionHex = regionHex[:regionLength*2]
+			}
 			regionBytes, err := hex.DecodeString(regionHex)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decode region: %w", err)
 			}
-			// Trim null bytes
-			pool.Region = strings.TrimRight(string(regionBytes), "\x00")
+			pool.Region = string(regionBytes)
 		}
 	}
-
-	// Parse remaining fields from the packed slot0
-	// Extract id, maxChallengeResponsePeriod, memberCount from slot0
-	// These are packed in the first part of slot0 before the address
-
-	// For now, we'll extract what we can from the available data
-	// In a full implementation, you'd need to properly parse the packed struct
 
 	return pool, nil
 }
