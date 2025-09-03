@@ -209,9 +209,9 @@ func CreateCustomRepo(ctx context.Context, basePath string, h host.Host, options
 
 	if !fsrepo.IsInitialized(repoPath) {
 		// Create the repository if it doesn't exist
-
+		// Add version 17 for kubo
 		versionFilePath := filepath.Join(repoPath, "version")
-		versionContent := strconv.Itoa(16)
+		versionContent := strconv.Itoa(17)
 		if err := os.WriteFile(versionFilePath, []byte(versionContent), 0644); err != nil {
 			return nil, err
 		}
