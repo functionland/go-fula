@@ -579,19 +579,11 @@ func (p *Blox) Start(ctx context.Context) error {
 	if err := p.bl.Start(ctx); err != nil {
 		return err
 	}
-	var nodeAccount string
-	accountFilePath := "/internal/.secrets/account.txt"
-	data, err := os.ReadFile(accountFilePath)
-	if err != nil {
-		log.Errorw("Error reading file", "err", err)
-	} else {
-		nodeAccount = string(data)
-	}
 
 	// Check if we need to discover pool membership (either no pool name or no chain name)
 	needsDiscovery := p.topicName == "0" || (p.getChainName != nil && p.getChainName() == "")
 
-	if needsDiscovery && nodeAccount != "" {
+	if needsDiscovery {
 		found := false
 		foundChain := ""
 
@@ -688,7 +680,7 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 
 		if !found {
-			log.Warnw("Could not find pool membership on any chain", "nodeAccount", nodeAccount, "chains", chainList)
+			log.Warnw("Could not find pool membership on any chain", "peerID", p.h.ID().String(), "chains", chainList)
 		}
 	}
 
