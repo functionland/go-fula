@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/ipfs/kubo/client/rpc"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -310,7 +310,7 @@ func GetContainerInfo(containerName string) (DockerInfo, error) {
 		return DockerInfo{}, err
 	}
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{})
 	if err != nil {
 		return DockerInfo{}, err
 	}
@@ -425,7 +425,7 @@ func fetchLogsFromDocker(ctx context.Context, containerName string, tailCount st
 		return "", fmt.Errorf("creating Docker client: %w", err)
 	}
 
-	options := types.ContainerLogsOptions{
+	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       tailCount, // Adjust the number of lines as needed
