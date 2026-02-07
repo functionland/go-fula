@@ -48,7 +48,6 @@ import (
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipni/index-provider/engine"
-	goprocess "github.com/jbenet/goprocess"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -882,9 +881,9 @@ func rewriteMaddrToUseLocalhostIfItsAny(maddr ma.Multiaddr) ma.Multiaddr {
 	first, rest := ma.SplitFirst(maddr)
 
 	switch {
-	case first.Equal(manet.IP4Unspecified):
+	case first.Equal(&manet.IP4Unspecified[0]):
 		return manet.IP4Loopback.Encapsulate(rest)
-	case first.Equal(manet.IP6Unspecified):
+	case first.Equal(&manet.IP6Unspecified[0]):
 		return manet.IP6Loopback.Encapsulate(rest)
 	default:
 		return maddr // not ip
@@ -1235,7 +1234,9 @@ func action(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
+		context.AfterFunc(ipfsNode.Context(), func() {
+			cctx.Plugins.Close()
+		})
 
 		wg.Add(1)
 		go func() {
@@ -1264,7 +1265,9 @@ func action(ctx *cli.Context) error {
 				if err != nil {
 					logger.Errorw("Error in Plugins Start", "err", err)
 				}
-				ipfsNode.Process.AddChild(goprocess.WithTeardown(cctx.Plugins.Close))
+				context.AfterFunc(ipfsNode.Context(), func() {
+					cctx.Plugins.Close()
+				})
 				_, err := serveHTTPApi(&cctx)
 				if err != nil {
 					logger.Errorw("Error setting up HTTP API server:", "err", err)

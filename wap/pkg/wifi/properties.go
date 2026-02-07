@@ -292,7 +292,7 @@ func GetBloxFreeSpace() (BloxFreeSpaceResponse, error) {
 	}
 
 	if len(errors) > 0 {
-		return BloxFreeSpaceResponse{}, fmt.Errorf(strings.Join(errors, "; "))
+		return BloxFreeSpaceResponse{}, fmt.Errorf("%s", strings.Join(errors, "; "))
 	}
 
 	return BloxFreeSpaceResponse{

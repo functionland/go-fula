@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/functionland/go-fula/blockchain"
@@ -90,6 +91,11 @@ func NewConfig() *Config {
 }
 
 func (cfg *Config) init(mc *Client) error {
+	// Apply defaults for zero-value Config created via gomobile constructors
+	if cfg.StaticRelays == nil {
+		cfg.StaticRelays = devRelays
+	}
+
 	var err error
 	hopts := []libp2p.Option{
 		libp2p.EnableNATService(),
@@ -118,7 +124,7 @@ func (cfg *Config) init(mc *Client) error {
 		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr,
 			autorelay.WithMinCandidates(1),
 			autorelay.WithNumRelays(1),
-			autorelay.WithBootDelay(30*time.Second),
+			autorelay.WithBootDelay(15*time.Second),
 			autorelay.WithMinInterval(10*time.Second),
 		))
 	}
@@ -136,6 +142,7 @@ func (cfg *Config) init(mc *Client) error {
 	if mc.h, err = libp2p.New(hopts...); err != nil {
 		return err
 	}
+
 	if cfg.StorePath == "" {
 		mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
 	} else {
@@ -158,6 +165,18 @@ func (cfg *Config) init(mc *Client) error {
 		}
 		mc.h.Peerstore().AddAddrs(bloxAddr.ID, bloxAddr.Addrs, peerstore.PermanentAddrTTL)
 		mc.bloxPid = bloxAddr.ID
+
+		// When using direct IP, also add relay circuit addresses as fallback
+		// so libp2p can transparently try relay if direct connection fails
+		if !strings.Contains(cfg.BloxAddr, "p2p-circuit") && len(cfg.StaticRelays) > 0 {
+			for _, relay := range cfg.StaticRelays {
+				circuitMA, err := multiaddr.NewMultiaddr(relay + "/p2p-circuit")
+				if err != nil {
+					continue
+				}
+				mc.h.Peerstore().AddAddr(bloxAddr.ID, circuitMA, time.Hour)
+			}
+		}
 	}
 	mc.ls = cidlink.DefaultLinkSystem()
 	mc.ls.StorageWriteOpener = func(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
