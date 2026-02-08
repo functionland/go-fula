@@ -8,37 +8,26 @@ on:
 jobs:
   update-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
-    
-    - name: Create new branch
-      run: |
-        git checkout -b update-version-${{ github.event.release.tag_name }}
+      uses: actions/checkout@v4
 
     - name: Update version
       run: |
-        VERSION=$(echo ${{ github.event.release.tag_name }} | cut -c 2-) # remove the v from the tag name
+        VERSION=$(echo "${{ github.event.release.tag_name }}" | cut -c 2-) # remove the v from the tag name
         sed -i 's/\(s.version\s*=\s*\).*$/\1'"\"$VERSION\""'/g' Fula.podspec
         sed -i 's/#{s.version}/'"$VERSION"'/g' Fula.podspec
 
-    - name: Set up Git
-      run: |
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-
-    - name: Commit and push
-      run: |
-        git add .
-        git commit -m "Update version to $VERSION"
-        git push origin update-version-${{ github.event.release.tag_name }}
-    
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v3
+      uses: peter-evans/create-pull-request@v7
       with:
-        title: 'Update version to ${{ env.VERSION }}'
+        title: 'Update version to ${{ github.event.release.tag_name }}'
         body: 'Automatically update version number.'
         labels: 'version update, automated pr'
         branch: 'update-version-${{ github.event.release.tag_name }}'
+        commit-message: 'Update version to ${{ github.event.release.tag_name }}'
         draft: false
