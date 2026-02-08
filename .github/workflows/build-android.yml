@@ -40,6 +40,7 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+        server-id: github
 
     - name: Set up Android SDK
       uses: android-actions/setup-android@v3
@@ -70,24 +71,15 @@ jobs:
     - name: Print release
       run: echo "Latest Release is ${{ steps.get-release-info.outputs.result }}"
 
-    - name: Install package with Maven
-      run: |
-        FILE="-Dfile=./build/mobile.aar"
-        mvn install:install-file $FILE -DgroupId=land.fx -DartifactId=fulamobile -Dversion=${{ steps.get-release-info.outputs.result }} -Dpackaging=aar -DgeneratePom=true
-
-    - name: Copy pom.xml and AndroidManifest.xml to build directory
-      run: |
-        mkdir -p ./build/src/main
-        cp ./.github/pom.xml ./build/pom.xml
-        cp ./.github/AndroidManifest.xml ./build/src/main/AndroidManifest.xml
-
-    - name: Prepare for Maven deployment
-      run: |
-        sed -i "s/\${release_version}/${{ steps.get-release-info.outputs.result }}/g" build/pom.xml
-
     - name: Deploy to GitHub Packages
-      working-directory: ./build
       run: |
-        mvn deploy -Drelease_version=${{ steps.get-release-info.outputs.result }}
+        mvn deploy:deploy-file \
+          -Dfile=./build/mobile.aar \
+          -DgroupId=land.fx \
+          -DartifactId=fulamobile \
+          -Dversion=${{ steps.get-release-info.outputs.result }} \
+          -Dpackaging=aar \
+          -DrepositoryId=github \
+          -Durl=https://maven.pkg.github.com/functionland/go-fula
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
