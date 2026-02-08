@@ -3,7 +3,9 @@ package mdns
 import (
 	"context"
 	"encoding/base64"
+	"net"
 	"os"
+	"strings"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
@@ -145,6 +147,35 @@ func StartServer(ctx context.Context, port int) *MDNSServer {
 	return server
 }
 
+// getLANInterfaces returns network interfaces excluding Docker/virtual bridges.
+// Returns nil (all interfaces) as fallback if no physical interfaces found.
+func getLANInterfaces() []net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	var filtered []net.Interface
+	for _, iface := range ifaces {
+		// Skip down or loopback interfaces
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		// Skip Docker bridges and virtual ethernet pairs
+		if iface.Name == "docker0" ||
+			strings.HasPrefix(iface.Name, "br-") ||
+			strings.HasPrefix(iface.Name, "veth") {
+			continue
+		}
+		filtered = append(filtered, iface)
+	}
+
+	if len(filtered) == 0 {
+		return nil // fallback: let library use all interfaces
+	}
+	return filtered
+}
+
 func NewZeroConfService(port int) (*MDNSServer, error) {
 	meta := createInfo()
 	log.Debugw("mdns meta created", "meta", meta)
@@ -155,7 +186,7 @@ func NewZeroConfService(port int) (*MDNSServer, error) {
 		"local.",          // service domain
 		port,              // service port
 		meta,              // service metadata
-		nil,               // register on all network interfaces
+		getLANInterfaces(), // only physical/LAN interfaces
 	)
 
 	if err != nil {
