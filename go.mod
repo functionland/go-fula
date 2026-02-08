@@ -44,7 +44,7 @@ require (
 )
 
 require (
-	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/moby/term v0.5.0 // indirect
@@ -52,7 +52,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	golang.org/x/sys v0.40.0 // indirect
-	gotest.tools/v3 v3.4.0 // indirect
 )
 
 require (
@@ -78,7 +77,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cheggaaa/pb v1.0.29 // indirect
 	github.com/cockroachdb/crlib v0.0.0-20241112164430-1264a2edc35b // indirect
-	github.com/cockroachdb/errors v1.11.3 // indirect
+	github.com/cockroachdb/errors v1.12.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/pebble/v2 v2.1.4 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
@@ -299,3 +298,5 @@ require (
 	lukechampine.com/blake3 v1.4.1 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
+
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20250825161204-c5933d9347a5

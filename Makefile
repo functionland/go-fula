@@ -20,7 +20,7 @@ prepare-gomobile:
 
 build-fula-xcframework:
 	gomobile init &&\
-	gomobile bind -v -o Fula.xcframework -target=ios github.com/functionland/go-fula/mobile
+	gomobile bind -v -o Fula.xcframework -target=ios -ldflags="-checklinkname=0" github.com/functionland/go-fula/mobile
 
 build-bundle:
 	mkdir -p build &&\
