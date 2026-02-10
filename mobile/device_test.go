@@ -1,6 +1,7 @@
 package fulamobile
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"testing"
@@ -107,6 +108,24 @@ func TestRealDeviceConnection(t *testing.T) {
 		t.Logf("Waiting 20s for IPFS DHT bootstrap to warm up...")
 		time.Sleep(20 * time.Second)
 	}
+
+	// --- Step 0: Verify libp2p connectivity to kubo ---
+	t.Run("ConnectToBlox", func(t *testing.T) {
+		t.Logf("Establishing libp2p connection to kubo...")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		peerInfo := client.h.Peerstore().PeerInfo(client.bloxPid)
+		t.Logf("Peerstore addresses for blox: %v", peerInfo.Addrs)
+		err := client.h.Connect(ctx, peerInfo)
+		require.NoError(t, err, "Failed to establish libp2p connection to kubo — check IP/relay/firewall")
+		t.Logf("Connected to kubo successfully")
+
+		// Log the connection details
+		conns := client.h.Network().ConnsToPeer(client.bloxPid)
+		for i, conn := range conns {
+			t.Logf("  Connection %d: local=%s remote=%s", i, conn.LocalMultiaddr(), conn.RemoteMultiaddr())
+		}
+	})
 
 	// --- Test 1: PoolList (read-only, safe to call) ---
 	t.Run("PoolList", func(t *testing.T) {

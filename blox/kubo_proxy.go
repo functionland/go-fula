@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -35,7 +37,21 @@ var defaultProtocols = []p2pProtocol{
 
 // registerKuboProtocols registers p2p protocol listeners on kubo via its HTTP API.
 // Each protocol maps a libp2p stream protocol to a local TCP address.
+// It first closes ALL existing p2p listeners to clear any stale state from
+// previous go-fula processes, then registers fresh listeners.
 func registerKuboProtocols(kuboAPI string) error {
+	// Close all existing p2p listeners first to clear stale state.
+	// This is safe because go-fula owns all p2p protocol registrations on kubo.
+	closeAllURL := fmt.Sprintf("http://%s/api/v0/p2p/close?all=true", kuboAPI)
+	closeResp, err := http.Post(closeAllURL, "", nil)
+	if err != nil {
+		log.Warnw("Could not close existing p2p listeners", "err", err)
+	} else {
+		body, _ := io.ReadAll(closeResp.Body)
+		closeResp.Body.Close()
+		log.Debugw("Closed existing p2p listeners", "status", closeResp.StatusCode, "response", string(body))
+	}
+
 	for _, p := range defaultProtocols {
 		if err := registerSingleProtocol(kuboAPI, p.name, p.target); err != nil {
 			return fmt.Errorf("failed to register protocol %s: %w", p.name, err)
@@ -46,21 +62,9 @@ func registerKuboProtocols(kuboAPI string) error {
 }
 
 func registerSingleProtocol(kuboAPI, protocol, target string) error {
-	// First close any existing listener for this protocol (idempotent).
-	// Use only arg=<protocol> so it matches regardless of listen/target address.
-	closeURL := fmt.Sprintf("http://%s/api/v0/p2p/close?arg=%s",
-		kuboAPI, protocol)
-	closeResp, err := http.Post(closeURL, "", nil)
-	if err != nil {
-		log.Debugw("Could not close existing p2p listener (may not exist)", "protocol", protocol, "err", err)
-	} else {
-		closeResp.Body.Close()
-	}
-
-	// Register the protocol
-	url := fmt.Sprintf("http://%s/api/v0/p2p/listen?arg=%s&arg=%s&allow-custom-protocol=true",
-		kuboAPI, protocol, target)
-	resp, err := http.Post(url, "", nil)
+	listenURL := fmt.Sprintf("http://%s/api/v0/p2p/listen?arg=%s&arg=%s&allow-custom-protocol=true",
+		kuboAPI, url.QueryEscape(protocol), url.QueryEscape(target))
+	resp, err := http.Post(listenURL, "", nil)
 	if err != nil {
 		return fmt.Errorf("kubo API request failed: %w", err)
 	}
@@ -70,7 +74,6 @@ func registerSingleProtocol(kuboAPI, protocol, target string) error {
 		body := make([]byte, 512)
 		n, _ := resp.Body.Read(body)
 		bodyStr := string(body[:n])
-		// "listener already registered" means the protocol is active — not an error
 		if strings.Contains(bodyStr, "listener already registered") {
 			log.Debugw("Protocol already registered, treating as success", "protocol", protocol)
 			return nil
