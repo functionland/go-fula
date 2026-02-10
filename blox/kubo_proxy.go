@@ -46,9 +46,10 @@ func registerKuboProtocols(kuboAPI string) error {
 }
 
 func registerSingleProtocol(kuboAPI, protocol, target string) error {
-	// First close any existing listener for this protocol (idempotent)
-	closeURL := fmt.Sprintf("http://%s/api/v0/p2p/close?arg=%s&listen-address=%s",
-		kuboAPI, protocol, target)
+	// First close any existing listener for this protocol (idempotent).
+	// Use only arg=<protocol> so it matches regardless of listen/target address.
+	closeURL := fmt.Sprintf("http://%s/api/v0/p2p/close?arg=%s",
+		kuboAPI, protocol)
 	closeResp, err := http.Post(closeURL, "", nil)
 	if err != nil {
 		log.Debugw("Could not close existing p2p listener (may not exist)", "protocol", protocol, "err", err)
@@ -66,10 +67,15 @@ func registerSingleProtocol(kuboAPI, protocol, target string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		var body []byte
-		body = make([]byte, 512)
+		body := make([]byte, 512)
 		n, _ := resp.Body.Read(body)
-		return fmt.Errorf("kubo API returned status %d: %s", resp.StatusCode, string(body[:n]))
+		bodyStr := string(body[:n])
+		// "listener already registered" means the protocol is active — not an error
+		if strings.Contains(bodyStr, "listener already registered") {
+			log.Debugw("Protocol already registered, treating as success", "protocol", protocol)
+			return nil
+		}
+		return fmt.Errorf("kubo API returned status %d: %s", resp.StatusCode, bodyStr)
 	}
 	return nil
 }
