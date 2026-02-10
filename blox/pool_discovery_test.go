@@ -329,7 +329,11 @@ func TestDebugPoolDiscoveryStep(t *testing.T) {
 func createTestBlockchain(t *testing.T) *blockchain.FxBlockchain {
 	// Create a minimal blockchain instance that can make EVM calls
 	// This doesn't require a full libp2p host since we're only testing EVM calls
-	return blockchain.NewTestBlockchain(30)
+	bl, err := blockchain.NewTestBlockchain(30)
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
+	}
+	return bl
 }
 
 // Example usage:

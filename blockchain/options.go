@@ -6,6 +6,7 @@ import (
 
 	ipfsCluster "github.com/ipfs-cluster/ipfs-cluster/api/rest/client"
 	"github.com/ipfs/kubo/client/rpc"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -31,6 +32,9 @@ type (
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 		rpc                      *rpc.HttpApi
 		ipfsClusterApi           ipfsCluster.Client
+		selfPeerID               peer.ID      // Peer ID derived from private key, used for authorization checks
+		signingKey               crypto.PrivKey // Private key for signing outgoing requests (mobile client)
+		clientProtocolID         string        // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
 	}
 )
 
@@ -205,11 +209,36 @@ func WithGetChainName(getChainName func() string) Option {
 	}
 }
 
-// WithStoreDir sets a the store directory we are using for datastore
-// Required.
+// WithRelays sets the relay addresses.
 func WithRelays(r []string) Option {
 	return func(o *options) error {
 		o.relays = r
+		return nil
+	}
+}
+
+// WithSelfPeerID sets the peer ID for the local node (derived from private key).
+// Used for authorization checks (replaces h.ID() when no libp2p host is present).
+func WithSelfPeerID(id peer.ID) Option {
+	return func(o *options) error {
+		o.selfPeerID = id
+		return nil
+	}
+}
+
+// WithRequestSigning enables signed request headers on outgoing HTTP requests.
+// The private key is used to sign requests so the receiving go-fula can verify the caller.
+func WithRequestSigning(key crypto.PrivKey) Option {
+	return func(o *options) error {
+		o.signingKey = key
+		return nil
+	}
+}
+
+// WithClientProtocolID sets the libp2p protocol ID used when dialing through kubo p2p.
+func WithClientProtocolID(pid string) Option {
+	return func(o *options) error {
+		o.clientProtocolID = pid
 		return nil
 	}
 }

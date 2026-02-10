@@ -1,11 +1,8 @@
 package blockchain
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"net/http"
-	"sync"
 	"testing"
 	"time"
 )
@@ -15,26 +12,12 @@ func TestPoolDiscoveryBug(t *testing.T) {
 	fmt.Println("=== TESTING POOL DISCOVERY BUG ===")
 	
 	// Create blockchain instance with proper initialization
-	bl := &FxBlockchain{
-		options: &options{
-			timeout: 30,
-		},
-		bufPool: &sync.Pool{
-			New: func() interface{} {
-				return new(bytes.Buffer)
-			},
-		},
-		reqPool: &sync.Pool{
-			New: func() interface{} {
-				return new(http.Request)
-			},
-		},
-		ch: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 100,
-			},
-		},
+	bl, err := NewFxBlockchain(
+		NewSimpleKeyStorer(""),
+		WithTimeout(30),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -96,26 +79,12 @@ func TestPoolDiscoveryBug(t *testing.T) {
 func TestDirectMembershipCheck(t *testing.T) {
 	fmt.Println("=== TESTING DIRECT MEMBERSHIP CHECK ===")
 	
-	bl := &FxBlockchain{
-		options: &options{
-			timeout: 30,
-		},
-		bufPool: &sync.Pool{
-			New: func() interface{} {
-				return new(bytes.Buffer)
-			},
-		},
-		reqPool: &sync.Pool{
-			New: func() interface{} {
-				return new(http.Request)
-			},
-		},
-		ch: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 100,
-			},
-		},
+	bl, err := NewFxBlockchain(
+		NewSimpleKeyStorer(""),
+		WithTimeout(30),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

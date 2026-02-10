@@ -223,6 +223,8 @@ func main() {
 		updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users) // We cannot do this as we dont know the ip of these nodes
 	*/
 	updateDatastorePath(&ipfsCfg, ipfsDatastorePath, apiIpAddr)
+	// Enable libp2p stream mounting so kubo can forward P2P protocols to go-fula's TCP server
+	ipfsCfg.Experimental.Libp2pStreamMounting = true
 
 	writeIPFSConfig(ipfsConfigPath, ipfsCfg)
 	writePredefinedFiles(ipfsDataPath, ipfsDatastorePath)

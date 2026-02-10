@@ -51,8 +51,9 @@ func TestFxBlockchainCreation(t *testing.T) {
 	defer h.Close()
 
 	// Create blockchain instance
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithAllowTransientConnection(true),
 		WithBlockchainEndPoint("127.0.0.1:4000"),
@@ -99,8 +100,9 @@ func TestCallEVMChain(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -165,8 +167,9 @@ func TestCallEVMChainWithRetry(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -212,8 +215,9 @@ func TestBlockchainHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -246,8 +250,9 @@ func TestTimeoutHandling(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(1), // 1 second timeout
 	)

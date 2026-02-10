@@ -24,6 +24,7 @@ import (
 	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/ipld/go-ipld-prime/traversal/selector"
 	"github.com/ipld/go-ipld-prime/traversal/selector/builder"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/mr-tron/base58"
@@ -52,6 +53,11 @@ type Client struct {
 	bl      blockchain.Blockchain
 	bloxPid peer.ID
 	relays  []string
+
+	ipfsDHT       *dht.IpfsDHT   // Standard IPFS DHT for peer discovery fallback
+	ipfsDHTReady  chan struct{}   // Closed when DHT bootstrap completes
+	ipfsDHTCtx    context.Context
+	ipfsDHTCancel context.CancelFunc
 
 	streams map[string]*blockchain.StreamBuffer // Map of active streams
 	mu      sync.Mutex                          // Mutex for thread-safe access
@@ -385,12 +391,22 @@ func (c *Client) IpniNotifyLink(l string) {
 func (c *Client) Shutdown() error {
 	ctx := context.TODO()
 	xErr := c.ex.Shutdown(ctx)
+	// Shut down IPFS DHT before closing the host
+	if c.ipfsDHTCancel != nil {
+		c.ipfsDHTCancel()
+	}
+	var dhtErr error
+	if c.ipfsDHT != nil {
+		dhtErr = c.ipfsDHT.Close()
+	}
 	hErr := c.h.Close()
 	fErr := c.Flush()
 	dsErr := c.ds.Close()
 	switch {
 	case hErr != nil:
 		return hErr
+	case dhtErr != nil:
+		return dhtErr
 	case fErr != nil:
 		return fErr
 	case dsErr != nil:

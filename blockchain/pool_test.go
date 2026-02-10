@@ -36,8 +36,9 @@ func TestPoolJoinRequest(t *testing.T) {
 	defer h2.Close()
 
 	// Create blockchain instance
-	bl, err := NewFxBlockchain(h1, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h1.ID()),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(30),
 	)
@@ -77,8 +78,9 @@ func TestPoolLeaveRequest(t *testing.T) {
 	require.NoError(t, err)
 	defer h2.Close()
 
-	bl, err := NewFxBlockchain(h1, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h1.ID()),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(30),
 	)
@@ -126,8 +128,9 @@ func TestHandleEVMPoolList(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -154,8 +157,9 @@ func TestHandleIsMemberOfPool(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -225,8 +229,9 @@ func TestPoolJoinErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	defer h1.Close()
 
-	bl, err := NewFxBlockchain(h1, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h1.ID()),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(1), // Very short timeout
 	)
@@ -271,8 +276,9 @@ func TestPoolOperationTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer h2.Close()
 
-	bl, err := NewFxBlockchain(h1, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h1.ID()),
 		WithAuthorizer(h1.ID()),
 		WithTimeout(30),
 	)
@@ -298,8 +304,9 @@ func TestFetchUsersAndPopulateSets(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -324,8 +331,9 @@ func TestDiscoverPoolAndChain(t *testing.T) {
 	require.NoError(t, err)
 	defer h.Close()
 
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 	)
@@ -464,8 +472,9 @@ func TestPoolDiscoveryWithMockServer(t *testing.T) {
 	defer h.Close()
 
 	// Create blockchain instance with mock server endpoint
-	bl, err := NewFxBlockchain(h, nil, nil,
+	bl, err := NewFxBlockchain(
 		NewSimpleKeyStorer(""),
+		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 		WithBlockchainEndPoint(mockServer.URL),

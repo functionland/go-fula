@@ -9,10 +9,12 @@ import (
 // TestPoolDiscoveryAndMembership tests the complete pool discovery and membership flow
 func TestPoolDiscoveryAndMembership(t *testing.T) {
 	// Create blockchain instance with proper options
-	bl := &FxBlockchain{
-		options: &options{
-			timeout: 30,
-		},
+	bl, err := NewFxBlockchain(
+		NewSimpleKeyStorer(""),
+		WithTimeout(30),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -93,10 +95,12 @@ func TestPoolDiscoveryAndMembership(t *testing.T) {
 
 // TestPoolZeroHandling tests that pool 0 is properly handled
 func TestPoolZeroHandling(t *testing.T) {
-	bl := &FxBlockchain{
-		options: &options{
-			timeout: 30,
-		},
+	bl, err := NewFxBlockchain(
+		NewSimpleKeyStorer(""),
+		WithTimeout(30),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -129,10 +133,12 @@ func TestPoolZeroHandling(t *testing.T) {
 
 // TestPoolDiscoveryReturnsCorrectPoolIDs tests that pool discovery returns the correct pool IDs
 func TestPoolDiscoveryReturnsCorrectPoolIDs(t *testing.T) {
-	bl := &FxBlockchain{
-		options: &options{
-			timeout: 30,
-		},
+	bl, err := NewFxBlockchain(
+		NewSimpleKeyStorer(""),
+		WithTimeout(30),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create blockchain: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

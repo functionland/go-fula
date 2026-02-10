@@ -28,7 +28,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (bl *FxBlockchain) AccountCreate(ctx context.Context, to peer.ID) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (bl *FxBlockchain) AccountFund(ctx context.Context, to peer.ID, r AccountFu
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (bl *FxBlockchain) AccountExists(ctx context.Context, to peer.ID, r Account
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (bl *FxBlockchain) AccountBalance(ctx context.Context, to peer.ID, r Accoun
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (bl *FxBlockchain) AssetsBalance(ctx context.Context, to peer.ID, r AssetsB
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (bl *FxBlockchain) TransferToFula(ctx context.Context, to peer.ID, r Transf
 		if err != nil {
 			return nil, err
 		}
-		resp, err := bl.c.Do(req)
+		resp, err := bl.doP2PRequest(req)
 		if err != nil {
 			return nil, err
 		}
