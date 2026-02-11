@@ -12,7 +12,9 @@ import (
 const (
 	// ProxyListenAddr is the TCP address where go-fula listens for
 	// kubo-forwarded blockchain commands.
-	ProxyListenAddr = "127.0.0.1:4020"
+	// Binds to all interfaces so that kubo containers in Docker bridge
+	// networking can reach the proxy via the Docker gateway IP.
+	ProxyListenAddr = "0.0.0.0:4020"
 )
 
 // StartProxy starts a TCP HTTP server on ProxyListenAddr that accepts

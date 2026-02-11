@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -17,9 +18,9 @@ const (
 	fulaBlockchainProtocol = "/x/fula-blockchain"
 	fulaPingProtocol       = "/x/fula-ping"
 
-	// Target addresses where kubo forwards protocol streams
-	blockchainTargetAddr = "/ip4/127.0.0.1/tcp/4020"
-	pingTargetAddr       = "/ip4/127.0.0.1/tcp/4021"
+	// Ports where go-fula listens for kubo-forwarded streams
+	blockchainTargetPort = "4020"
+	pingTargetPort       = "4021"
 
 	healthCheckInterval = 30 * time.Second
 )
@@ -29,9 +30,49 @@ type p2pProtocol struct {
 	target string
 }
 
-var defaultProtocols = []p2pProtocol{
-	{fulaBlockchainProtocol, blockchainTargetAddr},
-	{fulaPingProtocol, pingTargetAddr},
+// getProtocols returns the p2p protocols with target addresses using the
+// appropriate IP. When kubo runs in Docker bridge networking and go-fula
+// runs on the host (or with network_mode: host), 127.0.0.1 inside kubo's
+// container refers to kubo itself. We detect the docker0 bridge interface
+// IP so kubo can reach the host.
+func getProtocols() []p2pProtocol {
+	ip := resolveProxyTargetIP()
+	return []p2pProtocol{
+		{fulaBlockchainProtocol, fmt.Sprintf("/ip4/%s/tcp/%s", ip, blockchainTargetPort)},
+		{fulaPingProtocol, fmt.Sprintf("/ip4/%s/tcp/%s", ip, pingTargetPort)},
+	}
+}
+
+// resolveProxyTargetIP determines the IP address that kubo's container can
+// use to reach go-fula's proxy server.
+//
+// When kubo runs in Docker bridge networking (not host mode), 127.0.0.1
+// inside its container is kubo itself. The docker0 bridge interface IP
+// is the host's address visible from bridge containers.
+//
+// Detection order:
+//  1. docker0 interface IPv4 address (Docker bridge gateway)
+//  2. Fallback to 127.0.0.1 (works when kubo is also on host network)
+func resolveProxyTargetIP() string {
+	iface, err := net.InterfaceByName("docker0")
+	if err != nil {
+		log.Debugw("No docker0 interface found, using 127.0.0.1 for proxy target", "err", err)
+		return "127.0.0.1"
+	}
+	addrs, err := iface.Addrs()
+	if err != nil {
+		log.Warnw("Failed to get docker0 addresses, using 127.0.0.1", "err", err)
+		return "127.0.0.1"
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+			ip := ipnet.IP.String()
+			log.Infow("Detected Docker bridge IP for proxy target", "ip", ip)
+			return ip
+		}
+	}
+	log.Debug("No IPv4 on docker0, using 127.0.0.1 for proxy target")
+	return "127.0.0.1"
 }
 
 // registerKuboProtocols registers p2p protocol listeners on kubo via its HTTP API.
@@ -51,7 +92,8 @@ func registerKuboProtocols(kuboAPI string) error {
 		log.Debugw("Closed existing p2p listeners", "status", closeResp.StatusCode, "response", string(body))
 	}
 
-	for _, p := range defaultProtocols {
+	protocols := getProtocols()
+	for _, p := range protocols {
 		if err := registerSingleProtocol(kuboAPI, p.name, p.target); err != nil {
 			return fmt.Errorf("failed to register protocol %s: %w", p.name, err)
 		}
@@ -110,7 +152,7 @@ func checkKuboP2PListeners(kuboAPI string) bool {
 		registered[l.Protocol] = true
 	}
 
-	for _, p := range defaultProtocols {
+	for _, p := range getProtocols() {
 		if !registered[p.name] {
 			return false
 		}
