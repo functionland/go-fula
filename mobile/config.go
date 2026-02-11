@@ -281,6 +281,7 @@ func (cfg *Config) init(mc *Client) error {
 
 		// Create gostream-based HTTP client that dials through kubo's p2p protocol
 		p2pClient := &http.Client{
+			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, netw, addr string) (net.Conn, error) {
 					pid, err := peer.Decode(strings.TrimSuffix(addr, ".invalid:80"))
