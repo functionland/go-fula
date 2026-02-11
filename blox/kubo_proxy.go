@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -63,7 +62,7 @@ func registerKuboProtocols(kuboAPI string) error {
 
 func registerSingleProtocol(kuboAPI, protocol, target string) error {
 	listenURL := fmt.Sprintf("http://%s/api/v0/p2p/listen?arg=%s&arg=%s&allow-custom-protocol=true",
-		kuboAPI, url.QueryEscape(protocol), url.QueryEscape(target))
+		kuboAPI, protocol, target)
 	resp, err := http.Post(listenURL, "", nil)
 	if err != nil {
 		return fmt.Errorf("kubo API request failed: %w", err)
