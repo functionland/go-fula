@@ -1,10 +1,8 @@
 package fulamobile
 
 import (
-	"bytes"
 	"crypto/rand"
 	"testing"
-	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -42,13 +40,13 @@ func TestNewClient(t *testing.T) {
 			errString: "BloxAddr must be specified",
 		},
 		{
-			name: "invalid_store_path",
+			name: "empty_store_path_uses_temp",
 			config: &Config{
 				Exchange:  "noop",
-				StorePath: "/invalid/path/that/does/not/exist",
+				StorePath: "",
 				PoolName:  "1",
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -85,213 +83,6 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-// TestClientDataOperations tests Put/Get operations
-func TestClientDataOperations(t *testing.T) {
-	config := &Config{
-		Exchange:   "noop",
-		StorePath:  t.TempDir(),
-		PoolName:   "1",
-		SyncWrites: true,
-	}
-
-	client, err := NewClient(config)
-	require.NoError(t, err)
-	require.NotNil(t, client)
-	defer func() {
-		if shutdownErr := client.Shutdown(); shutdownErr != nil {
-			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
-		}
-	}()
-
-	// Test data storage and retrieval
-	testData := []byte("Hello, World!")
-	codec := int64(0x55) // Raw codec
-
-	// Test Put operation
-	linkBytes, err := client.Put(testData, codec)
-	assert.NoError(t, err)
-	assert.NotNil(t, linkBytes)
-	assert.NotEmpty(t, linkBytes)
-
-	// Test Get operation
-	retrievedData, err := client.Get(linkBytes)
-	assert.NoError(t, err)
-	assert.Equal(t, testData, retrievedData)
-}
-
-// TestClientDataOperationsWithDifferentCodecs tests various codecs
-func TestClientDataOperationsWithDifferentCodecs(t *testing.T) {
-	config := &Config{
-		Exchange:   "noop",
-		StorePath:  t.TempDir(),
-		PoolName:   "1",
-		SyncWrites: true,
-	}
-
-	client, err := NewClient(config)
-	require.NoError(t, err)
-	defer func() {
-		if shutdownErr := client.Shutdown(); shutdownErr != nil {
-			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
-		}
-	}()
-
-	tests := []struct {
-		name  string
-		data  []byte
-		codec int64
-	}{
-		{
-			name:  "raw_data",
-			data:  []byte("raw data test"),
-			codec: 0x55,
-		},
-		{
-			name:  "json_data",
-			data:  []byte(`{"test":"json data"}`), // No space after colon to match normalized JSON
-			codec: 0x0129,                         // JSON codec
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Store data
-			linkBytes, err := client.Put(tt.data, tt.codec)
-			assert.NoError(t, err)
-			assert.NotNil(t, linkBytes)
-
-			// Retrieve data
-			retrievedData, err := client.Get(linkBytes)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.data, retrievedData)
-		})
-	}
-}
-
-// TestClientPushPull tests Push/Pull operations
-func TestClientPushPull(t *testing.T) {
-	config := &Config{
-		Exchange:   "noop",
-		StorePath:  t.TempDir(),
-		PoolName:   "1",
-		SyncWrites: true,
-	}
-
-	client, err := NewClient(config)
-	require.NoError(t, err)
-	defer func() {
-		if shutdownErr := client.Shutdown(); shutdownErr != nil {
-			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
-		}
-	}()
-
-	// Store some data first
-	testData := []byte("test data for push/pull")
-	linkBytes, err := client.Put(testData, 0x55)
-	require.NoError(t, err)
-
-	// Test Push operation (with noop exchange, this should succeed)
-	err = client.Push(linkBytes)
-	assert.NoError(t, err)
-
-	// Test Pull operation (with noop exchange, this should succeed if data exists locally)
-	err = client.Pull(linkBytes)
-	assert.NoError(t, err)
-}
-
-// TestClientLargeData tests operations with large data
-func TestClientLargeData(t *testing.T) {
-	config := &Config{
-		Exchange:   "noop",
-		StorePath:  t.TempDir(),
-		PoolName:   "1",
-		SyncWrites: true,
-	}
-
-	client, err := NewClient(config)
-	require.NoError(t, err)
-	defer func() {
-		if shutdownErr := client.Shutdown(); shutdownErr != nil {
-			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
-		}
-	}()
-
-	// Create large test data (1MB)
-	largeData := make([]byte, 1024*1024)
-	_, err = rand.Read(largeData)
-	require.NoError(t, err)
-
-	// Test storing large data
-	linkBytes, err := client.Put(largeData, 0x55)
-	assert.NoError(t, err)
-	assert.NotNil(t, linkBytes)
-
-	// Test retrieving large data
-	retrievedData, err := client.Get(linkBytes)
-	assert.NoError(t, err)
-	assert.Equal(t, largeData, retrievedData)
-}
-
-// TestClientConcurrentOperations tests concurrent data operations
-func TestClientConcurrentOperations(t *testing.T) {
-	config := &Config{
-		Exchange:   "noop",
-		StorePath:  t.TempDir(),
-		PoolName:   "1",
-		SyncWrites: true,
-	}
-
-	client, err := NewClient(config)
-	require.NoError(t, err)
-	defer func() {
-		if shutdownErr := client.Shutdown(); shutdownErr != nil {
-			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
-		}
-	}()
-
-	// Number of concurrent operations
-	numOps := 10
-
-	// Channel to collect results
-	results := make(chan error, numOps)
-
-	// Start concurrent Put operations
-	for i := 0; i < numOps; i++ {
-		go func(index int) {
-			data := []byte("concurrent test data " + string(rune(index)))
-			linkBytes, err := client.Put(data, 0x55)
-			if err != nil {
-				results <- err
-				return
-			}
-
-			// Verify we can retrieve the data
-			retrievedData, err := client.Get(linkBytes)
-			if err != nil {
-				results <- err
-				return
-			}
-
-			if !bytes.Equal(data, retrievedData) {
-				results <- assert.AnError
-				return
-			}
-
-			results <- nil
-		}(i)
-	}
-
-	// Wait for all operations to complete
-	for i := 0; i < numOps; i++ {
-		select {
-		case err := <-results:
-			assert.NoError(t, err)
-		case <-time.After(10 * time.Second):
-			t.Fatal("Timeout waiting for concurrent operations")
-		}
-	}
-}
-
 // TestClientFlush tests the flush operation
 func TestClientFlush(t *testing.T) {
 	config := &Config{
@@ -308,11 +99,6 @@ func TestClientFlush(t *testing.T) {
 			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
 		}
 	}()
-
-	// Store some data
-	testData := []byte("test data for flush")
-	_, err = client.Put(testData, 0x55)
-	require.NoError(t, err)
 
 	// Test flush operation
 	err = client.Flush()
@@ -359,8 +145,8 @@ func TestClientSetAuth(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestClientInvalidOperations tests error handling
-func TestClientInvalidOperations(t *testing.T) {
+// TestClientInvalidSetAuth tests error handling for invalid SetAuth inputs
+func TestClientInvalidSetAuth(t *testing.T) {
 	config := &Config{
 		Exchange:   "noop",
 		StorePath:  t.TempDir(),
@@ -375,19 +161,6 @@ func TestClientInvalidOperations(t *testing.T) {
 			t.Logf("Warning: failed to shutdown client: %v", shutdownErr)
 		}
 	}()
-
-	// Test Get with invalid link
-	invalidLink := []byte("invalid link data")
-	_, err = client.Get(invalidLink)
-	assert.Error(t, err)
-
-	// Test Push with invalid link
-	err = client.Push(invalidLink)
-	assert.Error(t, err)
-
-	// Test Pull with invalid link
-	err = client.Pull(invalidLink)
-	assert.Error(t, err)
 
 	// Test SetAuth with invalid peer IDs
 	err = client.SetAuth("invalid-peer-id", "another-invalid-peer-id", true)

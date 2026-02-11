@@ -186,32 +186,16 @@ func (cfg *Config) init(mc *Client) error {
 	mc.ls.StorageWriteOpener = func(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
 		buf := bytes.NewBuffer(nil)
 		return buf, func(l ipld.Link) error {
-			ctx := ctx.Ctx
 			k := datastore.NewKey(l.Binary())
-			if err := mc.ds.Put(ctx, k, buf.Bytes()); err != nil {
-				return err
-			}
-			if err := mc.ex.Push(ctx, mc.bloxPid, l); err != nil {
-				return mc.markAsFailedPush(ctx, l)
-			}
-			return mc.markAsPushedSuccessfully(ctx, l)
+			return mc.ds.Put(ctx.Ctx, k, buf.Bytes())
 		}, nil
 	}
 	mc.ls.StorageReadOpener = func(ctx ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 		val, err := mc.ds.Get(ctx.Ctx, datastore.NewKey(l.Binary()))
-		if err == datastore.ErrNotFound {
-			// Attempt to pull missing link from blox if missing from local datastore.
-			if err := mc.ex.Pull(ctx.Ctx, mc.bloxPid, l); err != nil {
-				return nil, err
-			}
-			val, err = mc.ds.Get(ctx.Ctx, datastore.NewKey(l.Binary()))
-		}
-		switch err {
-		case nil:
-			return bytes.NewBuffer(val), nil
-		default:
+		if err != nil {
 			return nil, err
 		}
+		return bytes.NewBuffer(val), nil
 	}
 	switch cfg.Exchange {
 	case noopExchange:
