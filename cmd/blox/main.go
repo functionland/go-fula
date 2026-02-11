@@ -1055,11 +1055,6 @@ func action(ctx *cli.Context) error {
 	}
 	logger.Infow("Derived peer ID from private key", "peerID", selfPeerID.String())
 
-	ds, err := badger.NewDatastore(app.config.StoreDir, &badger.DefaultOptions)
-	if err != nil {
-		return err
-	}
-
 	linkSystem := cidlink.DefaultLinkSystem()
 	linkSystem.StorageReadOpener = CustomStorageReadOpenerNone
 	linkSystem.StorageWriteOpener = CustomStorageWriteOpenerNone
@@ -1092,7 +1087,6 @@ func action(ctx *cli.Context) error {
 		blox.WithSelfPeerID(selfPeerID),
 		blox.WithAuthorizer(authorizerPeerID),
 		blox.WithWg(&wg),
-		blox.WithDatastore(ds),
 		blox.WithLinkSystem(&linkSystem),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithTopicName(app.config.PoolName),

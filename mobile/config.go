@@ -16,7 +16,6 @@ import (
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	dssync "github.com/ipfs/go-datastore/sync"
-	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -157,16 +156,7 @@ func (cfg *Config) init(mc *Client) error {
 		return err
 	}
 
-	if cfg.StorePath == "" {
-		mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
-	} else {
-		options := &badger.DefaultOptions
-		options.SyncWrites = cfg.SyncWrites
-		mc.ds, err = badger.NewDatastore(cfg.StorePath, options)
-		if err != nil {
-			return err
-		}
-	}
+	mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
 	if cfg.BloxAddr == "" {
 		if cfg.Exchange != noopExchange {
 			return errors.New("the BloxAddr must be specified until autodiscovery service is implemented; " +
