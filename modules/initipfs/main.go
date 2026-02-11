@@ -124,8 +124,11 @@ type IPFSConfig struct {
 		} `json:"ConnMgr"`
 		DisableBandwidthMetrics bool     `json:"DisableBandwidthMetrics"`
 		DisableNatPortMap       bool     `json:"DisableNatPortMap"`
-		RelayClient             struct{} `json:"RelayClient"`
-		RelayService            struct{} `json:"RelayService"`
+		RelayClient struct {
+			Enabled      bool     `json:"Enabled,omitempty"`
+			StaticRelays []string `json:"StaticRelays,omitempty"`
+		} `json:"RelayClient"`
+		RelayService struct{} `json:"RelayService"`
 		ResourceMgr             struct{} `json:"ResourceMgr"`
 		Transports              struct {
 			Multiplexers map[string]interface{} `json:"Multiplexers"`
