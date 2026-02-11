@@ -10,8 +10,10 @@ import (
 
 	gostream "github.com/libp2p/go-libp2p-gostream"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	libp2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/stretchr/testify/require"
 )
 
@@ -100,8 +102,11 @@ func TestRealDeviceConnection(t *testing.T) {
 		time.Sleep(20 * time.Second)
 	}
 
-	// --- Verify libp2p connectivity ---
+	// --- Verify libp2p connectivity (skipped in DHT mode — uses bogus IP) ---
 	t.Run("ConnectToBlox", func(t *testing.T) {
+		if *flagMode == "dht" {
+			t.Skip("Skipped in DHT mode: direct connect uses bogus IP; DHT fallback is tested via BloxFreeSpace")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		peerInfo := client.h.Peerstore().PeerInfo(client.bloxPid)
@@ -123,10 +128,14 @@ func TestRealDeviceConnection(t *testing.T) {
 		}
 	})
 
-	// --- Raw stream diagnostic ---
+	// --- Raw stream diagnostic (skipped in DHT mode) ---
 	t.Run("RawStream", func(t *testing.T) {
+		if *flagMode == "dht" {
+			t.Skip("Skipped in DHT mode: raw stream uses bogus IP; DHT fallback is tested via BloxFreeSpace")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		ctx = network.WithUseTransient(ctx, "test")
 		s, err := client.h.NewStream(ctx, client.bloxPid, protocol.ID("/x/fula-blockchain"))
 		if err != nil {
 			t.Fatalf("NewStream failed: %v", err)
@@ -146,10 +155,14 @@ func TestRealDeviceConnection(t *testing.T) {
 		t.Logf("Response (%d bytes): %s", n, string(buf[:n]))
 	})
 
-	// --- Gostream dial diagnostic ---
+	// --- Gostream dial diagnostic (skipped in DHT mode) ---
 	t.Run("GostreamDial", func(t *testing.T) {
+		if *flagMode == "dht" {
+			t.Skip("Skipped in DHT mode: gostream dial uses bogus IP; DHT fallback is tested via BloxFreeSpace")
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		ctx = network.WithUseTransient(ctx, "test")
 		conn, err := gostream.Dial(ctx, client.h, client.bloxPid, "/x/fula-blockchain")
 		if err != nil {
 			t.Fatalf("gostream.Dial failed: %v", err)
@@ -177,5 +190,28 @@ func TestRealDeviceConnection(t *testing.T) {
 		} else {
 			t.Logf("BloxFreeSpace: %s", string(result))
 		}
+	})
+
+	// --- libp2p ping (works in all modes) ---
+	// Runs after BloxFreeSpace so that in DHT mode the connection is already
+	// established via the DHT fallback.
+	t.Run("Ping", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		ctx = network.WithUseTransient(ctx, "test")
+
+		const pingCount = 3
+		var successes int
+		for i := 0; i < pingCount; i++ {
+			result := <-libp2pping.Ping(ctx, client.h, client.bloxPid)
+			if result.Error != nil {
+				t.Logf("ping %d failed (non-fatal): %v", i+1, result.Error)
+			} else {
+				successes++
+				t.Logf("ping %d: %s", i+1, result.RTT)
+			}
+		}
+		require.Positive(t, successes, "all %d pings failed", pingCount)
+		t.Logf("Ping: %d/%d succeeded", successes, pingCount)
 	})
 }

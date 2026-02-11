@@ -292,14 +292,17 @@ func (cfg *Config) init(mc *Client) error {
 		// Create gostream-based HTTP client that dials through kubo's p2p protocol
 		p2pClient := &http.Client{
 			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				DialContext: func(ctx context.Context, netw, addr string) (net.Conn, error) {
 					pid, err := peer.Decode(strings.TrimSuffix(addr, ".invalid:80"))
 					if err != nil {
 						return nil, err
 					}
 
+					// Allow transient (relay) connections for gostream dials
+					dialCtx := network.WithUseTransient(ctx, "fx.mobile")
+
 					// Try direct dial first (uses peerstore addresses — direct IP + relay circuits)
-					conn, dialErr := gostream.Dial(ctx, mc.h, pid, "/x/fula-blockchain")
+					conn, dialErr := gostream.Dial(dialCtx, mc.h, pid, "/x/fula-blockchain")
 					if dialErr == nil {
 						return conn, nil
 					}
@@ -336,7 +339,7 @@ func (cfg *Config) init(mc *Client) error {
 
 					// Add discovered addresses to peerstore and retry
 					mc.h.Peerstore().AddAddrs(pid, addrInfo.Addrs, peerstore.TempAddrTTL)
-					retryConn, retryErr := gostream.Dial(ctx, mc.h, pid, "/x/fula-blockchain")
+					retryConn, retryErr := gostream.Dial(dialCtx, mc.h, pid, "/x/fula-blockchain")
 					if retryErr != nil {
 						return nil, fmt.Errorf("direct dial failed: %w; IPFS DHT retry also failed: %v", dialErr, retryErr)
 					}
