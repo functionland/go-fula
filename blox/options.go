@@ -107,6 +107,15 @@ func newOptions(o ...Option) (*options, error) {
 	return &opts, nil
 }
 
+// WithAuthorizer sets the peer ID that is allowed to manage authorization.
+// If unset, defaults to the blox's own peer ID (selfPeerID).
+func WithAuthorizer(id peer.ID) Option {
+	return func(o *options) error {
+		o.authorizer = id
+		return nil
+	}
+}
+
 // WithSelfPeerID sets the local peer ID (derived from the private key).
 // This replaces the libp2p host's ID for authorization and pool discovery.
 func WithSelfPeerID(id peer.ID) Option {

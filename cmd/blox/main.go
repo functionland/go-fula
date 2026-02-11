@@ -1081,8 +1081,16 @@ func action(ctx *cli.Context) error {
 		logger.Errorw("Error in setting ipfs cluster api", "err", err)
 	}
 
+	// Parse the authorizer peer ID from config
+	authorizerPeerID, err := peer.Decode(app.config.Authorizer)
+	if err != nil {
+		logger.Warnw("Failed to decode authorizer peer ID, defaulting to self", "authorizer", app.config.Authorizer, "err", err)
+		authorizerPeerID = selfPeerID
+	}
+
 	bb, err := blox.New(
 		blox.WithSelfPeerID(selfPeerID),
+		blox.WithAuthorizer(authorizerPeerID),
 		blox.WithWg(&wg),
 		blox.WithDatastore(ds),
 		blox.WithLinkSystem(&linkSystem),
