@@ -9,15 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/functionland/go-fula/exchange"
 	ipfsCluster "github.com/ipfs-cluster/ipfs-cluster/api/rest/client"
 	"github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/ipfs/kubo/client/rpc"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -26,7 +23,7 @@ type (
 	PoolNameUpdater func(string) error
 	PoolNameGetter  func() string
 	options         struct {
-		h                     host.Host
+		selfPeerID            peer.ID
 		name                  string
 		topicName             string
 		chainName             string
@@ -36,7 +33,6 @@ type (
 		ls                    *ipld.LinkSystem
 		authorizer            peer.ID
 		authorizedPeers       []peer.ID
-		exchangeOpts          []exchange.Option
 		relays                []string
 		updatePoolName        PoolNameUpdater
 		getPoolName           PoolNameGetter
@@ -53,6 +49,7 @@ type (
 		wg                    *sync.WaitGroup
 		rpc                   *rpc.HttpApi
 		ipfsClusterApi        ipfsCluster.Client
+		kuboAPIAddr           string // Address of kubo's HTTP API (default: 127.0.0.1:5001)
 	}
 )
 
@@ -74,12 +71,6 @@ func newOptions(o ...Option) (*options, error) {
 	}
 	if opts.topicName == "" {
 		opts.topicName = path.Clean(opts.name)
-	}
-	if opts.h == nil {
-		var err error
-		if opts.h, err = libp2p.New(); err != nil {
-			return nil, err
-		}
 	}
 	if opts.ds == nil {
 		opts.ds = dssync.MutexWrap(datastore.NewMapDatastore())
@@ -104,21 +95,32 @@ func newOptions(o ...Option) (*options, error) {
 			return bytes.NewBuffer(val), nil
 		}
 	}
-	if opts.authorizer == "" {
-		opts.authorizer = opts.h.ID()
+	if opts.authorizer == "" && opts.selfPeerID != "" {
+		opts.authorizer = opts.selfPeerID
 	}
 	if opts.wg == nil {
 		opts.wg = new(sync.WaitGroup)
 	}
+	if opts.kuboAPIAddr == "" {
+		opts.kuboAPIAddr = defaultKuboAPIAddr
+	}
 	return &opts, nil
 }
 
-// WithHost sets the libp2p host on which the blox is exposed.
-// If unset a default host with random identity is used.
-// See: libp2p.New.
-func WithHost(h host.Host) Option {
+// WithAuthorizer sets the peer ID that is allowed to manage authorization.
+// If unset, defaults to the blox's own peer ID (selfPeerID).
+func WithAuthorizer(id peer.ID) Option {
 	return func(o *options) error {
-		o.h = h
+		o.authorizer = id
+		return nil
+	}
+}
+
+// WithSelfPeerID sets the local peer ID (derived from the private key).
+// This replaces the libp2p host's ID for authorization and pool discovery.
+func WithSelfPeerID(id peer.ID) Option {
+	return func(o *options) error {
+		o.selfPeerID = id
 		return nil
 	}
 }
@@ -132,8 +134,7 @@ func WithPoolName(n string) Option {
 	}
 }
 
-// WithStoreDir sets a the store directory we are using for datastore
-// Required.
+// WithStoreDir sets the store directory used for datastore.
 func WithStoreDir(n string) Option {
 	return func(o *options) error {
 		o.storeDir = n
@@ -143,7 +144,6 @@ func WithStoreDir(n string) Option {
 
 // WithTopicName sets the name of the topic onto which announcements are made.
 // Defaults to "/explore.fula/pools/<pool-name>" if unset.
-// See: WithPoolName.
 func WithTopicName(n string) Option {
 	return func(o *options) error {
 		o.topicName = n
@@ -202,15 +202,7 @@ func WithLinkSystem(ls *ipld.LinkSystem) Option {
 	}
 }
 
-func WithExchangeOpts(eo ...exchange.Option) Option {
-	return func(o *options) error {
-		o.exchangeOpts = eo
-		return nil
-	}
-}
-
-// WithStoreDir sets a the store directory we are using for datastore
-// Required.
+// WithRelays sets the relay addresses.
 func WithRelays(r []string) Option {
 	return func(o *options) error {
 		o.relays = r
@@ -294,6 +286,15 @@ func WithUpdateChainName(updateChainName func(string) error) Option {
 func WithGetChainName(getChainName func() string) Option {
 	return func(o *options) error {
 		o.getChainName = getChainName
+		return nil
+	}
+}
+
+// WithKuboAPIAddr sets the address of kubo's HTTP API.
+// Defaults to "127.0.0.1:5001".
+func WithKuboAPIAddr(addr string) Option {
+	return func(o *options) error {
+		o.kuboAPIAddr = addr
 		return nil
 	}
 }

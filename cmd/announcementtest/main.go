@@ -198,7 +198,7 @@ func main() {
 	n1, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h1),
+		blox.WithSelfPeerID(h1.ID()),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
 		blox.WithPingCount(5),
@@ -224,7 +224,7 @@ func main() {
 	n2, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h2),
+		blox.WithSelfPeerID(h2.ID()),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
 		blox.WithPingCount(5),
@@ -250,7 +250,7 @@ func main() {
 	n3, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h3),
+		blox.WithSelfPeerID(h3.ID()),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
 		blox.WithPingCount(5),
@@ -321,7 +321,7 @@ func main() {
 	n4, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h4),
+		blox.WithSelfPeerID(h4.ID()),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
 		blox.WithPingCount(5),

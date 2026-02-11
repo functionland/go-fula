@@ -32,7 +32,7 @@ func (bl *FxBlockchain) ManifestUpload(ctx context.Context, to peer.ID, r Manife
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (bl *FxBlockchain) ManifestStore(ctx context.Context, to peer.ID, r Manifes
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +246,7 @@ func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r Man
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (bl *FxBlockchain) ManifestBatchStore(ctx context.Context, to peer.ID, r Ma
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (bl *FxBlockchain) ManifestBatchUpload(ctx context.Context, to peer.ID, r M
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +339,7 @@ func (bl *FxBlockchain) ManifestRemove(ctx context.Context, to peer.ID, r Manife
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func (bl *FxBlockchain) ManifestRemoveStorer(ctx context.Context, to peer.ID, r 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +413,7 @@ func (bl *FxBlockchain) ManifestRemoveStored(ctx context.Context, to peer.ID, r 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}

@@ -290,7 +290,7 @@ func (bl *FxBlockchain) ListPlugins(ctx context.Context, to peer.ID) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, to peer.ID, pluginNam
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +334,7 @@ func (bl *FxBlockchain) UninstallPlugin(ctx context.Context, to peer.ID, pluginN
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +351,7 @@ func (bl *FxBlockchain) ListActivePlugins(ctx context.Context, to peer.ID) ([]by
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +495,7 @@ func (bl *FxBlockchain) GetInstallOutput(ctx context.Context, to peer.ID, plugin
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +517,7 @@ func (bl *FxBlockchain) GetInstallStatus(ctx context.Context, to peer.ID, plugin
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -735,7 +735,7 @@ func (bl *FxBlockchain) UpdatePlugin(ctx context.Context, to peer.ID, pluginName
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}

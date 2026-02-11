@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,7 +38,7 @@ func (bl *FxBlockchain) PoolCreate(ctx context.Context, to peer.ID, r PoolCreate
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +159,7 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -183,19 +182,13 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 }
 
 func (bl *FxBlockchain) StartPingServer(ctx context.Context) error {
-	if bl.p != nil {
-		err := bl.p.Start(ctx)
-		return err
-	}
-	return errors.New("ping server cannot be started because it is nil")
+	// No-op: ping is now handled via TCP through kubo p2p
+	return nil
 }
 
 func (bl *FxBlockchain) StopPingServer(ctx context.Context) error {
-	if bl.p != nil {
-		err := bl.p.StopServer(ctx)
-		return err
-	}
-	return errors.New("ping server cannot be stopped because it is nil")
+	// No-op: ping is now handled via TCP through kubo p2p
+	return nil
 }
 
 func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCancelJoinRequest) ([]byte, error) {
@@ -213,7 +206,7 @@ func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCa
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -335,9 +328,7 @@ func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
 	}
 
 	bl.StopPingServer(ctx)
-	if bl.a != nil {
-		bl.a.StopJoinPoolRequestAnnouncements()
-	}
+	// Announcements no longer used - pool joins handled via blockchain API
 	// Send a stop signal if the channel is not nil
 	if bl.stopFetchUsersAfterJoinChan != nil {
 		close(bl.stopFetchUsersAfterJoinChan)
@@ -362,7 +353,7 @@ func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequ
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +390,7 @@ func (bl *FxBlockchain) PoolList(ctx context.Context, to peer.ID, r PoolListRequ
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +427,7 @@ func (bl *FxBlockchain) ReplicateInPool(ctx context.Context, to peer.ID, r Repli
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +464,7 @@ func (bl *FxBlockchain) PoolUserList(ctx context.Context, to peer.ID, r PoolUser
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +501,7 @@ func (bl *FxBlockchain) PoolVote(ctx context.Context, to peer.ID, r PoolVoteRequ
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +538,7 @@ func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRe
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -588,7 +579,7 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		// Ping
 		/*
 			// Use IPFS Ping
-			log.Debugw("****** Pinging pending node", "from", bl.h.ID(), "to", from)
+			log.Debugw("****** Pinging pending node", "from", bl.selfPeerID, "to", from)
 			averageDuration, successCount, err := bl.p.Ping(ctx, from)
 			if err != nil {
 				log.Errorw("An error occurred during ping", "error", err)
@@ -685,7 +676,7 @@ func (bl *FxBlockchain) HandlePoolJoinRequest(ctx context.Context, from peer.ID,
 		}
 
 		// Handle the response as needed
-		log.Infow("Vote cast successfully", "statusCode", statusCode, "voteResponse", voteResponse, "on", from, "by", bl.h.ID())
+		log.Infow("Vote cast successfully", "statusCode", statusCode, "voteResponse", voteResponse, "on", from, "by", bl.selfPeerID)
 		// Update member status to unknown
 		bl.membersLock.Lock()
 		bl.members[from] = common.Unknown

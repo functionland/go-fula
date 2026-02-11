@@ -77,7 +77,7 @@ func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (bl *FxBlockchain) EraseBlData(ctx context.Context, to peer.ID) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (bl *FxBlockchain) WifiRemoveall(ctx context.Context, to peer.ID) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (bl *FxBlockchain) Reboot(ctx context.Context, to peer.ID) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (bl *FxBlockchain) Partition(ctx context.Context, to peer.ID) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (bl *FxBlockchain) DeleteFulaConfig(ctx context.Context, to peer.ID) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (bl *FxBlockchain) GetAccount(ctx context.Context, to peer.ID) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +271,7 @@ func (bl *FxBlockchain) FetchContainerLogs(ctx context.Context, to peer.ID, r wi
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (bl *FxBlockchain) ChatWithAI(ctx context.Context, to peer.ID, r wifi.ChatW
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -387,7 +387,7 @@ func (bl *FxBlockchain) FindBestAndTargetInLogs(ctx context.Context, to peer.ID,
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +424,7 @@ func (bl *FxBlockchain) GetFolderSize(ctx context.Context, to peer.ID, r wifi.Ge
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +461,7 @@ func (bl *FxBlockchain) GetDatastoreSize(ctx context.Context, to peer.ID, r wifi
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -498,7 +498,7 @@ func (bl *FxBlockchain) DeleteWifi(ctx context.Context, to peer.ID, r wifi.Delet
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +535,7 @@ func (bl *FxBlockchain) DisconnectWifi(ctx context.Context, to peer.ID, r wifi.D
 	if err != nil {
 		return nil, err
 	}
-	resp, err := bl.c.Do(req)
+	resp, err := bl.doP2PRequest(req)
 	if err != nil {
 		return nil, err
 	}

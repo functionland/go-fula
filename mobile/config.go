@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -13,10 +16,11 @@ import (
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	dssync "github.com/ipfs/go-datastore/sync"
-	badger "github.com/ipfs/go-ds-badger"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/libp2p/go-libp2p"
+	gostream "github.com/libp2p/go-libp2p-gostream"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -30,6 +34,8 @@ import (
 const (
 	noopExchange = "noop"
 )
+
+var log = logging.Logger("fula/mobile")
 
 var devRelays = []string{
 	"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835",
@@ -73,6 +79,11 @@ type Config struct {
 	AllowTransientConnection bool
 	PoolName                 string
 	BlockchainEndpoint       string
+
+	// IpfsDHTLookupDisabled disables IPFS DHT peer discovery fallback.
+	// When false (default), the client will query the standard IPFS DHT to discover
+	// kubo's current addresses if direct and relay connections fail.
+	IpfsDHTLookupDisabled bool
 
 	// TODO: we don't need to take BloxAddr when there is a discovery mechanism facilitated via fx.land.
 	//       For now we manually take BloxAddr as config.
@@ -132,8 +143,10 @@ func (cfg *Config) init(mc *Client) error {
 	if cfg.ForceReachabilityPrivate {
 		hopts = append(hopts, libp2p.ForceReachabilityPrivate())
 	}
+	var pk crypto.PrivKey
 	if len(cfg.Identity) != 0 {
-		pk, err := crypto.UnmarshalPrivateKey(cfg.Identity)
+		var err error
+		pk, err = crypto.UnmarshalPrivateKey(cfg.Identity)
 		if err != nil {
 			return err
 		}
@@ -143,16 +156,7 @@ func (cfg *Config) init(mc *Client) error {
 		return err
 	}
 
-	if cfg.StorePath == "" {
-		mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
-	} else {
-		options := &badger.DefaultOptions
-		options.SyncWrites = cfg.SyncWrites
-		mc.ds, err = badger.NewDatastore(cfg.StorePath, options)
-		if err != nil {
-			return err
-		}
-	}
+	mc.ds = dssync.MutexWrap(datastore.NewMapDatastore())
 	if cfg.BloxAddr == "" {
 		if cfg.Exchange != noopExchange {
 			return errors.New("the BloxAddr must be specified until autodiscovery service is implemented; " +
@@ -182,32 +186,16 @@ func (cfg *Config) init(mc *Client) error {
 	mc.ls.StorageWriteOpener = func(ctx ipld.LinkContext) (io.Writer, ipld.BlockWriteCommitter, error) {
 		buf := bytes.NewBuffer(nil)
 		return buf, func(l ipld.Link) error {
-			ctx := ctx.Ctx
 			k := datastore.NewKey(l.Binary())
-			if err := mc.ds.Put(ctx, k, buf.Bytes()); err != nil {
-				return err
-			}
-			if err := mc.ex.Push(ctx, mc.bloxPid, l); err != nil {
-				return mc.markAsFailedPush(ctx, l)
-			}
-			return mc.markAsPushedSuccessfully(ctx, l)
+			return mc.ds.Put(ctx.Ctx, k, buf.Bytes())
 		}, nil
 	}
 	mc.ls.StorageReadOpener = func(ctx ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 		val, err := mc.ds.Get(ctx.Ctx, datastore.NewKey(l.Binary()))
-		if err == datastore.ErrNotFound {
-			// Attempt to pull missing link from blox if missing from local datastore.
-			if err := mc.ex.Pull(ctx.Ctx, mc.bloxPid, l); err != nil {
-				return nil, err
-			}
-			val, err = mc.ds.Get(ctx.Ctx, datastore.NewKey(l.Binary()))
-		}
-		switch err {
-		case nil:
-			return bytes.NewBuffer(val), nil
-		default:
+		if err != nil {
 			return nil, err
 		}
+		return bytes.NewBuffer(val), nil
 	}
 	switch cfg.Exchange {
 	case noopExchange:
@@ -228,17 +216,114 @@ func (cfg *Config) init(mc *Client) error {
 		if err != nil {
 			return err
 		}
-		mc.bl, err = blockchain.NewFxBlockchain(mc.h, nil, nil,
-			blockchain.NewSimpleKeyStorer(""),
+		blcOpts := []blockchain.Option{
 			blockchain.WithAuthorizer(mc.h.ID()),
+			blockchain.WithSelfPeerID(mc.h.ID()),
 			blockchain.WithAllowTransientConnection(cfg.AllowTransientConnection),
 			blockchain.WithBlockchainEndPoint(cfg.BlockchainEndpoint),
 			blockchain.WithRelays(cfg.StaticRelays),
 			blockchain.WithTopicName(cfg.PoolName),
-			blockchain.WithTimeout(65))
+			blockchain.WithTimeout(65),
+		}
+		if pk != nil {
+			blcOpts = append(blcOpts, blockchain.WithRequestSigning(pk))
+		}
+		blc, err := blockchain.NewFxBlockchain(
+			blockchain.NewSimpleKeyStorer(""),
+			blcOpts...)
 		if err != nil {
 			return err
 		}
+		// Initialize IPFS DHT for peer discovery fallback (non-fatal if it fails)
+		if !cfg.IpfsDHTLookupDisabled && mc.bloxPid != "" {
+			mc.ipfsDHTCtx, mc.ipfsDHTCancel = context.WithCancel(context.Background())
+			mc.ipfsDHTReady = make(chan struct{})
+			ipfsDHT, dhtErr := dht.New(mc.ipfsDHTCtx, mc.h,
+				dht.Mode(dht.ModeClient),
+				dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
+				dht.Datastore(namespace.Wrap(mc.ds, datastore.NewKey("ipfs-dht"))),
+			)
+			if dhtErr != nil {
+				log.Warnf("Failed to create IPFS DHT for peer discovery fallback: %v", dhtErr)
+				close(mc.ipfsDHTReady) // Signal ready immediately so DialContext doesn't block
+			} else {
+				mc.ipfsDHT = ipfsDHT
+				go func() {
+					defer close(mc.ipfsDHTReady)
+					if bErr := mc.ipfsDHT.Bootstrap(mc.ipfsDHTCtx); bErr != nil {
+						log.Warnf("IPFS DHT bootstrap failed: %v", bErr)
+						return
+					}
+					// Allow some time for the DHT to warm up and populate its routing table
+					select {
+					case <-time.After(10 * time.Second):
+					case <-mc.ipfsDHTCtx.Done():
+					}
+				}()
+			}
+		}
+
+		// Create gostream-based HTTP client that dials through kubo's p2p protocol
+		p2pClient := &http.Client{
+			Timeout: 60 * time.Second,
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, netw, addr string) (net.Conn, error) {
+					pid, err := peer.Decode(strings.TrimSuffix(addr, ".invalid:80"))
+					if err != nil {
+						return nil, err
+					}
+
+					// Allow transient (relay) connections for gostream dials
+					dialCtx := network.WithUseTransient(ctx, "fx.mobile")
+
+					// Try direct dial first (uses peerstore addresses — direct IP + relay circuits)
+					conn, dialErr := gostream.Dial(dialCtx, mc.h, pid, "/x/fula-blockchain")
+					if dialErr == nil {
+						return conn, nil
+					}
+
+					// If DHT is not available, return the original error
+					if mc.ipfsDHT == nil {
+						return nil, dialErr
+					}
+
+					log.Infof("Direct dial failed for peer %s, attempting IPFS DHT peer discovery: %v", pid, dialErr)
+
+					// Wait for DHT to be ready (up to 15s)
+					readyCtx, readyCancel := context.WithTimeout(ctx, 15*time.Second)
+					defer readyCancel()
+					select {
+					case <-mc.ipfsDHTReady:
+					case <-readyCtx.Done():
+						return nil, fmt.Errorf("direct dial failed: %w; IPFS DHT not ready in time", dialErr)
+					}
+
+					// Query DHT for peer addresses (up to 30s)
+					findCtx, findCancel := context.WithTimeout(ctx, 30*time.Second)
+					defer findCancel()
+					addrInfo, findErr := mc.ipfsDHT.FindPeer(findCtx, pid)
+					if findErr != nil {
+						return nil, fmt.Errorf("direct dial failed: %w; IPFS DHT FindPeer also failed: %v", dialErr, findErr)
+					}
+
+					if len(addrInfo.Addrs) == 0 {
+						return nil, fmt.Errorf("direct dial failed: %w; IPFS DHT found peer but no addresses", dialErr)
+					}
+
+					log.Infof("IPFS DHT discovered %d addresses for peer %s: %v", len(addrInfo.Addrs), pid, addrInfo.Addrs)
+
+					// Add discovered addresses to peerstore and retry
+					mc.h.Peerstore().AddAddrs(pid, addrInfo.Addrs, peerstore.TempAddrTTL)
+					retryConn, retryErr := gostream.Dial(dialCtx, mc.h, pid, "/x/fula-blockchain")
+					if retryErr != nil {
+						return nil, fmt.Errorf("direct dial failed: %w; IPFS DHT retry also failed: %v", dialErr, retryErr)
+					}
+					return retryConn, nil
+				},
+			},
+		}
+		blc.SetP2PClient(p2pClient) // auto-wraps with signing transport if key is set
+		mc.bl = blc
 		if mc.bloxPid != "" {
 			// Explicitly authorize the Blox ID if its address is specified.
 			if err := mc.SetAuth(mc.h.ID().String(), mc.bloxPid.String(), true); err != nil {

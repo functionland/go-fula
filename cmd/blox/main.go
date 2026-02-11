@@ -19,26 +19,21 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/functionland/go-fula/blox"
-	"github.com/functionland/go-fula/exchange"
 	ipfsCluster "github.com/ipfs-cluster/ipfs-cluster/api/rest/client"
 	ipfsPath "github.com/ipfs/boxo/path"
 	blockformat "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/namespace"
 	badger "github.com/ipfs/go-ds-badger"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/kubo/client/rpc"
 	oldcmds "github.com/ipfs/kubo/commands"
 	config "github.com/ipfs/kubo/config"
 	core "github.com/ipfs/kubo/core"
-	coreapi "github.com/ipfs/kubo/core/coreapi"
 	"github.com/ipfs/kubo/core/corehttp"
 	iface "github.com/ipfs/kubo/core/coreiface"
 	kubolibp2p "github.com/ipfs/kubo/core/node/libp2p"
@@ -47,16 +42,12 @@ import (
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/ipni/index-provider/engine"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	sockets "github.com/libp2p/go-socket-activation"
-	"github.com/mdp/qrterminal"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/multiformats/go-multicodec"
@@ -1037,36 +1028,11 @@ func action(ctx *cli.Context) error {
 		fmt.Print(mnemonic)
 		return nil // Exit after generating the node key
 	}
-	authorizer, err := peer.Decode(app.config.Authorizer)
-	if err != nil {
-		return err
-	}
-	if app.poolHost {
-		authorizer = ""
-	}
-	// Decode the authorized peers from strings to peer.IDs
-	authorizedPeers := make([]peer.ID, len(app.config.AuthorizedPeers))
-	for i, authorizedPeer := range app.config.AuthorizedPeers {
-		id, err := peer.Decode(authorizedPeer)
-		if err != nil {
-			return fmt.Errorf("unable to decode authorized peer: %w", err)
-		}
-		authorizedPeers[i] = id
-	}
 	km, err := base64.StdEncoding.DecodeString(app.config.Identity)
 	if err != nil {
 		return err
 	}
 	k, err := crypto.UnmarshalPrivateKey(km)
-	if err != nil {
-		return err
-	}
-
-	ipnikm, err := base64.StdEncoding.DecodeString(app.config.IpniPublisherIdentity)
-	if err != nil {
-		return err
-	}
-	ipnik, err := crypto.UnmarshalPrivateKey(ipnikm)
 	if err != nil {
 		return err
 	}
@@ -1077,103 +1043,18 @@ func action(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		ipnipid, err := peer.IDFromPrivateKey(ipnik)
-		if err != nil {
-			return err
-		}
 		fmt.Printf("   blox peer ID: %s\n", pid.String())
-		fmt.Printf("   blox IPNI publisher peer ID: %s\n", ipnipid.String())
 		return nil
 	}
 
-	listenAddrs := make([]ma.Multiaddr, 0, len(app.config.ListenAddrs)+1)
-	// Convert string addresses to multiaddr and append to listenAddrs
-	for _, addrString := range app.config.ListenAddrs {
-		addr, err := ma.NewMultiaddr(addrString)
-		if err != nil {
-			panic(fmt.Errorf("invalid multiaddress: %w", err))
-		}
-		listenAddrs = append(listenAddrs, addr)
-	}
-	// Add the relay multiaddress
-	relayAddr2, err := ma.NewMultiaddr("/p2p-circuit")
-	if err != nil {
-		panic(fmt.Errorf("error creating relay multiaddress: %w", err))
-	}
-	listenAddrs = append(listenAddrs, relayAddr2)
-
-	hopts := []libp2p.Option{
-		libp2p.EnableNATService(),
-		libp2p.NATPortMap(),
-		libp2p.EnableRelay(),
-		libp2p.EnableHolePunching(),
-	}
-
-	if app.config.ForceReachabilityPrivate {
-		hopts = append(hopts, libp2p.ForceReachabilityPrivate())
-	}
-	if app.config.DisableResourceManger {
-		hopts = append(hopts, libp2p.ResourceManager(&network.NullResourceManager{}))
-	}
-
-	sr := make([]peer.AddrInfo, 0, len(app.config.StaticRelays))
-	for _, relay := range app.config.StaticRelays {
-		rma, err := ma.NewMultiaddr(relay)
-		if err != nil {
-			return err
-		}
-		rai, err := peer.AddrInfoFromP2pAddr(rma)
-		if err != nil {
-			return err
-		}
-		sr = append(sr, *rai)
-	}
-	if len(sr) != 0 {
-		hopts = append(hopts, libp2p.EnableAutoRelayWithStaticRelays(sr,
-			autorelay.WithMinCandidates(1),
-			autorelay.WithNumRelays(1),
-			autorelay.WithBootDelay(30*time.Second),
-			autorelay.WithMinInterval(10*time.Second),
-		))
-	}
-
-	bopts := append(hopts, libp2p.Identity(k), libp2p.ListenAddrs(listenAddrs...))
-	h, err := libp2p.New(bopts...)
+	// Derive peer ID from private key — no libp2p host needed.
+	// Kubo handles all P2P networking; go-fula is a pure local TCP/HTTP service.
+	selfPeerID, err := peer.IDFromPrivateKey(k)
 	if err != nil {
 		return err
 	}
+	logger.Infow("Derived peer ID from private key", "peerID", selfPeerID.String())
 
-	// Create a new slice for updated listen addresses
-	ipniListenAddrs := make([]ma.Multiaddr, len(listenAddrs))
-	// Update each address in the slice
-	for i, addr := range listenAddrs {
-		// Convert the multiaddr to a string for manipulation
-		addrStr := addr.String()
-
-		// Replace "40001" with "40002" in the string representation
-		updatedAddrStr := strings.Replace(addrStr, "40001", "40002", -1)
-
-		// Parse the updated string back into a multiaddr.Multiaddr
-		updatedAddr, err := ma.NewMultiaddr(updatedAddrStr)
-		if err != nil {
-			log.Fatalf("Failed to parse updated multiaddr '%s': %v", updatedAddrStr, err)
-		}
-
-		// Store the updated multiaddr in the slice
-		ipniListenAddrs[i] = updatedAddr
-	}
-
-	iopts := append(hopts, libp2p.Identity(ipnik), libp2p.ListenAddrs(ipniListenAddrs...))
-	ipnih, err := libp2p.New(iopts...)
-	if err != nil {
-		return err
-	}
-	ds, err := badger.NewDatastore(app.config.StoreDir, &badger.DefaultOptions)
-	if err != nil {
-		return err
-	}
-
-	dirPath := filepath.Dir(app.configPath)
 	linkSystem := cidlink.DefaultLinkSystem()
 	linkSystem.StorageReadOpener = CustomStorageReadOpenerNone
 	linkSystem.StorageWriteOpener = CustomStorageWriteOpenerNone
@@ -1187,99 +1068,7 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	const useIPFSServer = "none" //internal: runs local ipfs instance, none requires an external one and fula runs the mock server on 5001
-	if useIPFSServer == "internal" {
-		repo, err := CreateCustomRepo(ctx2, dirPath, h, &badger.DefaultOptions, app.config.StoreDir, "90%")
-		if err != nil {
-			logger.Fatal(err)
-			return err
-		}
-
-		ipfsConfig := &core.BuildCfg{
-			Online:    true,
-			Permanent: true,
-			Host:      CustomHostOption(h),
-			Routing:   kubolibp2p.DHTOption,
-			Repo:      repo,
-		}
-
-		ipfsNode, err := core.NewNode(ctx2, ipfsConfig)
-		if err != nil {
-			logger.Fatal(err)
-			return err
-		}
-		ipfsHostId := ipfsNode.PeerHost.ID()
-		ipfsId := ipfsNode.Identity.String()
-		logger.Infow("ipfscore successfully instantiated", "host", ipfsHostId, "peer", ipfsId)
-		ipfsAPI, err := coreapi.NewCoreAPI(ipfsNode)
-		if err != nil {
-			panic(fmt.Errorf("failed to create IPFS API: %w", err))
-		}
-		if ipfsAPI != nil {
-			logger.Info("ipfscoreapi successfully instantiated")
-		}
-
-		ipfsNode.IsDaemon = true
-		logger.Debug("called wg.Add in blox start")
-		logger.Debugw("ipfs started", "condifg path", dirPath)
-
-		cctx := oldcmds.Context{
-			ConfigRoot:    dirPath,
-			ConstructNode: func() (*core.IpfsNode, error) { return ipfsNode, nil },
-			Gateway:       false,
-			// Other necessary fields...
-		}
-
-		err = cctx.Plugins.Start(ipfsNode)
-		if err != nil {
-			return err
-		}
-		context.AfterFunc(ipfsNode.Context(), func() {
-			cctx.Plugins.Close()
-		})
-
-		wg.Add(1)
-		go func() {
-			logger.Debug("called wg.Done in Start")
-			defer wg.Done()
-			defer logger.Debug("Start go routine is ending")
-			defer func() {
-				// We wait for the node to close first, as the node has children
-				// that it will wait for before closing, such as the API server.
-				ipfsNode.Close()
-
-				select {
-				case <-ctx2.Done():
-					logger.Info("Gracefully shut down daemon")
-				default:
-				}
-			}()
-			if ipfsNode.IsOnline {
-				logger.Infow("IPFS RPC server started on address http://127.0.0.1:5001")
-
-				/*err = corehttp.ListenAndServe(ipfsNode, "/ip4/127.0.0.1/tcp/5001", opts...)
-				if err != nil {
-					fmt.Println("Error setting up HTTP API server:", err)
-				}*/
-				err = cctx.Plugins.Start(ipfsNode)
-				if err != nil {
-					logger.Errorw("Error in Plugins Start", "err", err)
-				}
-				context.AfterFunc(ipfsNode.Context(), func() {
-					cctx.Plugins.Close()
-				})
-				_, err := serveHTTPApi(&cctx)
-				if err != nil {
-					logger.Errorw("Error setting up HTTP API server:", "err", err)
-				}
-			}
-			select {}
-		}()
-		//You need to correct the below as well. This commit was working https://github.com/functionland/go-fula/commit/34e39f76ec8f7e8d2175283eff9c2725c98ec059#diff-b1997e94b91855c9f21a9d9e5fb5aba0fc5ac30765046e3c5972aad2cc5cbcd3
-		//ds = ipfsNode.Repo.Datastore()
-		// linkSystem.StorageReadOpener = CustomStorageReadOpenerInternal
-		// linkSystem.StorageWriteOpener = CustomStorageWriteOpenerInternal
-	}
+	const useIPFSServer = "none" //none: requires an external kubo instance, fula: runs the mock server on 5001
 
 	ipfsClusterConfig := ipfsCluster.Config{}
 	ipfsClusterApi, err := ipfsCluster.NewDefaultClient(&ipfsClusterConfig)
@@ -1287,10 +1076,17 @@ func action(ctx *cli.Context) error {
 		logger.Errorw("Error in setting ipfs cluster api", "err", err)
 	}
 
+	// Parse the authorizer peer ID from config
+	authorizerPeerID, err := peer.Decode(app.config.Authorizer)
+	if err != nil {
+		logger.Warnw("Failed to decode authorizer peer ID, defaulting to self", "authorizer", app.config.Authorizer, "err", err)
+		authorizerPeerID = selfPeerID
+	}
+
 	bb, err := blox.New(
-		blox.WithHost(h),
+		blox.WithSelfPeerID(selfPeerID),
+		blox.WithAuthorizer(authorizerPeerID),
 		blox.WithWg(&wg),
-		blox.WithDatastore(ds),
 		blox.WithLinkSystem(&linkSystem),
 		blox.WithPoolName(app.config.PoolName),
 		blox.WithTopicName(app.config.PoolName),
@@ -1309,32 +1105,6 @@ func action(ctx *cli.Context) error {
 		blox.WithIpfsClient(node),
 		blox.WithPoolHostMode(app.poolHost),
 		blox.WithIpfsClusterAPI(ipfsClusterApi),
-		blox.WithExchangeOpts(
-			exchange.WithUpdateConfig(updateConfig),
-			exchange.WithWg(&wg),
-			//exchange.WithIPFSApi(ipfsAPI),
-			exchange.WithAuthorizer(authorizer),
-			exchange.WithAuthorizedPeers(authorizedPeers),
-			exchange.WithAllowTransientConnection(app.config.AllowTransientConnection),
-			exchange.WithMaxPushRate(app.config.MaxCIDPushRate),
-			exchange.WithIpniPublishDisabled(app.config.IpniPublishDisabled),
-			exchange.WithIpniPublishInterval(app.config.IpniPublishInterval),
-			exchange.WithIpniGetEndPoint("https://cid.contact/cid/"),
-			exchange.WithPoolHostMode(app.poolHost),
-			exchange.WithIpniProviderEngineOptions(
-				engine.WithHost(ipnih),
-				engine.WithDatastore(namespace.Wrap(ds, datastore.NewKey("ipni/ads"))),
-				engine.WithPublisherKind(engine.DataTransferPublisher),
-				engine.WithDirectAnnounce(app.config.IpniPublishDirectAnnounce...),
-			),
-			/*exchange.WithDhtProviderOptions(
-				//dht.Datastore(namespace.Wrap(ds, datastore.NewKey("dht"))),
-				dht.ProtocolExtension(protocol.ID("/"+app.config.PoolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),*/
-		),
 	)
 	if err != nil {
 		return err
@@ -1344,8 +1114,7 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	logger.Info("Started blox", "addrs", h.Addrs())
-	////printMultiaddrAsQR(h)
+	logger.Infow("Started blox", "peerID", selfPeerID.String())
 
 	// Setup signal handling
 	sig := make(chan os.Signal, 1)
@@ -1362,52 +1131,6 @@ func action(ctx *cli.Context) error {
 	<-ctx2.Done()
 	wg.Wait()
 	return nil
-}
-
-func printMultiaddrAsQR(h host.Host) {
-	var addr ma.Multiaddr
-	addrs := h.Addrs()
-
-	switch len(addrs) {
-	case 0:
-		// No addresses to process
-		return
-	case 1:
-		addr = addrs[0]
-	default:
-		// Select the best address to use
-		for _, a := range addrs {
-			if manet.IsPublicAddr(a) {
-				addr = a
-				break
-			}
-			if !manet.IsIPLoopback(a) {
-				addr = a
-			}
-		}
-	}
-
-	if addr == nil {
-		fmt.Println("blox has no multiaddrs")
-		return
-	}
-
-	fullAddr := fmt.Sprintf("%s/p2p/%s", addr.String(), h.ID().String())
-	fmt.Printf(">>> blox multiaddr: %s\n", fullAddr)
-
-	// Configure QR code generation based on OS
-	config := qrterminal.Config{
-		Level:     qrterminal.M,
-		Writer:    os.Stdout,
-		QuietZone: qrterminal.QUIET_ZONE,
-	}
-
-	// Characters for other terminals (e.g., Unix/Linux)
-	config.BlackChar = qrterminal.BLACK
-	config.WhiteChar = qrterminal.WHITE
-
-	// Generate QR code
-	qrterminal.GenerateWithConfig(fullAddr, config)
 }
 
 func main() {

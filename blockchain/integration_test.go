@@ -80,8 +80,9 @@ func TestRealContractIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer h.Close()
 
-		bl, err := NewFxBlockchain(h, nil, nil,
+		bl, err := NewFxBlockchain(
 			NewSimpleKeyStorer(""),
+			WithSelfPeerID(h.ID()),
 			WithAuthorizer(h.ID()),
 			WithTimeout(30),
 		)
@@ -173,8 +174,9 @@ func TestRealContractIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer h.Close()
 
-		bl, err := NewFxBlockchain(h, nil, nil,
+		bl, err := NewFxBlockchain(
 			NewSimpleKeyStorer(""),
+			WithSelfPeerID(h.ID()),
 			WithAuthorizer(h.ID()),
 			WithTimeout(30),
 		)

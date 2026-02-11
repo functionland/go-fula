@@ -6,28 +6,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
-	"path"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/functionland/go-fula/announcements"
 	"github.com/functionland/go-fula/common"
-	"github.com/functionland/go-fula/ping"
 	wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 	ipfsClusterClientApi "github.com/ipfs-cluster/ipfs-cluster/api"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
-	gostream "github.com/libp2p/go-libp2p-gostream"
-	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
 )
 
 var apiError struct {
@@ -54,10 +46,9 @@ type Config struct {
 type (
 	FxBlockchain struct {
 		*options
-		h  host.Host
-		s  *http.Server
-		c  *http.Client //libp2p client
-		ch *http.Client //normal http client
+		c           *http.Client // P2P client for mobile->device calls (nil on device side)
+		ch          *http.Client // normal http client for blockchain API calls
+		proxyServer *http.Server // TCP proxy server for kubo-forwarded requests
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
@@ -65,9 +56,6 @@ type (
 		bufPool   *sync.Pool
 		reqPool   *sync.Pool
 		keyStorer KeyStorer
-
-		p *ping.FxPing
-		a *announcements.FxAnnouncements
 
 		members     map[peer.ID]common.MemberStatus
 		membersLock sync.RWMutex
@@ -90,28 +78,13 @@ type (
 	}
 )
 
-func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncements, keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
+func NewFxBlockchain(keyStorer KeyStorer, o ...Option) (*FxBlockchain, error) {
 	opts, err := newOptions(o...)
 	if err != nil {
 		return nil, err
 	}
 	bl := &FxBlockchain{
 		options: opts,
-		h:       h,
-		p:       p,
-		a:       a,
-		s:       &http.Server{},
-		c: &http.Client{
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-					pid, err := peer.Decode(strings.TrimSuffix(addr, ".invalid:80"))
-					if err != nil {
-						return nil, err
-					}
-					return gostream.Dial(ctx, h, pid, FxBlockchainProtocolID)
-				},
-			},
-		},
 		ch: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
@@ -134,13 +107,44 @@ func NewFxBlockchain(h host.Host, p *ping.FxPing, a *announcements.FxAnnouncemen
 		fetchInterval:  opts.fetchFrequency,
 		fetchCheckStop: make(chan struct{}),
 	}
-	if bl.authorizer != "" {
-		if err := bl.SetAuth(context.Background(), h.ID(), bl.authorizer, true); err != nil {
+	if bl.authorizer != "" && bl.selfPeerID != "" {
+		if err := bl.SetAuth(context.Background(), bl.selfPeerID, bl.authorizer, true); err != nil {
 			return nil, err
 		}
 	}
 	bl.startFetchCheck()
 	return bl, nil
+}
+
+// SetP2PClient sets the HTTP client used for outgoing P2P calls (mobile client side).
+// On the device side this is not called; the device only receives requests via the TCP proxy.
+// If a signing key was configured via WithRequestSigning, the client's transport is
+// automatically wrapped with signingTransport to add authenticated headers.
+func (bl *FxBlockchain) SetP2PClient(c *http.Client) {
+	if bl.signingKey != nil && c != nil {
+		transport := c.Transport
+		if transport == nil {
+			transport = http.DefaultTransport
+		}
+		c = &http.Client{
+			Transport: &signingTransport{
+				base:    transport,
+				privKey: bl.signingKey,
+				peerID:  bl.selfPeerID,
+			},
+			Timeout: c.Timeout,
+		}
+	}
+	bl.c = c
+}
+
+// doP2PRequest sends an HTTP request via the P2P client. Returns an error if
+// the P2P client has not been set via SetP2PClient (i.e. device-side only mode).
+func (bl *FxBlockchain) doP2PRequest(req *http.Request) (*http.Response, error) {
+	if bl.c == nil {
+		return nil, fmt.Errorf("P2P client not configured: call SetP2PClient first (this method is only available on mobile client)")
+	}
+	return bl.c.Do(req)
 }
 
 func (bl *FxBlockchain) startFetchCheck() {
@@ -176,24 +180,8 @@ func (bl *FxBlockchain) startFetchCheck() {
 }
 
 func (bl *FxBlockchain) Start(ctx context.Context) error {
-	listen, err := gostream.Listen(bl.h, FxBlockchainProtocolID)
-	if err != nil {
-		return err
-	}
-	bl.s.Handler = http.HandlerFunc(bl.serve)
-	if bl.wg != nil {
-		log.Debug("called wg.Add in blockchain start")
-		bl.wg.Add(1)
-	}
-	go func() {
-		if bl.wg != nil {
-			log.Debug("called wg.Done in Start blockchain")
-			defer bl.wg.Done()
-		}
-		defer log.Debug("Start blockchain go routine is ending")
-		bl.s.Serve(listen)
-	}()
-	return nil
+	// Start the TCP proxy server for kubo-forwarded requests
+	return bl.StartProxy(ctx)
 }
 
 func (bl *FxBlockchain) putBuf(buf *bytes.Buffer) {
@@ -464,22 +452,9 @@ func convertMobileRequestToFullRequest(mobileReq *ManifestBatchUploadMobileReque
 	}
 }
 
-func (bl *FxBlockchain) serve(w http.ResponseWriter, r *http.Request) {
-
-	from, err := peer.Decode(r.RemoteAddr)
-	if err != nil {
-		log.Errorw("cannot parse remote addr as peer ID: %v", err)
-		http.Error(w, "", http.StatusBadRequest)
-		return
-	}
-	action := path.Base(r.URL.Path)
-	if !bl.authorized(from, action) {
-		log.Errorw("rejected unauthorized request", "from", from, "action", action)
-		http.Error(w, "", http.StatusUnauthorized)
-		return
-	} else {
-		log.Debugw("action: ", action, "was permitted from: ", from)
-	}
+// dispatch routes an authenticated request to the appropriate handler.
+// Called by serveProxy (TCP proxy) after verifying signed headers.
+func (bl *FxBlockchain) dispatch(from peer.ID, action string, w http.ResponseWriter, r *http.Request) {
 	// Define a map of functions with the same signature as handleAction
 	actionMap := map[string]func(peer.ID, http.ResponseWriter, *http.Request){
 		actionSeeded: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
@@ -996,50 +971,26 @@ func (bl *FxBlockchain) handleDisconnectWifi(ctx context.Context, from peer.ID, 
 }
 
 func (bl *FxBlockchain) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow bool) error {
-	// Check if auth is for local host; if so, handle it locally.
-	if on == bl.h.ID() {
-		bl.authorizedPeersLock.Lock()
-		if allow {
-			bl.authorizedPeers[subject] = struct{}{}
-		} else {
-			delete(bl.authorizedPeers, subject)
-		}
-		bl.authorizedPeersLock.Unlock()
-		return nil
+	// Only local auth is supported now (no libp2p host for remote calls)
+	if on != bl.selfPeerID {
+		log.Warnw("Remote SetAuth not supported without libp2p host", "on", on, "subject", subject)
+		return fmt.Errorf("remote SetAuth not supported: target %s is not local peer %s", on, bl.selfPeerID)
 	}
-	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	bl.authorizedPeersLock.Lock()
+	if allow {
+		bl.authorizedPeers[subject] = struct{}{}
+	} else {
+		delete(bl.authorizedPeers, subject)
 	}
-	r := authorizationRequest{Subject: subject, Allow: allow}
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(r); err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+on.String()+".invalid/"+actionAuth, &buf)
-	if err != nil {
-		return err
-	}
-	resp, err := bl.c.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	switch {
-	case err != nil:
-		return err
-	case resp.StatusCode != http.StatusOK:
-		return fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
-	default:
-		return nil
-	}
+	bl.authorizedPeersLock.Unlock()
+	return nil
 }
 
 func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
-	log.Debugw("Checking authorization", "action", action, "pid", pid, "bl.authorizer", bl.authorizer, "h.ID", bl.h.ID())
+	log.Debugw("Checking authorization", "action", action, "pid", pid, "bl.authorizer", bl.authorizer, "selfPeerID", bl.selfPeerID)
 	switch action {
 	case actionReplicateInPool:
-		return (bl.authorizer == bl.h.ID() || bl.authorizer == "")
+		return (bl.authorizer == bl.selfPeerID || bl.authorizer == "")
 	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionChatWithAI, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput, actionUpdatePlugin:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
@@ -1053,10 +1004,12 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 }
 
 func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
-	bl.c.CloseIdleConnections()
+	if bl.c != nil {
+		bl.c.CloseIdleConnections()
+	}
 	bl.ch.CloseIdleConnections()
 	close(bl.fetchCheckStop)
-	return bl.s.Shutdown(ctx)
+	return bl.ShutdownProxy(ctx)
 }
 
 func (bl *FxBlockchain) IsMembersEmpty() bool {
@@ -1076,21 +1029,8 @@ func contains(slice []string, str string) bool {
 }
 
 func (bl *FxBlockchain) cleanUnwantedPeers(keepPeers []peer.ID) {
-	// Convert the keepPeers slice to a map for efficient existence checks
-	keepMap := make(map[peer.ID]bool)
-	for _, p := range keepPeers {
-		keepMap[p] = true
-	}
-
-	// Retrieve all peers from the AddrBook
-	allPeers := bl.h.Peerstore().PeersWithAddrs()
-
-	// Iterate over all peers and clear addresses for those not in keepMap
-	for _, peerID := range allPeers {
-		if _, found := keepMap[peerID]; !found {
-			bl.h.Peerstore().ClearAddrs(peerID)
-		}
-	}
+	// No-op: go-fula no longer has a libp2p host or peerstore.
+	// Peer management is handled by kubo.
 }
 
 func (bl *FxBlockchain) checkIfUserHasOpenPoolRequests(ctx context.Context, topicString string) (bool, error) {
@@ -1103,8 +1043,7 @@ func (bl *FxBlockchain) checkIfUserHasOpenPoolRequests(ctx context.Context, topi
 		log.Info("poolId should be positive")
 		return false, fmt.Errorf("invalid topic, not an integer: %s", err)
 	}
-	localPeerID := bl.h.ID()
-	localPeerIDStr := localPeerID.String()
+	localPeerIDStr := bl.selfPeerID.String()
 
 	req := PoolUserListRequest{
 		PoolID:        topic,
@@ -1138,7 +1077,7 @@ func (bl *FxBlockchain) checkIfUserHasOpenPoolRequests(ctx context.Context, topi
 	}
 
 	// Now iterate through the users and populate the member map
-	log.Debugw("Now iterate through the users and find our status", "peer", localPeerID, "response", response.Users)
+	log.Debugw("Now iterate through the users and find our status", "peer", localPeerIDStr, "response", response.Users)
 
 	for _, user := range response.Users {
 		//Check if self status is in pool request, start ping server and announce join request
@@ -1165,66 +1104,9 @@ func (bl *FxBlockchain) clearPoolPeersFromPeerAddr(ctx context.Context, topic in
 		delete(bl.members, i)
 	}
 	bl.membersLock.Unlock()
-
-	localPeerID := bl.h.ID()
-
-	if topic <= 0 {
-		log.Info("Not a member of any pool at the moment")
-		return nil
-	}
-
-	//Get the list of both join requests and joined members for the pool
-	// Create a struct for the POST req
-	req := PoolUserListRequest{
-		PoolID:        topic,
-		RequestPoolID: topic,
-	}
-
-	// Call the existing function to make the request
-	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", actionPoolUserList, req)
-	if err != nil {
-		// Handle the error from callBlockchain, including the status code for more context
-		return fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
-	}
-
-	// Check if the status code is OK; if not, handle it as an error
-	if statusCode != http.StatusOK {
-		var errMsg map[string]interface{}
-		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
-			// If the responseBody is JSON, use it in the error message
-			return fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
-				statusCode, errMsg["message"], errMsg["description"])
-		} else {
-			// If the responseBody is not JSON, return it as a plain text error message
-			return fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
-		}
-	}
-	var response PoolUserListResponse
-
-	// Unmarshal the response body into the response struct
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return err
-	}
-
-	// Now iterate through the users and populate the member map
-	log.Debugw("Now iterate through the users and populate the member map", "peer", localPeerID, "response", response.Users)
-
-	for _, user := range response.Users {
-		pid, err := peer.Decode(user.PeerID)
-		if err != nil {
-			log.Errorw("Could not debug PeerID in response.Users", "user.PeerID", user.PeerID, "err", err)
-		}
-		bl.h.Peerstore().ClearAddrs(pid)
-	}
+	// No-op for peerstore operations: go-fula no longer has a libp2p host.
+	// Peer management is handled by kubo.
 	return nil
-}
-
-func multiaddrsToStrings(addrs []multiaddr.Multiaddr) []string {
-	var addrsStr []string
-	for _, addr := range addrs {
-		addrsStr = append(addrsStr, addr.String())
-	}
-	return addrsStr
 }
 
 // FetchUsersAndPopulateSets fetches pool members and updates the local members map
@@ -1291,7 +1173,7 @@ func (bl *FxBlockchain) discoverPoolAndChain(ctx context.Context, poolID uint32)
 
 		// Check if our peer ID is a member of this pool on this chain
 		membershipReq := IsMemberOfPoolRequest{
-			PeerID:    bl.h.ID().String(),
+			PeerID:    bl.selfPeerID.String(),
 			PoolID:    poolID,
 			ChainName: chainName,
 		}

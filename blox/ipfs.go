@@ -188,26 +188,17 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 	})
 	// https://docs.ipfs.tech/reference/kubo/rpc/#api-v0-id
 	mux.HandleFunc("/api/v0/id", func(w http.ResponseWriter, r *http.Request) {
-		//Get string value of addresses
-		addresses := p.h.Addrs()
-		addressStrings := make([]string, len(addresses))
-		for i, addr := range addresses {
-			addressStrings[i] = addr.String()
+		// No libp2p host — return selfPeerID with empty addresses
+		pubKeyBase64 := ""
+		if p.selfPeerID != "" {
+			pubKey, err := p.selfPeerID.ExtractPublicKey()
+			if err == nil {
+				pubKeyBytes, err := pubKey.Raw()
+				if err == nil {
+					pubKeyBase64 = base64.StdEncoding.EncodeToString(pubKeyBytes)
+				}
+			}
 		}
-
-		//Get Public Key
-		pubKey, err := p.h.ID().ExtractPublicKey()
-		if err != nil {
-			log.Errorw("Public key is not available", err)
-			return
-		}
-		pubKeyBytes, err := pubKey.Raw()
-		if err != nil {
-			log.Errorw("Error getting raw public key:", err)
-			return
-		}
-
-		pubKeyBase64 := base64.StdEncoding.EncodeToString(pubKeyBytes)
 
 		resp := struct {
 			Addresses       []string `json:"Addresses"`
@@ -217,9 +208,9 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 			Protocols       []string `json:"Protocols"`
 			PublicKey       string   `json:"PublicKey"`
 		}{
-			Addresses:       addressStrings,
+			Addresses:       []string{},
 			AgentVersion:    common.Version0,
-			ID:              p.h.ID().String(),
+			ID:              p.selfPeerID.String(),
 			ProtocolVersion: "fx_exchange/" + common.Version0,
 			Protocols:       []string{"fx_exchange"},
 			PublicKey:       pubKeyBase64,
@@ -409,7 +400,7 @@ func (p *Blox) ServeIpfsRpc() http.Handler {
 
 		resp := PeerStats{
 			Exchanged: 0,
-			Peer:      p.h.ID().String(),
+			Peer:      p.selfPeerID.String(),
 			Recv:      0,
 			Sent:      0,
 			Value:     0,
