@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -366,9 +368,55 @@ func fetchPoolUsers(poolName string) []string {
 	return userIDs
 }
 
+// deriveKuboKey derives a separate deterministic Ed25519 key for kubo
+// from the original private key using HMAC-SHA256 with a fixed domain separator.
+// This keeps the original key for ipfs-cluster identity while giving kubo
+// a distinct but reproducible identity.
+func deriveKuboKey(originalIdentity string) (crypto.PrivKey, peer.ID, error) {
+	privKeyBytes, err := base64.StdEncoding.DecodeString(originalIdentity)
+	if err != nil {
+		return nil, "", fmt.Errorf("decoding private key: %w", err)
+	}
+
+	priv, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("unmarshaling private key: %w", err)
+	}
+
+	rawKey, err := priv.Raw()
+	if err != nil {
+		return nil, "", fmt.Errorf("extracting raw key: %w", err)
+	}
+	originalSeed := rawKey[:32]
+
+	mac := hmac.New(sha256.New, []byte("fula-kubo-identity-v1"))
+	mac.Write(originalSeed)
+	derivedSeed := mac.Sum(nil)
+
+	kuboPriv, _, err := crypto.GenerateEd25519Key(bytes.NewReader(derivedSeed))
+	if err != nil {
+		return nil, "", fmt.Errorf("generating kubo key: %w", err)
+	}
+
+	kuboPeerID, err := peer.IDFromPublicKey(kuboPriv.GetPublic())
+	if err != nil {
+		return nil, "", fmt.Errorf("generating kubo peer ID: %w", err)
+	}
+
+	return kuboPriv, kuboPeerID, nil
+}
+
 func updateIPFSConfigIdentity(ipfsCfg *IPFSConfig, cfg ConfigYAML) {
-	ipfsCfg.Identity.PrivKey = cfg.Identity
-	ipfsCfg.Identity.PeerID = generatePeerIDFromIdentity(cfg.Identity)
+	kuboPriv, kuboPeerID, err := deriveKuboKey(cfg.Identity)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to derive kubo key: %v", err))
+	}
+	kuboPrivBytes, err := crypto.MarshalPrivateKey(kuboPriv)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to marshal kubo private key: %v", err))
+	}
+	ipfsCfg.Identity.PrivKey = base64.StdEncoding.EncodeToString(kuboPrivBytes)
+	ipfsCfg.Identity.PeerID = kuboPeerID.String()
 }
 
 func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
@@ -389,26 +437,6 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
 	ipfsCfg.Addresses.API = "/ip4/" + apiIp + "/tcp/5001"
 }
 
-func generatePeerIDFromIdentity(identity string) string {
-	// Decode the base64 encoded identity to get the private key bytes
-	privateKeyBytes, err := base64.StdEncoding.DecodeString(identity)
-	if err != nil {
-		panic(err)
-	}
-
-	// Assuming the private key is in a format understood by the libp2p crypto package
-	priv, err := crypto.UnmarshalPrivateKey(privateKeyBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	// Generate the PeerID from the public key
-	peerID, err := peer.IDFromPublicKey(priv.GetPublic())
-	if err != nil {
-		panic(err)
-	}
-	return peerID.String()
-}
 
 func updateIPFSConfigBootstrap(ipfsCfg *IPFSConfig, predefinedBootstraps, bootstrapPeers []string) {
 	ipfsCfg.Bootstrap = append(predefinedBootstraps, bootstrapPeers...)

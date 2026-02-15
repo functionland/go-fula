@@ -21,14 +21,14 @@ func main() {
 	externalPathPtr := flag.String("external", "/uniondrive", "Path to the internal disk")
 	flag.Parse()
 
-	// Use the flag values (replace hardcoded paths)
 	internalPath := *internalPathPtr
 	externalPath := *externalPathPtr
 
 	fulaConfigPath := internalPath + "/config.yaml"
+	clusterDir := externalPath + "/ipfs-cluster"
+	identityPath := clusterDir + "/identity.json"
 
 	var cfg Config
-	// Assuming config.yaml is in the current directory
 	configFile, err := os.ReadFile(fulaConfigPath)
 	if err != nil {
 		panic(fmt.Errorf("reading config.yaml: %v", err))
@@ -38,27 +38,43 @@ func main() {
 		panic(fmt.Errorf("parsing config.yaml: %v", err))
 	}
 
-	// Decode the base64 encoded identity to get the private key bytes
+	// Use the original identity directly for ipfs-cluster (keeps cluster PeerID intact)
 	privKeyBytes, err := base64.StdEncoding.DecodeString(cfg.Identity)
 	if err != nil {
 		panic(fmt.Errorf("decoding private key: %v", err))
 	}
-
-	// Assuming the private key is in a format understood by the libp2p crypto package
-	priv, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	clusterPriv, err := crypto.UnmarshalPrivateKey(privKeyBytes)
 	if err != nil {
 		panic(fmt.Errorf("unmarshaling private key: %v", err))
 	}
-
-	// Generate the PeerID from the public key
-	peerID, err := peer.IDFromPublicKey(priv.GetPublic())
+	clusterPeerID, err := peer.IDFromPublicKey(clusterPriv.GetPublic())
 	if err != nil {
-		panic(fmt.Errorf("generating PeerID from public key: %v", err))
+		panic(fmt.Errorf("generating cluster peer ID: %v", err))
+	}
+	clusterPrivB64 := cfg.Identity
+
+	// Migration: check if existing identity.json has a different key
+	if existingData, err := os.ReadFile(identityPath); err == nil {
+		var existing map[string]string
+		if err := json.Unmarshal(existingData, &existing); err == nil {
+			if existing["private_key"] != clusterPrivB64 {
+				fmt.Println("Existing cluster identity differs from derived key. Wiping cluster state for migration...")
+				if err := os.RemoveAll(clusterDir); err != nil {
+					panic(fmt.Errorf("removing old cluster state: %v", err))
+				}
+				fmt.Println("Old cluster state removed.")
+			}
+		}
+	}
+
+	// Create directory and write identity.json
+	if err := os.MkdirAll(clusterDir, 0755); err != nil {
+		panic(fmt.Errorf("creating ipfs-cluster directory: %v", err))
 	}
 
 	identity := map[string]string{
-		"id":          peerID.String(),
-		"private_key": cfg.Identity,
+		"id":          clusterPeerID.String(),
+		"private_key": clusterPrivB64,
 	}
 
 	identityJSON, err := json.MarshalIndent(identity, "", "    ")
@@ -66,13 +82,9 @@ func main() {
 		panic(fmt.Errorf("marshaling identity to JSON: %v", err))
 	}
 
-	// Write the identity.json to the /internal/ipfs-cluster/ directory
-	if err := os.MkdirAll(externalPath+"/ipfs-cluster", 0755); err != nil {
-		panic(fmt.Errorf("creating /internal/ipfs-cluster directory: %v", err))
-	}
-	if err := os.WriteFile(externalPath+"/ipfs-cluster/identity.json", identityJSON, 0644); err != nil {
+	if err := os.WriteFile(identityPath, identityJSON, 0644); err != nil {
 		panic(fmt.Errorf("writing identity.json: %v", err))
 	}
 
-	fmt.Println("IPFS Cluster identity.json created successfully.")
+	fmt.Printf("IPFS Cluster identity.json created successfully. Cluster PeerID: %s\n", clusterPeerID.String())
 }

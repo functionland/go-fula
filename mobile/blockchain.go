@@ -355,6 +355,18 @@ func (c *Client) GetDatastoreSize() ([]byte, error) {
 	return c.bl.GetDatastoreSize(ctx, c.bloxPid, wifi.GetDatastoreSizeRequest{})
 }
 
+// GetDockerImageBuildDates fetches build dates of all Docker images running on the blox.
+func (c *Client) GetDockerImageBuildDates() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetDockerImageBuildDates(ctx, c.bloxPid)
+}
+
+// GetClusterInfo fetches the ipfs-cluster peer ID and peer name from the blox.
+func (c *Client) GetClusterInfo() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.GetClusterInfo(ctx, c.bloxPid)
+}
+
 // ListPlugins requests the blox to list all available plugins
 func (c *Client) ListPlugins() ([]byte, error) {
 	ctx := context.TODO()

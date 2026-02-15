@@ -49,8 +49,10 @@ const (
 	actionGetAccount              = "get-account"
 	actionFetchContainerLogs      = "fetch-container-logs"
 	actionFindBestAndTargetInLogs = "find-bestandtarget-inlogs"
-	actionGetFolderSize           = "get-folder-size"
-	actionGetDatastoreSize        = "get-datastore-size"
+	actionGetFolderSize                = "get-folder-size"
+	actionGetDatastoreSize             = "get-datastore-size"
+	actionGetDockerImageBuildDates     = "get-docker-image-build-dates"
+	actionGetClusterInfo               = "get-cluster-info"
 
 	// Cluster
 	actionReplicateInPool = "replicate"
@@ -552,6 +554,8 @@ type Blockchain interface {
 	FindBestAndTargetInLogs(context.Context, peer.ID, wifi.FindBestAndTargetInLogsRequest) ([]byte, error)
 	GetFolderSize(context.Context, peer.ID, wifi.GetFolderSizeRequest) ([]byte, error)
 	GetDatastoreSize(context.Context, peer.ID, wifi.GetDatastoreSizeRequest) ([]byte, error)
+	GetDockerImageBuildDates(context.Context, peer.ID) ([]byte, error)
+	GetClusterInfo(context.Context, peer.ID) ([]byte, error)
 
 	//Plugins
 	ListPlugins(context.Context, peer.ID) ([]byte, error)
@@ -608,7 +612,9 @@ var requestTypes = map[string]reflect.Type{
 	actionFetchContainerLogs:      reflect.TypeOf(wifi.FetchContainerLogsRequest{}),
 	actionFindBestAndTargetInLogs: reflect.TypeOf(wifi.FindBestAndTargetInLogsRequest{}),
 	actionGetFolderSize:           reflect.TypeOf(wifi.GetFolderSizeRequest{}),
-	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
+	actionGetDatastoreSize:             reflect.TypeOf(wifi.GetDatastoreSizeRequest{}),
+	actionGetDockerImageBuildDates:     reflect.TypeOf(wifi.GetDockerImageBuildDatesRequest{}),
+	actionGetClusterInfo:               reflect.TypeOf(wifi.GetClusterInfoRequest{}),
 
 	// Plugins
 	actionListPlugins:       reflect.TypeOf(ListPluginsRequest{}),
@@ -665,7 +671,9 @@ var responseTypes = map[string]reflect.Type{
 	actionFetchContainerLogs:      reflect.TypeOf(wifi.FetchContainerLogsResponse{}),
 	actionFindBestAndTargetInLogs: reflect.TypeOf(wifi.FindBestAndTargetInLogsResponse{}),
 	actionGetFolderSize:           reflect.TypeOf(wifi.GetFolderSizeResponse{}),
-	actionGetDatastoreSize:        reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
+	actionGetDatastoreSize:             reflect.TypeOf(wifi.GetDatastoreSizeResponse{}),
+	actionGetDockerImageBuildDates:     reflect.TypeOf(wifi.GetDockerImageBuildDatesResponse{}),
+	actionGetClusterInfo:               reflect.TypeOf(wifi.GetClusterInfoResponse{}),
 
 	// Plugins
 	actionListPlugins:       reflect.TypeOf(ListPluginsResponse{}),

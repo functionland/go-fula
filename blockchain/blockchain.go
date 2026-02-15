@@ -576,6 +576,12 @@ func (bl *FxBlockchain) dispatch(from peer.ID, action string, w http.ResponseWri
 		actionGetDatastoreSize: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleGetDatastoreSize(r.Context(), from, w, r)
 		},
+		actionGetDockerImageBuildDates: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleGetDockerImageBuildDates(from, w, r)
+		},
+		actionGetClusterInfo: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleGetClusterInfo(from, w, r)
+		},
 
 		// Plugin actions
 		actionListPlugins: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
@@ -991,7 +997,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 	switch action {
 	case actionReplicateInPool:
 		return (bl.authorizer == bl.selfPeerID || bl.authorizer == "")
-	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionChatWithAI, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput, actionUpdatePlugin:
+	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionChatWithAI, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput, actionUpdatePlugin, actionGetDockerImageBuildDates, actionGetClusterInfo:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

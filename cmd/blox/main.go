@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -998,6 +999,44 @@ func serveHTTPApi(cctx *oldcmds.Context) (<-chan error, error) {
 	return errc, nil
 }
 
+// deriveKuboKey derives a separate deterministic Ed25519 key for kubo
+// from the original private key using HMAC-SHA256 with a fixed domain separator.
+// This keeps the original key for ipfs-cluster identity while giving kubo
+// a distinct but reproducible identity.
+func deriveKuboKey(originalIdentity string) (crypto.PrivKey, peer.ID, error) {
+	privKeyBytes, err := base64.StdEncoding.DecodeString(originalIdentity)
+	if err != nil {
+		return nil, "", fmt.Errorf("decoding private key: %w", err)
+	}
+
+	priv, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("unmarshaling private key: %w", err)
+	}
+
+	rawKey, err := priv.Raw()
+	if err != nil {
+		return nil, "", fmt.Errorf("extracting raw key: %w", err)
+	}
+	originalSeed := rawKey[:32]
+
+	mac := hmac.New(sha256.New, []byte("fula-kubo-identity-v1"))
+	mac.Write(originalSeed)
+	derivedSeed := mac.Sum(nil)
+
+	kuboPriv, _, err := crypto.GenerateEd25519Key(bytes.NewReader(derivedSeed))
+	if err != nil {
+		return nil, "", fmt.Errorf("generating kubo key: %w", err)
+	}
+
+	kuboPeerID, err := peer.IDFromPublicKey(kuboPriv.GetPublic())
+	if err != nil {
+		return nil, "", fmt.Errorf("generating kubo peer ID: %w", err)
+	}
+
+	return kuboPriv, kuboPeerID, nil
+}
+
 func action(ctx *cli.Context) error {
 	var wg sync.WaitGroup
 	ctx2, cancel := context.WithCancel(context.Background())
@@ -1028,18 +1067,9 @@ func action(ctx *cli.Context) error {
 		fmt.Print(mnemonic)
 		return nil // Exit after generating the node key
 	}
-	km, err := base64.StdEncoding.DecodeString(app.config.Identity)
-	if err != nil {
-		return err
-	}
-	k, err := crypto.UnmarshalPrivateKey(km)
-	if err != nil {
-		return err
-	}
-
 	if app.initOnly {
 		fmt.Printf("Application config initialised at: %s\n", app.configPath)
-		pid, err := peer.IDFromPrivateKey(k)
+		_, pid, err := deriveKuboKey(app.config.Identity)
 		if err != nil {
 			return err
 		}
@@ -1047,13 +1077,14 @@ func action(ctx *cli.Context) error {
 		return nil
 	}
 
-	// Derive peer ID from private key — no libp2p host needed.
+	// Derive kubo-matching peer ID — no libp2p host needed.
 	// Kubo handles all P2P networking; go-fula is a pure local TCP/HTTP service.
-	selfPeerID, err := peer.IDFromPrivateKey(k)
+	// Must match kubo's identity so mobile clients can dial the correct PeerID.
+	_, selfPeerID, err := deriveKuboKey(app.config.Identity)
 	if err != nil {
 		return err
 	}
-	logger.Infow("Derived peer ID from private key", "peerID", selfPeerID.String())
+	logger.Infow("Derived kubo peer ID from private key", "peerID", selfPeerID.String())
 
 	linkSystem := cidlink.DefaultLinkSystem()
 	linkSystem.StorageReadOpener = CustomStorageReadOpenerNone

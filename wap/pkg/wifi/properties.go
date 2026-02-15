@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -132,6 +133,100 @@ const (
 	MB = 1024 * KB
 	GB = 1024 * MB
 )
+
+// Docker image build dates
+type GetDockerImageBuildDatesRequest struct{}
+
+type DockerImageBuildDate struct {
+	ContainerName string `json:"container_name"`
+	ImageName     string `json:"image_name"`
+	ImageCreated  string `json:"image_created"`
+	ImageDigest   string `json:"image_digest"`
+}
+
+type GetDockerImageBuildDatesResponse struct {
+	Images []DockerImageBuildDate `json:"images"`
+}
+
+// Cluster info
+type GetClusterInfoRequest struct{}
+
+type GetClusterInfoResponse struct {
+	ClusterPeerID   string `json:"cluster_peer_id"`
+	ClusterPeerName string `json:"cluster_peer_name"`
+}
+
+func GetDockerImageBuildDates() (GetDockerImageBuildDatesResponse, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return GetDockerImageBuildDatesResponse{}, fmt.Errorf("creating Docker client: %w", err)
+	}
+
+	containers, err := cli.ContainerList(context.Background(), container.ListOptions{})
+	if err != nil {
+		return GetDockerImageBuildDatesResponse{}, fmt.Errorf("listing containers: %w", err)
+	}
+
+	var images []DockerImageBuildDate
+	for _, c := range containers {
+		name := ""
+		if len(c.Names) > 0 {
+			name = strings.TrimPrefix(c.Names[0], "/")
+		}
+
+		imageInspect, _, err := cli.ImageInspectWithRaw(context.Background(), c.ImageID)
+		if err != nil {
+			continue
+		}
+
+		digest := ""
+		if len(imageInspect.RepoDigests) > 0 {
+			digest = imageInspect.RepoDigests[0]
+		}
+
+		images = append(images, DockerImageBuildDate{
+			ContainerName: name,
+			ImageName:     c.Image,
+			ImageCreated:  imageInspect.Created,
+			ImageDigest:   digest,
+		})
+	}
+
+	return GetDockerImageBuildDatesResponse{Images: images}, nil
+}
+
+func GetClusterInfo() (GetClusterInfoResponse, error) {
+	// Read cluster peer ID from identity.json
+	clusterIdentityData, err := os.ReadFile("/uniondrive/ipfs-cluster/identity.json")
+	if err != nil {
+		return GetClusterInfoResponse{}, fmt.Errorf("reading cluster identity: %w", err)
+	}
+	var clusterIdentity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(clusterIdentityData, &clusterIdentity); err != nil {
+		return GetClusterInfoResponse{}, fmt.Errorf("parsing cluster identity: %w", err)
+	}
+
+	// Read kubo peer ID (used as CLUSTER_PEERNAME) from kubo config
+	kuboConfigData, err := os.ReadFile("/internal/ipfs_data/config")
+	if err != nil {
+		return GetClusterInfoResponse{}, fmt.Errorf("reading kubo config: %w", err)
+	}
+	var kuboConfig struct {
+		Identity struct {
+			PeerID string `json:"PeerID"`
+		} `json:"Identity"`
+	}
+	if err := json.Unmarshal(kuboConfigData, &kuboConfig); err != nil {
+		return GetClusterInfoResponse{}, fmt.Errorf("parsing kubo config: %w", err)
+	}
+
+	return GetClusterInfoResponse{
+		ClusterPeerID:   clusterIdentity.ID,
+		ClusterPeerName: kuboConfig.Identity.PeerID,
+	}, nil
+}
 
 func GetHardwareID() (string, error) {
 	cmd := "(cat /proc/cpuinfo | grep -i 'Serial' && cat /proc/cpuinfo | grep -i 'Hardware' && cat /proc/cpuinfo | grep -i 'Revision') | sha256sum | awk '{print $1}'"

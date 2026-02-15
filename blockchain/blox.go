@@ -483,6 +483,58 @@ func (bl *FxBlockchain) GetDatastoreSize(ctx context.Context, to peer.ID, r wifi
 	}
 }
 
+func (bl *FxBlockchain) GetDockerImageBuildDates(ctx context.Context, to peer.ID) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionGetDockerImageBuildDates, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.doP2PRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+	default:
+		return b, nil
+	}
+}
+
+func (bl *FxBlockchain) GetClusterInfo(ctx context.Context, to peer.ID) ([]byte, error) {
+	if bl.allowTransientConnection {
+		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionGetClusterInfo, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := bl.doP2PRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+
+	switch {
+	case err != nil:
+		return nil, err
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("unexpected response: %d %s", resp.StatusCode, string(b))
+	default:
+		return b, nil
+	}
+}
+
 func (bl *FxBlockchain) DeleteWifi(ctx context.Context, to peer.ID, r wifi.DeleteWifiRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
@@ -790,4 +842,38 @@ func (bl *FxBlockchain) handleGetDatastoreSize(ctx context.Context, from peer.ID
 		return
 	}
 
+}
+
+func (bl *FxBlockchain) handleGetDockerImageBuildDates(from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionGetDockerImageBuildDates, "from", from)
+	out, err := wifi.GetDockerImageBuildDates()
+	if err != nil {
+		log.Error("failed to GetDockerImageBuildDates: %v", err)
+		out = wifi.GetDockerImageBuildDatesResponse{
+			Images: []wifi.DockerImageBuildDate{},
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (bl *FxBlockchain) handleGetClusterInfo(from peer.ID, w http.ResponseWriter, r *http.Request) {
+	log := log.With("action", actionGetClusterInfo, "from", from)
+	out, err := wifi.GetClusterInfo()
+	if err != nil {
+		log.Error("failed to GetClusterInfo: %v", err)
+		out = wifi.GetClusterInfoResponse{}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Error("failed to write response: %v", err)
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
 }
