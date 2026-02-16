@@ -51,28 +51,51 @@ func getProtocols() []p2pProtocol {
 // is the host's address visible from bridge containers.
 //
 // Detection order:
-//  1. docker0 interface IPv4 address (Docker bridge gateway)
-//  2. Fallback to 127.0.0.1 (works when kubo is also on host network)
+//  1. docker0 interface IPv4 address (Docker default bridge gateway)
+//  2. Any Docker Compose bridge (br-<hash>) IPv4 address
+//  3. Fallback to 127.0.0.1 (works when kubo is also on host network)
 func resolveProxyTargetIP() string {
-	iface, err := net.InterfaceByName("docker0")
+	// 1. Try docker0 (default Docker bridge)
+	if ip := getIPv4FromInterface("docker0"); ip != "" {
+		log.Infow("Detected Docker bridge IP for proxy target", "iface", "docker0", "ip", ip)
+		return ip
+	}
+
+	// 2. Try any Docker Compose bridge (br-<hash>)
+	ifaces, err := net.Interfaces()
+	if err == nil {
+		for _, iface := range ifaces {
+			if strings.HasPrefix(iface.Name, "br-") {
+				if ip := getIPv4FromInterface(iface.Name); ip != "" {
+					log.Infow("Detected Docker Compose bridge IP for proxy target", "iface", iface.Name, "ip", ip)
+					return ip
+				}
+			}
+		}
+	}
+
+	// 3. Fallback
+	log.Debug("No Docker bridge interface found, using 127.0.0.1 for proxy target")
+	return "127.0.0.1"
+}
+
+// getIPv4FromInterface returns the first IPv4 address of the named interface,
+// or "" if the interface doesn't exist or has no IPv4 address.
+func getIPv4FromInterface(name string) string {
+	iface, err := net.InterfaceByName(name)
 	if err != nil {
-		log.Debugw("No docker0 interface found, using 127.0.0.1 for proxy target", "err", err)
-		return "127.0.0.1"
+		return ""
 	}
 	addrs, err := iface.Addrs()
 	if err != nil {
-		log.Warnw("Failed to get docker0 addresses, using 127.0.0.1", "err", err)
-		return "127.0.0.1"
+		return ""
 	}
 	for _, addr := range addrs {
 		if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-			ip := ipnet.IP.String()
-			log.Infow("Detected Docker bridge IP for proxy target", "ip", ip)
-			return ip
+			return ipnet.IP.String()
 		}
 	}
-	log.Debug("No IPv4 on docker0, using 127.0.0.1 for proxy target")
-	return "127.0.0.1"
+	return ""
 }
 
 // registerKuboProtocols registers p2p protocol listeners on kubo via its HTTP API.
