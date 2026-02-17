@@ -195,37 +195,60 @@ func GetDockerImageBuildDates() (GetDockerImageBuildDatesResponse, error) {
 	return GetDockerImageBuildDatesResponse{Images: images}, nil
 }
 
-func GetClusterInfo() (GetClusterInfoResponse, error) {
-	// Read cluster peer ID from identity.json
-	clusterIdentityData, err := os.ReadFile("/uniondrive/ipfs-cluster/identity.json")
-	if err != nil {
-		return GetClusterInfoResponse{}, fmt.Errorf("reading cluster identity: %w", err)
-	}
-	var clusterIdentity struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(clusterIdentityData, &clusterIdentity); err != nil {
-		return GetClusterInfoResponse{}, fmt.Errorf("parsing cluster identity: %w", err)
-	}
-
-	// Read kubo peer ID (used as CLUSTER_PEERNAME) from kubo config
+// GetKuboPeerID reliably returns kubo's peerID without depending on ipfs-cluster.
+// It first tries reading from the kubo config file, then falls back to the kubo API.
+func GetKuboPeerID() (string, error) {
+	// Try reading from kubo config file first
 	kuboConfigData, err := os.ReadFile("/internal/ipfs_data/config")
-	if err != nil {
-		return GetClusterInfoResponse{}, fmt.Errorf("reading kubo config: %w", err)
-	}
-	var kuboConfig struct {
-		Identity struct {
-			PeerID string `json:"PeerID"`
-		} `json:"Identity"`
-	}
-	if err := json.Unmarshal(kuboConfigData, &kuboConfig); err != nil {
-		return GetClusterInfoResponse{}, fmt.Errorf("parsing kubo config: %w", err)
+	if err == nil {
+		var kuboConfig struct {
+			Identity struct {
+				PeerID string `json:"PeerID"`
+			} `json:"Identity"`
+		}
+		if err := json.Unmarshal(kuboConfigData, &kuboConfig); err == nil && kuboConfig.Identity.PeerID != "" {
+			return kuboConfig.Identity.PeerID, nil
+		}
 	}
 
-	return GetClusterInfoResponse{
-		ClusterPeerID:   clusterIdentity.ID,
-		ClusterPeerName: kuboConfig.Identity.PeerID,
-	}, nil
+	// Fallback: query kubo API
+	resp, err := http.Post("http://127.0.0.1:5001/api/v0/id", "", nil)
+	if err != nil {
+		return "", fmt.Errorf("both config file and kubo API failed: %w", err)
+	}
+	defer resp.Body.Close()
+	var idResp struct {
+		ID string `json:"ID"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&idResp); err != nil {
+		return "", fmt.Errorf("failed to parse kubo API response: %w", err)
+	}
+	return idResp.ID, nil
+}
+
+func GetClusterInfo() (GetClusterInfoResponse, error) {
+	resp := GetClusterInfoResponse{}
+
+	// Best-effort: read cluster peer ID from identity.json (file may not exist)
+	clusterIdentityData, err := os.ReadFile("/uniondrive/ipfs-cluster/identity.json")
+	if err == nil {
+		var clusterIdentity struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(clusterIdentityData, &clusterIdentity); err == nil {
+			resp.ClusterPeerID = clusterIdentity.ID
+		}
+	}
+	// No error return here — cluster being unavailable is expected
+
+	// Always get kubo peer ID reliably
+	kuboPeerID, err := GetKuboPeerID()
+	if err != nil {
+		return resp, fmt.Errorf("getting kubo peer ID: %w", err)
+	}
+	resp.ClusterPeerName = kuboPeerID
+
+	return resp, nil
 }
 
 func GetHardwareID() (string, error) {

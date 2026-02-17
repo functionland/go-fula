@@ -44,7 +44,9 @@ By default, Libp2p connections are established through Functionland's libp2p rel
 | --- | --- |
 | [blox](blox) | Blox provides the backend to receive the DAG created by fulamobile and store it |
 | [mobile](mobile) | Initiates a libp2p instance and interacts with WNFS (as its datastore) to encrypt the data and Send and receive files in a browser or an Android or iOS app. Available for [React-Native here](https://github.com/functionland/react-native-fula) and for [Android here](https://github.com/functionland/fula-build-aar) |
-| [exchange](exchange) | Fula exchange protocol is responsible for the ctual transfer of data |
+| [exchange](exchange) | Fula exchange protocol is responsible for the actual transfer of data |
+| [blockchain](blockchain) | On-chain interactions for pool management, manifests, and account operations |
+| [wap](wap) | Wireless Access Point server — provides HTTP endpoints (`/properties`, `/readiness`, `/wifi/*`, `/peer/*`) on port 3500 and mDNS service discovery |
 
 ## Other related libraries
 
@@ -52,6 +54,145 @@ By default, Libp2p connections are established through Functionland's libp2p rel
 | --- | --- |
 | [WNFS for Android](https://github.com/functionland/wnfs-android) | Android build for WNFS rust version |
 | [WNFS for iOS](https://github.com/functionland/wnfs-ios) | iOS build for WNFS rust version |
+
+## PeerID Architecture
+
+Blox devices maintain two separate libp2p identities:
+
+- **Kubo peerID** — Derived via HMAC-SHA256 (domain `"fula-kubo-identity-v1"`) from the main identity key. Used by the embedded IPFS (kubo) node. Always available.
+- **ipfs-cluster peerID** — The original identity from `config.yaml`. Used by ipfs-cluster when installed.
+
+Kubo is always running on the device; ipfs-cluster may not be installed. The `wifi.GetKuboPeerID()` utility function provides reliable access to the kubo peerID (via config file or kubo API fallback) without depending on ipfs-cluster.
+
+### Getting ipfs-cluster and kubo PeerIDs
+
+There are several ways to retrieve peerIDs depending on which part of the system you are working with.
+
+#### 1. WAP HTTP Endpoints (port 3500)
+
+These endpoints are served by the WAP server on the device. Mobile apps connect to them over the local network.
+
+**GET `/properties`**
+
+Returns device properties including the kubo peerID.
+
+```bash
+curl http://<device-ip>:3500/properties
+```
+
+Response (relevant fields):
+```json
+{
+  "kubo_peer_id": "12D3KooWAbCdEf...",
+  "hardwareID": "a1b2c3...",
+  "bloxFreeSpace": { "device_count": 1, "size": 500000000000, "used": 120000000000, "avail": 380000000000, "used_percentage": 24 },
+  "ota_version": "1.2.3",
+  "...": "..."
+}
+```
+
+- `kubo_peer_id` — The kubo (IPFS) peerID. Always present when kubo is running.
+
+**GET `/readiness`**
+
+Returns readiness status and properties, also including the kubo peerID.
+
+```bash
+curl http://<device-ip>:3500/readiness
+```
+
+Response (relevant fields):
+```json
+{
+  "name": "fula_go",
+  "kubo_peer_id": "12D3KooWAbCdEf...",
+  "...": "..."
+}
+```
+
+#### 2. Mobile SDK (`GetClusterInfo`)
+
+From the mobile app, call `GetClusterInfo()` on the Fula client. This uses libp2p to call the blox node directly (no HTTP needed).
+
+```go
+result, err := client.GetClusterInfo()
+```
+
+Response JSON:
+```json
+{
+  "cluster_peer_id": "12D3KooWXyZaBc...",
+  "cluster_peer_name": "12D3KooWAbCdEf..."
+}
+```
+
+| Field | Description | When empty |
+|-------|-------------|------------|
+| `cluster_peer_id` | ipfs-cluster peerID (from `/uniondrive/ipfs-cluster/identity.json`) | ipfs-cluster is not installed |
+| `cluster_peer_name` | kubo peerID (from kubo config or API) | Only if kubo is also unreachable |
+
+When ipfs-cluster is not installed, the response will have an empty `cluster_peer_id` but `cluster_peer_name` (kubo peerID) will still be populated:
+```json
+{
+  "cluster_peer_id": "",
+  "cluster_peer_name": "12D3KooWAbCdEf..."
+}
+```
+
+#### 3. Kubo API Directly (port 5001)
+
+If you have direct access to the device, you can query kubo's identity endpoint:
+
+```bash
+curl -X POST http://127.0.0.1:5001/api/v0/id
+```
+
+Response:
+```json
+{
+  "ID": "12D3KooWAbCdEf...",
+  "PublicKey": "base64encodedkey...",
+  "Addresses": [],
+  "AgentVersion": "0.0.1",
+  "ProtocolVersion": "fx_exchange/0.0.1",
+  "Protocols": ["fx_exchange"]
+}
+```
+
+- `ID` — The kubo peerID.
+
+#### 4. mDNS Service Discovery
+
+Blox devices advertise both peerIDs via mDNS TXT records on the local network (service type `_fulatower._tcp`).
+
+| TXT Key | Value | Description |
+|---------|-------|-------------|
+| `bloxPeerIdString` | `12D3KooWAbCdEf...` | Kubo peerID |
+| `ipfsClusterID` | `12D3KooWXyZaBc...` | ipfs-cluster peerID |
+| `poolName` | `my-pool` | Pool name from config |
+| `authorizer` | `...` | Authorizer address |
+| `hardwareID` | `a1b2c3...` | Device hardware ID |
+
+If the config file is missing or identity derivation fails, `bloxPeerIdString` falls back to reading from kubo's config file via `GetKuboPeerID()`. Fields default to `"NA"` when unavailable.
+
+#### 5. Go Code (`wifi.GetKuboPeerID()`)
+
+For internal Go code that needs the kubo peerID, use the standalone utility function:
+
+```go
+import wifi "github.com/functionland/go-fula/wap/pkg/wifi"
+
+kuboPeerID, err := wifi.GetKuboPeerID()
+if err != nil {
+    // both kubo config file and kubo API are unavailable
+}
+```
+
+This function tries two sources in order:
+1. Read `/internal/ipfs_data/config` and parse `Identity.PeerID`
+2. Call kubo API at `http://127.0.0.1:5001/api/v0/id` and parse the `ID` field
+
+It does not depend on ipfs-cluster being installed.
 
 ## Run
 

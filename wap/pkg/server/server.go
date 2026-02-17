@@ -162,6 +162,11 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		response["restartNeeded"] = restartNeeded
 		response["ota_version"] = config.OTA_VERSION
 
+		kuboPeerID, err := wifi.GetKuboPeerID()
+		if err == nil {
+			response["kubo_peer_id"] = kuboPeerID
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		jsonErr := json.NewEncoder(w).Encode(response)
@@ -281,6 +286,12 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p["name"] = config.PROJECT_NAME
+
+	kuboPeerID, err := wifi.GetKuboPeerID()
+	if err == nil {
+		p["kubo_peer_id"] = kuboPeerID
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	jsonErr := json.NewEncoder(w).Encode(p)

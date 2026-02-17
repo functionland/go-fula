@@ -1,7 +1,10 @@
 package mdns
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"net"
 	"os"
@@ -34,6 +37,7 @@ type Config struct {
 
 type Meta struct {
 	BloxPeerIdString string
+	IpfsClusterID    string
 	PoolName         string
 	Authorizer       string
 	HardwareID       string
@@ -48,6 +52,7 @@ func LoadConfig() {
 	// Initialize with default values
 	globalConfig = &Meta{
 		BloxPeerIdString: defaultValue,
+		IpfsClusterID:    defaultValue,
 		PoolName:         defaultValue,
 		Authorizer:       defaultValue,
 		HardwareID:       defaultValue,
@@ -90,12 +95,42 @@ func LoadConfig() {
 		if err != nil {
 			log.Errorw("UnmarshalPrivateKey failed", "err", err)
 		} else {
-			bloxPeerId, err := peer.IDFromPrivateKey(key)
+			// ipfs-cluster peer ID (direct from identity)
+			clusterPeerId, err := peer.IDFromPrivateKey(key)
 			if err != nil {
-				log.Errorw("IDFromPrivateKey failed", "err", err)
+				log.Errorw("IDFromPrivateKey failed for cluster", "err", err)
 			} else {
-				globalConfig.BloxPeerIdString = bloxPeerId.String() // Successfully decoded BloxPeerId
+				globalConfig.IpfsClusterID = clusterPeerId.String()
 			}
+
+			// kubo peer ID (derived via HMAC, same as deriveKuboKey in cmd/blox/main.go)
+			rawKey, err := key.Raw()
+			if err != nil {
+				log.Errorw("Raw key extraction failed", "err", err)
+			} else {
+				mac := hmac.New(sha256.New, []byte("fula-kubo-identity-v1"))
+				mac.Write(rawKey[:32])
+				derivedSeed := mac.Sum(nil)
+
+				kuboPriv, _, err := crypto.GenerateEd25519Key(bytes.NewReader(derivedSeed))
+				if err != nil {
+					log.Errorw("GenerateEd25519Key for kubo failed", "err", err)
+				} else {
+					kuboPeerId, err := peer.IDFromPublicKey(kuboPriv.GetPublic())
+					if err != nil {
+						log.Errorw("IDFromPublicKey for kubo failed", "err", err)
+					} else {
+						globalConfig.BloxPeerIdString = kuboPeerId.String()
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: if HMAC derivation failed, try reading kubo config directly
+	if globalConfig.BloxPeerIdString == defaultValue {
+		if kuboPeerID, err := wifi.GetKuboPeerID(); err == nil {
+			globalConfig.BloxPeerIdString = kuboPeerID
 		}
 	}
 
@@ -120,10 +155,11 @@ func createInfo() []string {
 	// Use the loaded globalConfig here to create your metadata
 	// Example:
 	infoSlice := []string{
-		"bloxPeerIdString=" + globalConfig.BloxPeerIdString, // Just an example, adjust according to actual data structure
+		"bloxPeerIdString=" + globalConfig.BloxPeerIdString,
+		"ipfsClusterID=" + globalConfig.IpfsClusterID,
 		"poolName=" + globalConfig.PoolName,
 		"authorizer=" + globalConfig.Authorizer,
-		"hardwareID=" + globalConfig.HardwareID, // Assuming you handle hardwareID differently
+		"hardwareID=" + globalConfig.HardwareID,
 	}
 
 	return infoSlice
