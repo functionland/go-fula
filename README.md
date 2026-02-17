@@ -163,7 +163,13 @@ Response:
 
 #### 4. mDNS Service Discovery
 
-Blox devices advertise both peerIDs via mDNS TXT records on the local network (service type `_fulatower._tcp`).
+Blox devices advertise themselves on the local network via mDNS (multicast DNS), allowing mobile apps and other clients to discover devices without knowing their IP addresses.
+
+**Service type:** `_fulatower._tcp`
+
+**Instance naming:** Each device registers with a unique instance name derived from its kubo peerID: `fulatower_<last 5 chars of peerID>`. For example, a device with kubo peerID `12D3KooWAbCdEfGh12345` registers as `fulatower_12345`. If the peerID is not yet available (e.g. first boot before configuration), the device registers as `fulatower_NEW`. This ensures multiple blox devices on the same LAN are all discoverable without overwriting each other.
+
+**TXT records:**
 
 | TXT Key | Value | Description |
 |---------|-------|-------------|
@@ -174,6 +180,85 @@ Blox devices advertise both peerIDs via mDNS TXT records on the local network (s
 | `hardwareID` | `a1b2c3...` | Device hardware ID |
 
 If the config file is missing or identity derivation fails, `bloxPeerIdString` falls back to reading from kubo's config file via `GetKuboPeerID()`. Fields default to `"NA"` when unavailable.
+
+**Discovering devices from the command line:**
+
+Using `dns-sd` (macOS):
+```bash
+dns-sd -B _fulatower._tcp local.
+```
+
+Example output:
+```
+Browsing for _fulatower._tcp.local.
+DATE: ---Mon 17 Feb 2026---
+Timestamp     A/R  Flags  if  Domain       Service Type         Instance Name
+10:23:45.123  Add      2   4  local.       _fulatower._tcp.     fulatower_12345
+10:23:45.456  Add      2   4  local.       _fulatower._tcp.     fulatower_67890
+```
+
+To get full details (IP, port, TXT records) for a specific device:
+```bash
+dns-sd -L "fulatower_12345" _fulatower._tcp local.
+```
+
+Example output:
+```
+Lookup fulatower_12345._fulatower._tcp.local.
+DATE: ---Mon 17 Feb 2026---
+fulatower_12345._fulatower._tcp.local. can be reached at blox-device.local.:40001
+ bloxPeerIdString=12D3KooWAbCdEfGh12345
+ ipfsClusterID=12D3KooWXyZaBcDe67890
+ poolName=my-pool
+ authorizer=...
+ hardwareID=a1b2c3d4e5
+```
+
+Using `avahi-browse` (Linux):
+```bash
+avahi-browse -r _fulatower._tcp
+```
+
+Example output:
+```
++ eth0 IPv4 fulatower_12345              _fulatower._tcp      local
+= eth0 IPv4 fulatower_12345              _fulatower._tcp      local
+   hostname = [blox-device.local]
+   address = [192.168.1.100]
+   port = [40001]
+   txt = ["bloxPeerIdString=12D3KooWAbCdEfGh12345" "ipfsClusterID=12D3KooWXyZaBcDe67890" "poolName=my-pool" "authorizer=..." "hardwareID=a1b2c3d4e5"]
++ eth0 IPv4 fulatower_67890              _fulatower._tcp      local
+= eth0 IPv4 fulatower_67890              _fulatower._tcp      local
+   hostname = [blox-device-2.local]
+   address = [192.168.1.101]
+   port = [40001]
+   txt = ["bloxPeerIdString=12D3KooWZzYyXxWw67890" "ipfsClusterID=12D3KooWQqRrSsTt11111" "poolName=my-pool" "authorizer=..." "hardwareID=f6g7h8i9j0"]
+```
+
+**Programmatic discovery (Go):**
+
+```go
+import "github.com/grandcat/zeroconf"
+
+resolver, _ := zeroconf.NewResolver(nil)
+entries := make(chan *zeroconf.ServiceEntry)
+
+go func() {
+    for entry := range entries {
+        fmt.Printf("Found: %s at %s:%d\n", entry.Instance, entry.AddrIPv4, entry.Port)
+        for _, txt := range entry.Text {
+            fmt.Printf("  %s\n", txt)
+        }
+    }
+}()
+
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+resolver.Browse(ctx, "_fulatower._tcp", "local.", entries)
+<-ctx.Done()
+```
+
+**Multi-device coexistence:** When multiple blox devices are on the same network, each registers with its own unique instance name. A browsing client will see all devices and can identify them by their TXT records (peerID, hardwareID, pool name). The service type `_fulatower._tcp` remains the same across all devices for compatibility — only the instance name varies.
 
 #### 5. Go Code (`wifi.GetKuboPeerID()`)
 
