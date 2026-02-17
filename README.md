@@ -62,7 +62,7 @@ Blox devices maintain two separate libp2p identities:
 - **Kubo peerID** — Derived via HMAC-SHA256 (domain `"fula-kubo-identity-v1"`) from the main identity key. Used by the embedded IPFS (kubo) node. Always available.
 - **ipfs-cluster peerID** — The original identity from `config.yaml`. Used by ipfs-cluster when installed.
 
-Kubo is always running on the device; ipfs-cluster may not be installed. The `wifi.GetKuboPeerID()` utility function provides reliable access to the kubo peerID (via config file or kubo API fallback) without depending on ipfs-cluster.
+Kubo is always running on the device; ipfs-cluster may not be installed. The `wifi.GetKuboPeerID()` utility function provides reliable access to the kubo peerID (via kubo API, falling back to config file) without depending on ipfs-cluster.
 
 ### Getting ipfs-cluster and kubo PeerIDs
 
@@ -84,6 +84,7 @@ Response (relevant fields):
 ```json
 {
   "kubo_peer_id": "12D3KooWAbCdEf...",
+  "ipfs_cluster_peer_id": "12D3KooWXyZaBc...",
   "hardwareID": "a1b2c3...",
   "bloxFreeSpace": { "device_count": 1, "size": 500000000000, "used": 120000000000, "avail": 380000000000, "used_percentage": 24 },
   "ota_version": "1.2.3",
@@ -92,6 +93,7 @@ Response (relevant fields):
 ```
 
 - `kubo_peer_id` — The kubo (IPFS) peerID. Always present when kubo is running.
+- `ipfs_cluster_peer_id` — The ipfs-cluster peerID. Present when ipfs-cluster identity exists.
 
 **GET `/readiness`**
 
@@ -269,15 +271,473 @@ import wifi "github.com/functionland/go-fula/wap/pkg/wifi"
 
 kuboPeerID, err := wifi.GetKuboPeerID()
 if err != nil {
-    // both kubo config file and kubo API are unavailable
+    // both kubo API and config file are unavailable
 }
 ```
 
 This function tries two sources in order:
-1. Read `/internal/ipfs_data/config` and parse `Identity.PeerID`
-2. Call kubo API at `http://127.0.0.1:5001/api/v0/id` and parse the `ID` field
+1. Call kubo API at `POST http://127.0.0.1:5001/api/v0/id` and parse the `ID` field
+2. Read `/internal/ipfs_data/config` and parse `Identity.PeerID`
 
 It does not depend on ipfs-cluster being installed.
+
+## WAP HTTP Server Reference
+
+The WAP (Wireless Access Point) server runs on port `3500` (default bind: `10.42.0.1:3500`, fallback `127.0.0.1:3500`). It exposes HTTP endpoints used by BLE commands, mobile apps, and local services.
+
+### GET /properties
+
+Returns device properties, storage info, container status, and peer IDs.
+
+```bash
+curl http://<device-ip>:3500/properties
+```
+
+Response:
+```json
+{
+  "name": "fula_go",
+  "kubo_peer_id": "12D3KooWAbCdEf...",
+  "ipfs_cluster_peer_id": "12D3KooWXyZaBc...",
+  "hardwareID": "a1b2c3...",
+  "bloxFreeSpace": {
+    "device_count": 1,
+    "size": 500000000000,
+    "used": 120000000000,
+    "avail": 380000000000,
+    "used_percentage": 24
+  },
+  "containerInfo_fula": {
+    "image": "functionland/go-fula:release",
+    "version": "abc123",
+    "id": "d1c53fff7db3...",
+    "labels": {},
+    "created": "2026-02-17T10:00:00Z",
+    "repo_digests": ["functionland/go-fula@sha256:..."]
+  },
+  "containerInfo_fxsupport": { "image": "...", "..." : "..." },
+  "containerInfo_node": { "image": "...", "..." : "..." },
+  "ota_version": "1.2.3",
+  "restartNeeded": "false"
+}
+```
+
+### GET /readiness
+
+Returns system readiness status and the kubo peer ID.
+
+```bash
+curl http://<device-ip>:3500/readiness
+```
+
+Response:
+```json
+{
+  "name": "fula_go",
+  "kubo_peer_id": "12D3KooWAbCdEf..."
+}
+```
+
+### GET /wifi/list
+
+Scans and returns available WiFi networks (up to 6, strongest first, duplicates removed).
+
+```bash
+curl http://<device-ip>:3500/wifi/list
+```
+
+Response:
+```json
+[
+  { "essid": "MyNetwork", "ssid": "MyNetwork", "rssi": -45 },
+  { "essid": "Neighbor", "ssid": "Neighbor", "rssi": -72 }
+]
+```
+
+### GET /wifi/status
+
+Checks whether WiFi is currently connected.
+
+```bash
+curl http://<device-ip>:3500/wifi/status
+```
+
+Response:
+```json
+{ "status": true }
+```
+
+### POST /wifi/connect
+
+Connects to a WiFi network. Deletes any existing connection with the same SSID, creates a new one with autoconnect and priority 20, and removes the FxBlox hotspot on success.
+
+```bash
+curl -X POST http://<device-ip>:3500/wifi/connect \
+  -d "ssid=MyNetwork&password=secret123&countryCode=US"
+```
+
+Parameters (form-encoded):
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `ssid` | yes | Network SSID |
+| `password` | yes | Network password |
+| `countryCode` | no | ISO country code (default from config) |
+
+Response: `"Wifi connected!"`
+
+### GET /ap/enable
+
+Enables the WiFi hotspot/access point.
+
+```bash
+curl http://<device-ip>:3500/ap/enable
+```
+
+Response:
+```json
+{ "status": "enabled" }
+```
+
+### GET /ap/disable
+
+Disables the WiFi hotspot/access point.
+
+```bash
+curl http://<device-ip>:3500/ap/disable
+```
+
+Response:
+```json
+{ "status": "disable" }
+```
+
+### POST /partition
+
+Creates a partition flag file to trigger disk partitioning.
+
+```bash
+curl -X POST http://<device-ip>:3500/partition
+```
+
+Response:
+```json
+{ "status": true, "message": "File created" }
+```
+
+### POST /delete-fula-config
+
+Deletes the Fula configuration file (`/internal/config.yaml`).
+
+```bash
+curl -X POST http://<device-ip>:3500/delete-fula-config
+```
+
+Response:
+```json
+{ "status": true, "message": "Config file deleted successfully." }
+```
+
+### POST /peer/exchange
+
+Initializes the blox identity from the mobile client's seed, then returns the **kubo peerID** that the mobile app should use to connect. The mobile app communicates through kubo's libp2p host, which internally forwards requests to go-fula.
+
+```bash
+curl -X POST http://<device-ip>:3500/peer/exchange \
+  -d "peer_id=12D3KooWClient...&seed=myseed123"
+```
+
+Parameters (form-encoded):
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `peer_id` | yes | Client's libp2p peer ID |
+| `seed` | yes | Seed value for key generation |
+
+Response:
+```json
+{ "peer_id": "12D3KooWKuboPeerID..." }
+```
+
+The `peer_id` in the response is the kubo peerID (obtained from kubo API, falling back to kubo config file). This is the peerID the mobile app uses for all subsequent libp2p connections to the device.
+
+### POST /peer/generate-identity
+
+Generates a deterministic libp2p identity (Ed25519 key pair) from a seed.
+
+```bash
+curl -X POST http://<device-ip>:3500/peer/generate-identity \
+  -d "seed=myseed123"
+```
+
+Parameters (form-encoded):
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `seed` | yes | Seed value for identity generation |
+
+Response:
+```json
+{
+  "peer_id": "12D3KooWAbCdEf...",
+  "seed": "base64-encoded-private-key"
+}
+```
+
+### POST /pools/join
+
+Joins a storage/compute pool by writing the pool ID to `config.yaml`.
+
+```bash
+curl -X POST http://<device-ip>:3500/pools/join \
+  -H "Content-Type: application/json" \
+  -d '{"poolID": "my-pool-1"}'
+```
+
+Response:
+```json
+{ "status": "joined", "poolID": "my-pool-1" }
+```
+
+### POST /pools/leave
+
+Leaves a storage/compute pool.
+
+```bash
+curl -X POST http://<device-ip>:3500/pools/leave \
+  -d "poolID=my-pool-1"
+```
+
+Response:
+```json
+{ "status": "left", "poolID": "my-pool-1" }
+```
+
+### POST /pools/cancel
+
+Cancels a pending pool join.
+
+```bash
+curl -X POST http://<device-ip>:3500/pools/cancel \
+  -d "poolID=my-pool-1"
+```
+
+Response:
+```json
+{ "status": "cancelled", "poolID": "my-pool-1" }
+```
+
+### GET /chain/status
+
+Returns blockchain sync status (stub implementation).
+
+```bash
+curl http://<device-ip>:3500/chain/status
+```
+
+Response:
+```json
+{ "isSynced": true, "syncProgress": 100 }
+```
+
+### GET /account/id
+
+Returns the account ID from the device secrets.
+
+```bash
+curl http://<device-ip>:3500/account/id
+```
+
+Response:
+```json
+{ "accountId": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY" }
+```
+
+### GET /account/seed
+
+Returns the account seed from the device secrets.
+
+```bash
+curl http://<device-ip>:3500/account/seed
+```
+
+Response:
+```json
+{ "accountSeed": "bottom drive obey lake..." }
+```
+
+## BLE (Bluetooth Low Energy) Server Reference
+
+The BLE server runs on the fxsupport container and provides a GATT service for mobile app communication during device setup and management.
+
+### Service Details
+
+| Property | Value |
+|----------|-------|
+| Service UUID | `00000001-710e-4a5b-8d75-3e5b444bc3cf` |
+| Command Characteristic UUID | `00000003-710e-4a5b-8d75-3e5b444bc3cf` |
+| Broadcast Characteristic UUID | `00000002-710e-4a5b-8d75-3e5b444bc3cf` |
+| Advertised Name | `fulatower_<last 5 chars of kubo peerID>` or `fulatower_NEW` |
+
+The advertised name uses the kubo peerID to match the mDNS instance name. The kubo peerID is obtained from the kubo API (`POST http://127.0.0.1:5001/api/v0/id`), falling back to the kubo config file (`/home/pi/.internal/ipfs_data/config` → `Identity.PeerID`). If neither source is available (e.g. first boot before setup), the name defaults to `fulatower_NEW`.
+
+### Response Chunking
+
+Responses larger than 512 bytes are split into chunks:
+
+**Header** (sent first):
+```json
+{ "type": "ble_header", "total_length": 2048, "chunks": 5 }
+```
+
+**Data chunks** (sent sequentially with 100ms delay):
+```json
+{ "type": "ble_chunk", "index": 1, "data": "..." }
+```
+
+The client reassembles by concatenating all `data` fields in order.
+
+### BLE Commands
+
+Commands are sent as UTF-8 strings via BLE write to the Command Characteristic. Responses are sent back via notifications or indications. Long-running commands send periodic `"Processing <command>"` updates every 2 seconds.
+
+#### properties
+
+Returns device properties (proxies to `GET /properties`).
+
+Write: `properties`
+
+Response:
+```json
+{
+  "bloxFreeSpace": { "device_count": 1, "size": 500000000000, "used": 120000000000, "avail": 380000000000, "used_percentage": 24 },
+  "containerInfo_fula": {},
+  "containerInfo_fxsupport": {},
+  "containerInfo_node": {},
+  "hardwareID": "a1b2c3...",
+  "ota_version": "1.2.3",
+  "restartNeeded": "false",
+  "kubo_peer_id": "12D3KooWAbCdEf...",
+  "ipfs_cluster_peer_id": "12D3KooWXyZaBc..."
+}
+```
+
+#### readiness
+
+Returns system readiness (proxies to `GET /readiness`).
+
+Write: `readiness`
+
+#### wifi/list
+
+Scans available WiFi networks (proxies to `GET /wifi/list`).
+
+Write: `wifi/list`
+
+Response:
+```json
+[
+  { "essid": "MyNetwork", "ssid": "MyNetwork", "rssi": -45 }
+]
+```
+
+#### wifi/status
+
+Checks WiFi connection (proxies to `GET /wifi/status`).
+
+Write: `wifi/status`
+
+Response:
+```json
+{ "status": true }
+```
+
+#### wifi/connect
+
+Connects to WiFi (proxies to `POST /wifi/connect`).
+
+Write: `wifi/connect <ssid> <password> [country_code]`
+
+Examples:
+- `wifi/connect MyNetwork secret123`
+- `wifi/connect MyNetwork secret123 US`
+
+#### peer/exchange
+
+Initializes blox identity and returns the kubo peerID for mobile connection (proxies to `POST /peer/exchange`).
+
+Write: `peer/exchange <peer_id> <seed>`
+
+Example: `peer/exchange 12D3KooWClient... myseed123`
+
+Response:
+```json
+{ "peer_id": "12D3KooWKuboPeerID..." }
+```
+
+#### peer/generate-identity
+
+Generates identity from seed (proxies to `POST /peer/generate-identity`).
+
+Write: `peer/generate-identity <seed>`
+
+Example: `peer/generate-identity myseed123`
+
+Response:
+```json
+{ "peer_id": "12D3KooWAbCdEf...", "seed": "base64-private-key" }
+```
+
+#### ap/enable
+
+Enables WiFi hotspot (proxies to `GET /ap/enable`).
+
+Write: `ap/enable`
+
+#### partition
+
+Triggers disk partitioning (proxies to `POST /partition`).
+
+Write: `partition`
+
+#### reset
+
+Factory reset with 20-second cancellation window. During the window, the LED turns red. After 20 seconds: deletes all WiFi connections, removes `config.yaml`, and reboots.
+
+Write: `reset`
+
+#### cancel
+
+Cancels an in-progress reset (must be sent within 20 seconds of `reset`).
+
+Write: `cancel`
+
+#### stopleds
+
+Stops all LED activity.
+
+Write: `stopleds`
+
+#### removedockercpblock
+
+Removes the Docker copy block flag (`stop_docker_copy.txt`), allowing OTA file extraction to resume.
+
+Write: `removedockercpblock`
+
+#### logs
+
+Retrieves container or system logs.
+
+Write: `logs {"container_name":"fula_go","tail_count":"50"}`
+
+Response: Log text from the specified container.
+
+### Error Responses
+
+On any error, BLE commands return:
+```json
+{ "error": "error message", "status": "error" }
+```
 
 ## Run
 
