@@ -212,12 +212,30 @@ func getLANInterfaces() []net.Interface {
 	return filtered
 }
 
+func instanceName() string {
+	if globalConfig == nil {
+		return "fulatower_NEW"
+	}
+	id := globalConfig.BloxPeerIdString
+	if id == "" || id == "NA" {
+		return "fulatower_NEW"
+	}
+	suffix := id
+	if len(suffix) > 5 {
+		suffix = suffix[len(suffix)-5:]
+	}
+	return "fulatower_" + suffix
+}
+
 func NewZeroConfService(port int) (*MDNSServer, error) {
 	meta := createInfo()
 	log.Debugw("mdns meta created", "meta", meta)
 
+	name := instanceName()
+	log.Debugw("mdns instance name", "name", name)
+
 	service, err := zeroconf.Register(
-		"fulatower",       // service instance name
+		name,              // unique instance name per device
 		"_fulatower._tcp", // service type and protocol
 		"local.",          // service domain
 		port,              // service port
