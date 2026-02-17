@@ -430,10 +430,24 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Derive ipfs-cluster peerID (direct from identity, no HMAC)
+	clusterPeerID := ""
+	privKeyBytes, err := base64.StdEncoding.DecodeString(bloxPrivKey)
+	if err == nil {
+		privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+		if err == nil {
+			pid, err := peer.IDFromPrivateKey(privKey)
+			if err == nil {
+				clusterPeerID = pid.String()
+			}
+		}
+	}
+
 	err = config.WriteProperties(map[string]interface{}{
-		"client_peer_id": peerID,
-		"blox_peer_id":   bloxPeerID,
-		"blox_seed":      bloxPrivKey,
+		"client_peer_id":       peerID,
+		"blox_peer_id":         bloxPeerID,
+		"blox_seed":            bloxPrivKey,
+		"ipfs_cluster_peer_id": clusterPeerID,
 	})
 	if err != nil {
 		http.Error(w, "failed to write the properties", http.StatusBadRequest)

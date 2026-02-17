@@ -19,10 +19,13 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/ipfs/kubo/client/rpc"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"golang.org/x/crypto/ed25519"
+	"gopkg.in/yaml.v3"
 )
 
 // Assuming config.ReadProperties() and config.PROJECT_NAME are defined in your code
@@ -226,10 +229,42 @@ func GetKuboPeerID() (string, error) {
 	return kuboConfig.Identity.PeerID, nil
 }
 
+// GetClusterPeerIDFromIdentity derives the ipfs-cluster peerID from the identity
+// field in config.yaml. The identity is the base64-encoded private key that
+// ipfs-cluster uses directly (no HMAC derivation like kubo).
+func GetClusterPeerIDFromIdentity() (string, error) {
+	data, err := os.ReadFile(config.FULA_CONFIG_PATH)
+	if err != nil {
+		return "", fmt.Errorf("reading config.yaml: %w", err)
+	}
+	var cfg struct {
+		Identity string `yaml:"identity"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return "", fmt.Errorf("parsing config.yaml: %w", err)
+	}
+	if cfg.Identity == "" {
+		return "", fmt.Errorf("no identity field in config.yaml")
+	}
+	privKeyBytes, err := base64.StdEncoding.DecodeString(cfg.Identity)
+	if err != nil {
+		return "", fmt.Errorf("decoding identity: %w", err)
+	}
+	privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
+	if err != nil {
+		return "", fmt.Errorf("unmarshaling private key: %w", err)
+	}
+	pid, err := peer.IDFromPrivateKey(privKey)
+	if err != nil {
+		return "", fmt.Errorf("deriving peer ID: %w", err)
+	}
+	return pid.String(), nil
+}
+
 func GetClusterInfo() (GetClusterInfoResponse, error) {
 	resp := GetClusterInfoResponse{}
 
-	// Primary: query ipfs-cluster API
+	// Fallback 1: query ipfs-cluster API
 	clusterResp, err := http.Get("http://127.0.0.1:9094/id")
 	if err == nil {
 		defer clusterResp.Body.Close()
@@ -241,7 +276,7 @@ func GetClusterInfo() (GetClusterInfoResponse, error) {
 		}
 	}
 
-	// Fallback: read cluster peer ID from identity.json
+	// Fallback 2: read cluster peer ID from identity.json
 	if resp.ClusterPeerID == "" {
 		clusterIdentityData, err := os.ReadFile("/uniondrive/ipfs-cluster/identity.json")
 		if err == nil {
@@ -253,7 +288,23 @@ func GetClusterInfo() (GetClusterInfoResponse, error) {
 			}
 		}
 	}
-	// No error return here — cluster being unavailable is expected
+
+	// Fallback 3: read from box_props.json
+	if resp.ClusterPeerID == "" {
+		props, err := config.ReadProperties()
+		if err == nil {
+			if id, ok := props["ipfs_cluster_peer_id"].(string); ok && id != "" {
+				resp.ClusterPeerID = id
+			}
+		}
+	}
+
+	// Fallback 4: derive from config.yaml identity
+	if resp.ClusterPeerID == "" {
+		if id, err := GetClusterPeerIDFromIdentity(); err == nil {
+			resp.ClusterPeerID = id
+		}
+	}
 
 	// Always get kubo peer ID reliably
 	kuboPeerID, err := GetKuboPeerID()
