@@ -182,13 +182,11 @@ func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequ
 }
 
 func (bl *FxBlockchain) StartPingServer(ctx context.Context) error {
-	// No-op: ping is now handled via TCP through kubo p2p
-	return nil
+	return bl.StartPingProxy(ctx)
 }
 
 func (bl *FxBlockchain) StopPingServer(ctx context.Context) error {
-	// No-op: ping is now handled via TCP through kubo p2p
-	return nil
+	return bl.ShutdownPingProxy(ctx)
 }
 
 func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCancelJoinRequest) ([]byte, error) {

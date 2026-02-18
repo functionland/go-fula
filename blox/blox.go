@@ -643,8 +643,7 @@ func (p *Blox) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, allow b
 }
 
 func (p *Blox) StartPingServer(ctx context.Context) error {
-	// Ping is now handled via kubo p2p protocol forwarding.
-	return nil
+	return p.bl.StartPingServer(ctx)
 }
 
 func (p *Blox) Ping(ctx context.Context, to peer.ID) (int, int, error) {

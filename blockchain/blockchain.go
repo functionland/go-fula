@@ -49,6 +49,7 @@ type (
 		c           *http.Client // P2P client for mobile->device calls (nil on device side)
 		ch          *http.Client // normal http client for blockchain API calls
 		proxyServer *http.Server // TCP proxy server for kubo-forwarded requests
+		pingServer  *http.Server // TCP ping server for kubo-forwarded ping requests
 
 		authorizedPeers     map[peer.ID]struct{}
 		authorizedPeersLock sync.RWMutex
@@ -181,7 +182,11 @@ func (bl *FxBlockchain) startFetchCheck() {
 
 func (bl *FxBlockchain) Start(ctx context.Context) error {
 	// Start the TCP proxy server for kubo-forwarded requests
-	return bl.StartProxy(ctx)
+	if err := bl.StartProxy(ctx); err != nil {
+		return err
+	}
+	// Start the ping server for kubo-forwarded ping requests
+	return bl.StartPingProxy(ctx)
 }
 
 func (bl *FxBlockchain) putBuf(buf *bytes.Buffer) {
@@ -1015,6 +1020,9 @@ func (bl *FxBlockchain) Shutdown(ctx context.Context) error {
 	}
 	bl.ch.CloseIdleConnections()
 	close(bl.fetchCheckStop)
+	if err := bl.ShutdownPingProxy(ctx); err != nil {
+		log.Errorw("Failed to shutdown ping proxy", "err", err)
+	}
 	return bl.ShutdownProxy(ctx)
 }
 
