@@ -732,6 +732,39 @@ Write: `logs {"container_name":"fula_go","tail_count":"50"}`
 
 Response: Log text from the specified container.
 
+#### wireguard/start
+
+Starts the WireGuard support tunnel. Registers with the support server if not already registered, then brings up the tunnel. This is a long-running command (threaded).
+
+Write: `wireguard/start`
+
+Response:
+```json
+{ "installed": true, "registered": true, "active": true, "endpoint": "support.fx.land:51820", "assigned_ip": "10.0.0.5/32", "peer_id_registered": "12D3KooW..." }
+```
+
+#### wireguard/stop
+
+Stops the WireGuard support tunnel.
+
+Write: `wireguard/stop`
+
+Response:
+```json
+{ "status": "stopped" }
+```
+
+#### wireguard/status
+
+Returns the current WireGuard support tunnel status without changing state.
+
+Write: `wireguard/status`
+
+Response:
+```json
+{ "installed": true, "registered": true, "active": false, "endpoint": "support.fx.land:51820", "assigned_ip": "10.0.0.5/32", "peer_id_registered": "12D3KooW..." }
+```
+
 ### Error Responses
 
 On any error, BLE commands return:
