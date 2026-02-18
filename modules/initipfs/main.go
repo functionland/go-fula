@@ -295,47 +295,48 @@ func readConfigYAML(path string) ConfigYAML {
 func readIPFSConfig(sourceIpfsConfig, path string) (IPFSConfig, error) {
 	var cfg IPFSConfig
 
-	// Check if the file exists
+	// Check if the deployed config file exists
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// File doesn't exist, return an error to handle in main
 			return cfg, err
-		} else {
-			// Unexpected error, panic
-			panic(fmt.Sprintf("Failed to check IPFS config file: %v", err))
 		}
+		panic(fmt.Sprintf("Failed to check IPFS config file: %v", err))
 	}
 
-	// Check if the target is a directory
+	// If path is a directory, remove it and fall back to template
 	if fileInfo.IsDir() {
-		// Target is a directory, attempt to delete it
-		err := os.RemoveAll(path)
-		if err != nil {
-			// Failed to delete directory, return an error
+		if err := os.RemoveAll(path); err != nil {
 			return cfg, fmt.Errorf("failed to delete directory at %s: %v", path, err)
 		}
 		if err := copyDefaultIPFSConfig(sourceIpfsConfig, path); err != nil {
-			panic(fmt.Sprintf("Failed to create empty config file: %v", err))
+			panic(fmt.Sprintf("Failed to create config file from template: %v", err))
 		}
 	}
 
-	// Read the existing file
-	data, err := os.ReadFile(sourceIpfsConfig)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to read IPFS config: %v", err))
-	} else if len(data) == 0 {
-		// File is empty, return an empty struct and nil error
-		return cfg, nil
-	} else {
-		// Unmarshal only if the file has content
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			// Unmarshaling failed, replace file with empty one and return empty cfg
-			if err := createEmptyFile(path); err != nil {
-				return cfg, err
-			}
+	// Read the DEPLOYED config first (preserves runtime changes like StorageMax)
+	data, err := os.ReadFile(path)
+	if err == nil && len(data) > 0 {
+		if err := json.Unmarshal(data, &cfg); err == nil {
 			return cfg, nil
 		}
+		// Deployed config is corrupt — fall through to template
+		fmt.Printf("Warning: deployed config %s is corrupt, falling back to template\n", path)
+	}
+
+	// Fallback: read from template
+	data, err = os.ReadFile(sourceIpfsConfig)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to read IPFS template config: %v", err))
+	}
+	if len(data) == 0 {
+		return cfg, nil
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		if err := createEmptyFile(path); err != nil {
+			return cfg, err
+		}
+		return cfg, nil
 	}
 	return cfg, nil
 }
