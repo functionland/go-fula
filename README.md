@@ -765,6 +765,31 @@ Response:
 { "installed": true, "registered": true, "active": false, "endpoint": "support.fx.land:51820", "assigned_ip": "10.0.0.5/32", "peer_id_registered": "12D3KooW..." }
 ```
 
+#### forceupdate
+
+Pulls the latest Docker images from Docker Hub (runs `fula.sh update`). This is a long-running command (threaded, up to 10-minute timeout). The LED turns purple during the update and yellow for 10 seconds after completion. Does not restart services — send `restart_fula` via `logs {"exec":["restart_fula"]}` separately if needed.
+
+Write: `forceupdate`
+
+Response (success):
+```json
+{ "status": "updated", "msg": "Docker images pulled successfully" }
+```
+
+Response (error):
+```json
+{ "status": "error", "msg": "stderr output (last 500 chars)" }
+```
+
+Response (timeout):
+```json
+{ "status": "timeout", "msg": "Update timed out after 10 minutes" }
+```
+
+Also available via the logs exec path:
+
+Write: `logs {"exec":["force_update"]}`
+
 ### Error Responses
 
 On any error, BLE commands return:

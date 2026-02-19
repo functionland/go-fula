@@ -8,3 +8,4 @@ wap/wap
 .env
 build
 tmp-fula-build
+.claude/settings.local.json
