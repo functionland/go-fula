@@ -161,8 +161,10 @@ func registerSingleProtocol(kuboAPI, protocol, target string) error {
 	return nil
 }
 
-// checkKuboP2PListeners verifies that all required p2p protocols are registered on kubo.
-// Returns true if all protocols are present.
+// checkKuboP2PListeners verifies that all required p2p protocol listeners are registered on kubo.
+// Returns true if all protocol listeners are present.
+// It distinguishes listeners from forwards: a listener has ListenAddress starting with /p2p/
+// (the local peer ID), while a forward has ListenAddress starting with /ip4/ (a local bind address).
 func checkKuboP2PListeners(kuboAPI string) bool {
 	url := fmt.Sprintf("http://%s/api/v0/p2p/ls", kuboAPI)
 	resp, err := http.Post(url, "", nil)
@@ -177,16 +179,21 @@ func checkKuboP2PListeners(kuboAPI string) bool {
 
 	var result struct {
 		Listeners []struct {
-			Protocol string `json:"Protocol"`
+			Protocol      string `json:"Protocol"`
+			ListenAddress string `json:"ListenAddress"`
 		} `json:"Listeners"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return false
 	}
 
+	// Only count entries where ListenAddress starts with /p2p/ (true listeners),
+	// not /ip4/ (forwards). This avoids counting the cluster forward as a listener.
 	registered := make(map[string]bool)
 	for _, l := range result.Listeners {
-		registered[l.Protocol] = true
+		if strings.HasPrefix(l.ListenAddress, "/p2p/") {
+			registered[l.Protocol] = true
+		}
 	}
 
 	for _, p := range getProtocols() {
@@ -364,6 +371,9 @@ func registerClusterForward(kuboAPI, serverKuboPeerID string) error {
 }
 
 // checkClusterForward checks if the /x/fula-cluster forward is registered on kubo.
+// It distinguishes a forward from a listener: a forward has TargetAddress starting with /p2p/
+// (pointing to a remote peer), while a listener has TargetAddress starting with /ip4/
+// (pointing to a local address).
 func checkClusterForward(kuboAPI string) bool {
 	url := fmt.Sprintf("http://%s/api/v0/p2p/ls", kuboAPI)
 	resp, err := http.Post(url, "", nil)
@@ -378,7 +388,8 @@ func checkClusterForward(kuboAPI string) bool {
 
 	var result struct {
 		Listeners []struct {
-			Protocol string `json:"Protocol"`
+			Protocol      string `json:"Protocol"`
+			TargetAddress string `json:"TargetAddress"`
 		} `json:"Listeners"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -386,7 +397,9 @@ func checkClusterForward(kuboAPI string) bool {
 	}
 
 	for _, l := range result.Listeners {
-		if l.Protocol == fulaClusterProtocol {
+		// A forward has TargetAddress pointing to a remote peer (/p2p/...),
+		// while a listener has TargetAddress pointing to a local address (/ip4/...).
+		if l.Protocol == fulaClusterProtocol && strings.HasPrefix(l.TargetAddress, "/p2p/") {
 			return true
 		}
 	}
