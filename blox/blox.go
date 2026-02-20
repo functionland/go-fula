@@ -422,6 +422,21 @@ func (p *Blox) Start(ctx context.Context) error {
 		p.watchKuboP2P(ctx)
 	}()
 
+	// Register cluster tunnel forward immediately if pool is already known from config,
+	// before potentially blocking on chain discovery for up to ~15 minutes.
+	if p.topicName != "0" {
+		kuboAPI := getKuboAPIAddr(p.kuboAPIAddr)
+		serverKuboID, err := fetchServerKuboPeerID(p.topicName)
+		if err != nil {
+			log.Warnw("Failed to fetch server kubo peer ID for cluster tunnel", "err", err)
+		} else {
+			p.setServerKuboPeerID(serverKuboID)
+			if err := registerClusterForward(kuboAPI, serverKuboID); err != nil {
+				log.Warnw("Failed to register cluster forward", "err", err)
+			}
+		}
+	}
+
 	// Check if we need to discover pool membership (either no pool name or no chain name)
 	needsDiscovery := p.topicName == "0" || (p.getChainName != nil && p.getChainName() == "")
 
@@ -526,8 +541,9 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 	}
 
-	// Register cluster tunnel forward if pool was found
-	if p.topicName != "0" {
+	// Register cluster tunnel forward if discovery found a NEW pool (topicName was "0" before).
+	// If topicName was already set from config, the forward was registered above before discovery.
+	if p.topicName != "0" && p.getServerKuboPeerID() == "" {
 		kuboAPI := getKuboAPIAddr(p.kuboAPIAddr)
 		serverKuboID, err := fetchServerKuboPeerID(p.topicName)
 		if err != nil {

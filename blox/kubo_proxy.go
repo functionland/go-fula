@@ -25,6 +25,7 @@ const (
 	blockchainTargetPort = "4020"
 	pingTargetPort       = "4021"
 	clusterForwardPort   = "19096"
+	clusterSwarmPort     = "9096"
 
 	healthCheckInterval = 30 * time.Second
 
@@ -47,6 +48,12 @@ func getProtocols() []p2pProtocol {
 	return []p2pProtocol{
 		{fulaBlockchainProtocol, fmt.Sprintf("/ip4/%s/tcp/%s", ip, blockchainTargetPort)},
 		{fulaPingProtocol, fmt.Sprintf("/ip4/%s/tcp/%s", ip, pingTargetPort)},
+		// Cluster listener: when the server's ipfs-cluster dials a device's kubo
+		// via /x/fula-cluster, the server's kubo needs a listener that forwards
+		// the stream to the local ipfs-cluster swarm port (9096).
+		// On the device side this listener also exists but the forward registered
+		// by registerClusterForward() is what actually tunnels traffic to the server.
+		{fulaClusterProtocol, fmt.Sprintf("/ip4/%s/tcp/%s", ip, clusterSwarmPort)},
 	}
 }
 
