@@ -346,7 +346,7 @@ func fetchServerKuboPeerID(poolID string) (string, error) {
 // with a local listen address on 127.0.0.1:19096.
 func registerClusterForward(kuboAPI, serverKuboPeerID string) error {
 	forwardURL := fmt.Sprintf(
-		"http://%s/api/v0/p2p/forward?arg=%s&arg=/ip4/127.0.0.1/tcp/%s&target=/p2p/%s&allow-custom-protocol=true",
+		"http://%s/api/v0/p2p/forward?arg=%s&arg=/ip4/127.0.0.1/tcp/%s&arg=/p2p/%s&allow-custom-protocol=true",
 		kuboAPI, fulaClusterProtocol, clusterForwardPort, serverKuboPeerID)
 
 	resp, err := http.Post(forwardURL, "", nil)
