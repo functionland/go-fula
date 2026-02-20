@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -17,12 +19,17 @@ const (
 	// Protocol IDs registered on kubo for stream forwarding
 	fulaBlockchainProtocol = "/x/fula-blockchain"
 	fulaPingProtocol       = "/x/fula-ping"
+	fulaClusterProtocol    = "/x/fula-cluster"
 
 	// Ports where go-fula listens for kubo-forwarded streams
 	blockchainTargetPort = "4020"
 	pingTargetPort       = "4021"
+	clusterForwardPort   = "19096"
 
 	healthCheckInterval = 30 * time.Second
+
+	poolsAPIEndpoint             = "https://pools.fx.land/pools/"
+	serverKuboPeerIDCachePath    = "/internal/.tmp/pool_%s_server_kubo.tmp"
 )
 
 type p2pProtocol struct {
@@ -219,7 +226,7 @@ func waitForKuboAndRegister(ctx context.Context, kuboAPI string) error {
 }
 
 // watchKuboP2P periodically checks that kubo p2p listeners are active.
-// If kubo restarts, re-registers all protocols.
+// If kubo restarts, re-registers all protocols and the cluster forward.
 func (p *Blox) watchKuboP2P(ctx context.Context) {
 	kuboAPI := p.kuboAPIAddr
 	if kuboAPI == "" {
@@ -241,6 +248,22 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 				if err := registerKuboProtocols(kuboAPI); err != nil {
 					log.Errorw("Failed to re-register kubo protocols", "err", err)
 				}
+				// registerKuboProtocols calls p2p/close?all=true which clears
+				// ALL p2p entries (listeners AND forwards). Re-register the
+				// cluster forward if configured.
+				if serverPeerID := p.getServerKuboPeerID(); serverPeerID != "" {
+					if err := registerClusterForward(kuboAPI, serverPeerID); err != nil {
+						log.Warnw("Failed to re-register cluster forward", "err", err)
+					}
+				}
+			} else if serverPeerID := p.getServerKuboPeerID(); serverPeerID != "" {
+				// Listeners OK — check forward separately
+				if !checkClusterForward(kuboAPI) {
+					log.Info("Cluster forward missing, re-registering...")
+					if err := registerClusterForward(kuboAPI, serverPeerID); err != nil {
+						log.Warnw("Failed to register cluster forward", "err", err)
+					}
+				}
 			}
 		case <-ctx.Done():
 			return
@@ -254,4 +277,111 @@ func getKuboAPIAddr(addr string) string {
 		return defaultKuboAPIAddr
 	}
 	return strings.TrimPrefix(addr, "http://")
+}
+
+// fetchServerKuboPeerID fetches the server's kubo peer ID for the given pool.
+// It checks a filesystem cache first, then falls back to the pools API.
+func fetchServerKuboPeerID(poolID string) (string, error) {
+	cachePath := fmt.Sprintf(serverKuboPeerIDCachePath, poolID)
+
+	// Check filesystem cache
+	if data, err := os.ReadFile(cachePath); err == nil {
+		peerID := strings.TrimSpace(string(data))
+		if peerID != "" {
+			log.Debugw("Using cached server kubo peer ID", "poolID", poolID, "peerID", peerID)
+			return peerID, nil
+		}
+	}
+
+	// Fetch from pools API
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(poolsAPIEndpoint + poolID)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch pool info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("pools API returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		KuboPeerID string `json:"kubo-peerid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode pool info: %w", err)
+	}
+
+	if result.KuboPeerID == "" {
+		return "", fmt.Errorf("kubo-peerid is empty in pool info for pool %s", poolID)
+	}
+
+	// Write to cache
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		log.Warnw("Failed to create cache directory", "err", err)
+	} else if err := os.WriteFile(cachePath, []byte(result.KuboPeerID), 0644); err != nil {
+		log.Warnw("Failed to write server kubo peer ID cache", "err", err)
+	}
+
+	log.Infow("Fetched server kubo peer ID from API", "poolID", poolID, "peerID", result.KuboPeerID)
+	return result.KuboPeerID, nil
+}
+
+// registerClusterForward registers a p2p/forward on kubo for cluster traffic tunneling.
+// The forward maps /x/fula-cluster on the local kubo to the server's kubo peer ID,
+// with a local listen address on 127.0.0.1:19096.
+func registerClusterForward(kuboAPI, serverKuboPeerID string) error {
+	forwardURL := fmt.Sprintf(
+		"http://%s/api/v0/p2p/forward?arg=%s&arg=/ip4/127.0.0.1/tcp/%s&target=/p2p/%s&allow-custom-protocol=true",
+		kuboAPI, fulaClusterProtocol, clusterForwardPort, serverKuboPeerID)
+
+	resp, err := http.Post(forwardURL, "", nil)
+	if err != nil {
+		return fmt.Errorf("kubo API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body := make([]byte, 512)
+		n, _ := resp.Body.Read(body)
+		bodyStr := string(body[:n])
+		if strings.Contains(bodyStr, "already forwarding") || strings.Contains(bodyStr, "listener already registered") {
+			log.Debugw("Cluster forward already registered, treating as success")
+			return nil
+		}
+		return fmt.Errorf("kubo API returned status %d: %s", resp.StatusCode, bodyStr)
+	}
+
+	log.Infow("Registered cluster forward", "protocol", fulaClusterProtocol, "port", clusterForwardPort, "target", serverKuboPeerID)
+	return nil
+}
+
+// checkClusterForward checks if the /x/fula-cluster forward is registered on kubo.
+func checkClusterForward(kuboAPI string) bool {
+	url := fmt.Sprintf("http://%s/api/v0/p2p/ls", kuboAPI)
+	resp, err := http.Post(url, "", nil)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	var result struct {
+		Listeners []struct {
+			Protocol string `json:"Protocol"`
+		} `json:"Listeners"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false
+	}
+
+	for _, l := range result.Listeners {
+		if l.Protocol == fulaClusterProtocol {
+			return true
+		}
+	}
+	return false
 }

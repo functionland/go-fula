@@ -40,8 +40,23 @@ type (
 		ls   ipld.LinkSystem
 		bl   *blockchain.FxBlockchain
 		once sync.Once
+
+		serverKuboPeerID   string
+		serverKuboPeerIDMu sync.RWMutex
 	}
 )
+
+func (p *Blox) getServerKuboPeerID() string {
+	p.serverKuboPeerIDMu.RLock()
+	defer p.serverKuboPeerIDMu.RUnlock()
+	return p.serverKuboPeerID
+}
+
+func (p *Blox) setServerKuboPeerID(id string) {
+	p.serverKuboPeerIDMu.Lock()
+	defer p.serverKuboPeerIDMu.Unlock()
+	p.serverKuboPeerID = id
+}
 
 func New(o ...Option) (*Blox, error) {
 	opts, err := newOptions(o...)
@@ -508,6 +523,20 @@ func (p *Blox) Start(ctx context.Context) error {
 
 		if !found {
 			log.Warnw("Could not find pool membership on any chain", "peerID", p.selfPeerID.String(), "chains", chainList)
+		}
+	}
+
+	// Register cluster tunnel forward if pool was found
+	if p.topicName != "0" {
+		kuboAPI := getKuboAPIAddr(p.kuboAPIAddr)
+		serverKuboID, err := fetchServerKuboPeerID(p.topicName)
+		if err != nil {
+			log.Warnw("Failed to fetch server kubo peer ID for cluster tunnel", "err", err)
+		} else {
+			p.setServerKuboPeerID(serverKuboID)
+			if err := registerClusterForward(kuboAPI, serverKuboID); err != nil {
+				log.Warnw("Failed to register cluster forward", "err", err)
+			}
 		}
 	}
 
