@@ -14,7 +14,7 @@ const (
 	PingListenAddr = "0.0.0.0:4021"
 
 	// clusterAPIURL is the ipfs-cluster REST API endpoint for identity info.
-	clusterAPIURL = "http://127.0.0.1:9096/id"
+	clusterAPIURL = "http://127.0.0.1:9094/id"
 	// clusterTimeout is how long to wait for ipfs-cluster to respond.
 	clusterTimeout = 2 * time.Second
 )
