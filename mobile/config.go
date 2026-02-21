@@ -276,11 +276,20 @@ func (cfg *Config) init(mc *Client) error {
 					// Allow transient (relay) connections for gostream dials
 					dialCtx := network.WithUseTransient(ctx, "fx.mobile")
 
+					// Close stale connections to avoid "dial backoff" from expired relay v2
+					// circuits that libp2p still considers "connected".
+					if mc.h.Network().Connectedness(pid) != network.Connected {
+						_ = mc.h.Network().ClosePeer(pid)
+					}
+
 					// Try direct dial first (uses peerstore addresses — direct IP + relay circuits)
 					conn, dialErr := gostream.Dial(dialCtx, mc.h, pid, "/x/fula-blockchain")
 					if dialErr == nil {
 						return conn, nil
 					}
+
+					// Clean up failed connection state so the DHT retry doesn't hit "dial backoff"
+					_ = mc.h.Network().ClosePeer(pid)
 
 					// If DHT is not available, return the original error
 					if mc.ipfsDHT == nil {

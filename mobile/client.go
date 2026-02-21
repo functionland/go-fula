@@ -66,6 +66,14 @@ func NewClient(cfg *Config) (*Client, error) {
 // and falls back to IPFS DHT peer discovery if the direct attempt fails and DHT is enabled.
 func (c *Client) ensureConnected(ctx context.Context) error {
 	ctx = network.WithUseTransient(ctx, "fx.mobile")
+
+	// Close stale connections to avoid "dial backoff" from expired relay v2
+	// circuits that libp2p still considers "connected".
+	// See: mainnet/libp2p-service PingPeerProtocol for the same pattern.
+	if c.h.Network().Connectedness(c.bloxPid) != network.Connected {
+		_ = c.h.Network().ClosePeer(c.bloxPid)
+	}
+
 	peerInfo := c.h.Peerstore().PeerInfo(c.bloxPid)
 
 	// Try direct + relay (peerstore addresses)
@@ -73,6 +81,9 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 	if connectErr == nil {
 		return nil
 	}
+
+	// Clean up failed connection state so the DHT retry doesn't hit "dial backoff"
+	_ = c.h.Network().ClosePeer(c.bloxPid)
 
 	// If DHT is not available, return the original error
 	if c.ipfsDHT == nil {
