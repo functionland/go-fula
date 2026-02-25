@@ -206,13 +206,16 @@ func main() {
 	ipfsCfg, err = readIPFSConfig(defaultIpfsConfig, ipfsConfigPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// File doesn't exist, create it in main
+			// File doesn't exist, copy the template to disk
 			if err := copyDefaultIPFSConfig(defaultIpfsConfig, ipfsConfigPath); err != nil {
 				panic(fmt.Sprintf("Failed to create empty config file: %v", err))
 			}
+			// Re-read the just-copied config so ipfsCfg has the template values
+			ipfsCfg, err = readIPFSConfig(defaultIpfsConfig, ipfsConfigPath)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to read IPFS config after copying template: %v", err))
+			}
 		} else {
-			// Unexpected error, handle appropriately (e.g., logging, retrying)
-			// For now, panic for demonstration:
 			panic(fmt.Sprintf("Failed to read or create IPFS config: %v", err))
 		}
 	}
