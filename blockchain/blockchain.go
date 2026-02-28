@@ -613,6 +613,17 @@ func (bl *FxBlockchain) dispatch(from peer.ID, action string, w http.ResponseWri
 		actionUpdatePlugin: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handlePluginAction(r.Context(), from, w, r, actionUpdatePlugin)
 		},
+
+		// Auto-pin actions
+		actionAutoPinPair: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAutoPinPair(from, w, r)
+		},
+		actionAutoPinRefresh: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAutoPinRefresh(from, w, r)
+		},
+		actionAutoPinUnpair: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleAutoPinUnpair(from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -1002,7 +1013,7 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 	switch action {
 	case actionReplicateInPool:
 		return (bl.authorizer == bl.selfPeerID || bl.authorizer == "")
-	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionChatWithAI, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput, actionUpdatePlugin, actionGetDockerImageBuildDates, actionGetClusterInfo:
+	case actionBloxFreeSpace, actionAccountFund, actionManifestBatchUpload, actionAssetsBalance, actionGetDatastoreSize, actionGetFolderSize, actionFindBestAndTargetInLogs, actionFetchContainerLogs, actionChatWithAI, actionEraseBlData, actionWifiRemoveall, actionReboot, actionPartition, actionDeleteWifi, actionDisconnectWifi, actionDeleteFulaConfig, actionGetAccount, actionSeeded, actionAccountExists, actionPoolCreate, actionPoolJoin, actionPoolCancelJoin, actionPoolRequests, actionPoolList, actionPoolVote, actionPoolLeave, actionManifestUpload, actionManifestStore, actionManifestAvailable, actionManifestRemove, actionManifestRemoveStorer, actionManifestRemoveStored, actionTransferToMumbai, actionListPlugins, actionListActivePlugins, actionInstallPlugin, actionUninstallPlugin, actionGetInstallStatus, actionGetInstallOutput, actionUpdatePlugin, actionGetDockerImageBuildDates, actionGetClusterInfo, actionAutoPinPair, actionAutoPinRefresh, actionAutoPinUnpair:
 		bl.authorizedPeersLock.RLock()
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()

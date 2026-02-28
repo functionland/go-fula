@@ -412,3 +412,30 @@ func (c *Client) UpdatePlugin(pluginName string) ([]byte, error) {
 	ctx := context.TODO()
 	return c.bl.UpdatePlugin(ctx, c.bloxPid, pluginName)
 }
+
+//////////////////////////////////////////////////
+////////////////////AUTO-PIN//////////////////////
+//////////////////////////////////////////////////
+
+// AutoPinPair sends a pairing request to the blox with pinning service credentials.
+func (c *Client) AutoPinPair(token string, endpoint string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AutoPinPair(ctx, c.bloxPid, blockchain.AutoPinPairRequest{
+		PinningToken:    token,
+		PinningEndpoint: endpoint,
+	})
+}
+
+// AutoPinRefresh refreshes the pinning service token on the blox.
+func (c *Client) AutoPinRefresh(token string) ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AutoPinRefresh(ctx, c.bloxPid, blockchain.AutoPinRefreshRequest{
+		PinningToken: token,
+	})
+}
+
+// AutoPinUnpair removes auto-pin configuration from the blox.
+func (c *Client) AutoPinUnpair() ([]byte, error) {
+	ctx := context.TODO()
+	return c.bl.AutoPinUnpair(ctx, c.bloxPid)
+}

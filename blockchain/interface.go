@@ -69,6 +69,11 @@ const (
 
 	// AI
 	actionChatWithAI = "chat-ai"
+
+	// Auto-pin (personal device pinning)
+	actionAutoPinPair    = "auto-pin-pair"
+	actionAutoPinRefresh = "auto-pin-refresh"
+	actionAutoPinUnpair  = "auto-pin-unpair"
 )
 
 type ReplicateRequest struct {
@@ -513,6 +518,29 @@ type UpdatePluginResponse struct {
 	Status bool   `json:"status"`
 }
 
+// Auto-pin (personal device pinning)
+type AutoPinPairRequest struct {
+	PinningToken    string `json:"pinning_token"`
+	PinningEndpoint string `json:"pinning_endpoint"`
+}
+type AutoPinPairResponse struct {
+	Status        string `json:"status"`
+	PairingSecret string `json:"pairing_secret"`
+	HardwareID    string `json:"hardware_id"`
+}
+
+type AutoPinRefreshRequest struct {
+	PinningToken string `json:"pinning_token"`
+}
+type AutoPinRefreshResponse struct {
+	Status string `json:"status"`
+}
+
+type AutoPinUnpairRequest struct{}
+type AutoPinUnpairResponse struct {
+	Status string `json:"status"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -569,6 +597,11 @@ type Blockchain interface {
 
 	// AI
 	ChatWithAI(context.Context, peer.ID, wifi.ChatWithAIRequest) (*StreamBuffer, error)
+
+	// Auto-pin
+	AutoPinPair(context.Context, peer.ID, AutoPinPairRequest) ([]byte, error)
+	AutoPinRefresh(context.Context, peer.ID, AutoPinRefreshRequest) ([]byte, error)
+	AutoPinUnpair(context.Context, peer.ID) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -628,6 +661,11 @@ var requestTypes = map[string]reflect.Type{
 
 	// AI
 	actionChatWithAI: reflect.TypeOf(wifi.ChatWithAIRequest{}),
+
+	// Auto-pin
+	actionAutoPinPair:    reflect.TypeOf(AutoPinPairRequest{}),
+	actionAutoPinRefresh: reflect.TypeOf(AutoPinRefreshRequest{}),
+	actionAutoPinUnpair:  reflect.TypeOf(AutoPinUnpairRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -687,4 +725,9 @@ var responseTypes = map[string]reflect.Type{
 
 	// AI
 	actionChatWithAI: reflect.TypeOf(wifi.ChatWithAIResponse{}),
+
+	// Auto-pin
+	actionAutoPinPair:    reflect.TypeOf(AutoPinPairResponse{}),
+	actionAutoPinRefresh: reflect.TypeOf(AutoPinRefreshResponse{}),
+	actionAutoPinUnpair:  reflect.TypeOf(AutoPinUnpairResponse{}),
 }

@@ -160,6 +160,9 @@ func createInfo() []string {
 		"poolName=" + globalConfig.PoolName,
 		"authorizer=" + globalConfig.Authorizer,
 		"hardwareID=" + globalConfig.HardwareID,
+		"gatewayPort=8080",
+		"autoPinPort=3501",
+		"s3Port=9000",
 	}
 
 	return infoSlice
