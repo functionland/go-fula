@@ -561,9 +561,12 @@ func (p *Blox) Start(ctx context.Context) error {
 	}
 	recoverOut := make(chan api.GlobalPinInfo)
 	go func() {
+		for range recoverOut {
+		}
+	}()
+	go func() {
 		err := p.ipfsClusterApi.RecoverAll(ctx, true, recoverOut)
 		if err != nil {
-			// Handle error
 			log.Errorw("RecoverAll error", "err", err.Error())
 		}
 	}()
@@ -600,7 +603,7 @@ func (p *Blox) Start(ctx context.Context) error {
 			log.Debug("Called wg.Done in blox.start")
 			defer p.wg.Done()
 			defer log.Debug("Start blox blox.start go routine is ending")
-			ticker := time.NewTicker(15 * time.Minute)
+			ticker := time.NewTicker(6 * time.Hour)
 			defer ticker.Stop()
 			for {
 				select {
