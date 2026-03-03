@@ -622,7 +622,18 @@ func (p *Blox) Start(ctx context.Context) error {
 					if p.topicName != "0" {
 						shortCtx, shortCtxCancel := context.WithDeadline(p.ctx, time.Now().Add(60*time.Second))
 						defer shortCtxCancel()
-						p.rpc.Request("repo/gc").Send(shortCtx)
+						// Skip GC if fula-pinning is actively syncing
+						syncingPath := "/internal/fula-pinning/.syncing"
+						skipGC := false
+						if info, err := os.Stat(syncingPath); err == nil {
+							if time.Since(info.ModTime()) < 30*time.Minute {
+								log.Info("Skipping repo/gc: fula-pinning sync in progress")
+								skipGC = true
+							}
+						}
+						if !skipGC {
+							p.rpc.Request("repo/gc").Send(shortCtx)
+						}
 						storedLinks, err := p.ListModifiedStoredBlocks(lastCheckedTime)
 						if err != nil {
 							log.Errorf("Error listing stored blocks: %v", err)
