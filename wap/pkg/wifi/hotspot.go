@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -198,32 +199,36 @@ func DisconnectFromExternalWifi(ctx context.Context) error {
 	case "windows":
 		// TODO: Implement Windows-specific logic here.
 	default:
-		// Use nmcli to get a list of all connected networks.
-		output, _, err := runCommand(ctx, "nmcli --terse --fields NAME connection show --active")
+		// Query NAME and TYPE together to avoid a per-connection type lookup,
+		// which breaks when connection names contain spaces (e.g. "Wired connection 1")
+		// because runCommand splits on whitespace.
+		output, stderr, err := runCommand(ctx, "nmcli --terse --fields NAME,TYPE connection show --active")
 		if err != nil {
-			log.Errorw("failed to get a list of connected networks", "err", err)
+			log.Errorw("failed to get a list of connected networks", "err", err, "stderr", stderr)
 			return err
 		}
 
-		// The output from nmcli is a newline-separated list of network names.
-		// We'll split this into a slice for easier processing.
 		networks := strings.Split(output, "\n")
 
-		// Now we'll iterate over the list of networks, and disconnect from each wifi one
-		// that isn't named "FxBlox".
-		for _, network := range networks {
-			if strings.TrimSpace(network) != "" && network != "FxBlox" {
-				connectionTypeOutput, _, err := runCommand(ctx, fmt.Sprintf("nmcli -t -f connection.type con show %s", network))
-				if err != nil {
-					log.Errorw("failed to get the type of network", "network", network, "err", err)
-				} else {
-					connectionType := strings.Split(strings.TrimSpace(connectionTypeOutput), ":")[1]
-					if connectionType == "802-11-wireless" {
-						_, _, err = runCommand(ctx, fmt.Sprintf("nmcli connection down %s", network))
-						if err != nil {
-							log.Errorw("failed to disconnect from network", "network", network, "err", err)
-						}
-					}
+		for _, line := range networks {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			// Format is NAME:TYPE — TYPE (e.g. 802-11-wireless) never contains colons,
+			// so split on the last colon to handle connection names that may contain colons.
+			lastColon := strings.LastIndex(line, ":")
+			if lastColon < 0 {
+				continue
+			}
+			network := line[:lastColon]
+			connType := line[lastColon+1:]
+
+			if network != "FxBlox" && connType == "802-11-wireless" {
+				// Use exec.CommandContext to properly handle connection names with spaces
+				cmd := exec.CommandContext(ctx, "nmcli", "connection", "down", network)
+				if cmdErr := cmd.Run(); cmdErr != nil {
+					log.Errorw("failed to disconnect from network", "network", network, "err", cmdErr)
 				}
 			}
 		}
