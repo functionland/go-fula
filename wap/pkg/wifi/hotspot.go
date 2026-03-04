@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -99,14 +100,7 @@ func CheckHotspotSupported(ctx context.Context) (supported bool, err error) {
 func StartHotspot(ctx context.Context, forceReload bool) error {
 	var commands []string
 	var err error
-	// supported, err := CheckHotspotSupported(ctx)
-	// if err != nil {
-	// 	log.Errorw("failed to check hotspot support", "err", err)
-	// 	return err
-	// } else if !supported {
-	// 	log.Errorw("hotspot not supported")
-	// 	return fmt.Errorf("hotspot not supported")
-	// }
+
 	switch runtime.GOOS {
 	case "windows":
 		commands = []string{"netsh wlan start hostednetwork"}
@@ -128,17 +122,71 @@ func StartHotspot(ctx context.Context, forceReload bool) error {
 	case "darwin":
 		commands = []string{"/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/createbssid -n FxBlox"}
 	default:
-		commands = []string{"nmcli connection delete FxBlox", "nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared", "nmcli connection up FxBlox"}
+		return startHotspotLinux(ctx)
 	}
+
 	for _, command := range commands {
-		_, _, err = runCommand(ctx, command)
+		_, stderr, errCmd := runCommand(ctx, command)
 		time.Sleep(2 * time.Second)
-		if err != nil {
-			log.Errorw("failed to stop wifi hotspot", "command", command, "err", err)
+		if errCmd != nil {
+			err = errCmd
+			log.Errorw("failed to start wifi hotspot", "command", command, "err", errCmd, "stderr", stderr)
 		}
 	}
 	if err != nil {
-		log.Errorw("failed to start wifi hotspot", "command", commands, "err", err)
+		return err
+	}
+	return nil
+}
+
+// startHotspotLinux creates the FxBlox hotspot on Linux using nmcli,
+// with a file-based fallback if nmcli connection add fails (e.g. due to
+// nmcli/NM daemon version mismatch with mac-address-denylist property).
+func startHotspotLinux(ctx context.Context) error {
+	// Step 1: Delete existing FxBlox connection (cleanup, errors are non-fatal)
+	_, stderr, delErr := runCommand(ctx, "nmcli connection delete FxBlox")
+	if delErr != nil {
+		log.Infow("no existing FxBlox connection to delete (this is normal on first run)", "stderr", stderr)
+	}
+	time.Sleep(2 * time.Second)
+
+	// Step 2: Create FxBlox hotspot connection via nmcli
+	addCmd := "nmcli connection add type wifi con-name FxBlox autoconnect no wifi.mode ap wifi.ssid FxBlox ipv4.method shared ipv6.method shared"
+	_, stderr, err := runCommand(ctx, addCmd)
+	if err != nil {
+		log.Errorw("nmcli connection add failed, trying file-based fallback", "err", err, "stderr", stderr)
+
+		// Fallback: write .nmconnection file directly
+		if fallbackErr := writeHotspotConnectionFile(); fallbackErr != nil {
+			return fmt.Errorf("nmcli add failed (%w) and file fallback also failed (%v)", err, fallbackErr)
+		}
+		_, stderr, reloadErr := runCommand(ctx, "nmcli connection reload")
+		if reloadErr != nil {
+			log.Errorw("failed to reload connections after file fallback", "err", reloadErr, "stderr", stderr)
+			return fmt.Errorf("nmcli reload failed after file fallback: %w", reloadErr)
+		}
+		log.Infow("FxBlox connection created via file-based fallback")
+	}
+	time.Sleep(2 * time.Second)
+
+	// Step 3: Activate FxBlox connection
+	_, stderr, err = runCommand(ctx, "nmcli connection up FxBlox")
+	if err != nil {
+		log.Errorw("failed to activate FxBlox hotspot", "err", err, "stderr", stderr)
+		return err
+	}
+
+	return nil
+}
+
+// writeHotspotConnectionFile writes a .nmconnection file for the FxBlox hotspot directly,
+// bypassing nmcli. This avoids version-mismatch issues where a newer nmcli sends
+// properties (like mac-address-denylist) that an older NM daemon doesn't recognize.
+func writeHotspotConnectionFile() error {
+	content := "[connection]\nid=FxBlox\ntype=wifi\nautoconnect=false\n\n[wifi]\nmode=ap\nssid=FxBlox\n\n[ipv4]\nmethod=shared\n\n[ipv6]\nmethod=shared\n"
+	path := "/etc/NetworkManager/system-connections/FxBlox.nmconnection"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		log.Errorw("failed to write fallback .nmconnection file", "path", path, "err", err)
 		return err
 	}
 	return nil
@@ -201,7 +249,6 @@ func CheckConnection(timeout time.Duration) error {
 
 func StopHotspot(ctx context.Context) error {
 	var commands []string
-	var err error
 	// supported, err := CheckHotspotSupported(ctx)
 	// if err != nil {
 	// 	log.Errorw("failed to check hotspot support", "err", err)
@@ -220,10 +267,10 @@ func StopHotspot(ctx context.Context) error {
 		commands = []string{"nmcli r wifi off", "nmcli r wifi on"}
 	}
 	for _, command := range commands {
-		_, _, err = runCommand(ctx, command)
-		if err != nil {
-			log.Errorw("failed to stop wifi hotspot", "command", command, "err", err)
-			return err
+		_, stderr, errCmd := runCommand(ctx, command)
+		if errCmd != nil {
+			log.Errorw("failed to stop wifi hotspot", "command", command, "err", errCmd, "stderr", stderr)
+			return errCmd
 		}
 	}
 	return nil

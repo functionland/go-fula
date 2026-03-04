@@ -17,11 +17,15 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /app ./cmd/blox && \
     CGO_ENABLED=0 GOOS=linux go build -o /initipfscluster ./modules/initipfscluster
 
 # Final stage
-FROM alpine:3.17
+FROM alpine:3.20
 
-# Install necessary packages
+# Install packages from stable repos (NM 1.46.6 — compatible with host NM 1.46.0)
+# IMPORTANT: Do NOT use edge/testing for networkmanager packages — a newer nmcli
+# than the host's NM daemon causes "unknown property" errors (e.g. mac-address-denylist)
 RUN apk update && \
-    apk add --no-cache hostapd iw wireless-tools networkmanager-wifi networkmanager-cli dhcp iptables curl mergerfs --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing
+    apk add --no-cache hostapd iw wireless-tools networkmanager-wifi networkmanager-cli \
+        networkmanager-dnsmasq dhcpcd iptables curl && \
+    apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing mergerfs
 
 WORKDIR /
 

@@ -2,6 +2,7 @@ package wifi
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -357,18 +358,49 @@ func WifiRemoveall(ctx context.Context) WifiRemoveallResponse {
 }
 
 func createConnection(ctx context.Context, connectionName, ssid, password string) error {
-	// Create a connection
+	// Create a connection via nmcli
 	cmd1 := exec.CommandContext(ctx, "nmcli", "con", "add", "type", "wifi", "ifname", "*", "con-name", connectionName, "ssid", ssid)
-	if err := runCommandDirect(cmd1); err != nil {
-		return err
+	var stderr1 bytes.Buffer
+	cmd1.Stderr = &stderr1
+	if err := cmd1.Run(); err != nil {
+		log.Errorw("nmcli con add failed, trying file-based fallback", "err", err, "stderr", stderr1.String())
+
+		// Fallback: write .nmconnection file directly (avoids nmcli version mismatch issues)
+		if fallbackErr := writeWifiConnectionFile(connectionName, ssid, password); fallbackErr != nil {
+			return fmt.Errorf("nmcli add failed (%w) and file fallback also failed (%v)", err, fallbackErr)
+		}
+		_, reloadStderr, reloadErr := runCommand(ctx, "nmcli connection reload")
+		if reloadErr != nil {
+			log.Errorw("failed to reload connections after file fallback", "err", reloadErr, "stderr", reloadStderr)
+			return fmt.Errorf("nmcli reload failed after file fallback: %w", reloadErr)
+		}
+		log.Infow("WiFi connection created via file-based fallback", "connection", connectionName)
+		return nil
 	}
 
 	// Modify the connection with security settings
 	cmd2 := exec.CommandContext(ctx, "nmcli", "con", "modify", connectionName, "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", password)
-	if err := runCommandDirect(cmd2); err != nil {
+	var stderr2 bytes.Buffer
+	cmd2.Stderr = &stderr2
+	if err := cmd2.Run(); err != nil {
+		log.Errorw("nmcli con modify failed", "err", err, "stderr", stderr2.String())
 		return err
 	}
 
+	return nil
+}
+
+// writeWifiConnectionFile writes a .nmconnection file for a WiFi client connection directly,
+// bypassing nmcli. This avoids version-mismatch issues where a newer nmcli sends
+// properties (like mac-address-denylist) that an older NM daemon doesn't recognize.
+func writeWifiConnectionFile(connectionName, ssid, password string) error {
+	content := fmt.Sprintf("[connection]\nid=%s\ntype=wifi\ninterface-name=*\n\n[wifi]\nssid=%s\n\n[wifi-security]\nkey-mgmt=wpa-psk\npsk=%s\n\n[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n",
+		connectionName, ssid, password)
+	path := fmt.Sprintf("/etc/NetworkManager/system-connections/%s.nmconnection", connectionName)
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		log.Errorw("failed to write fallback .nmconnection file", "path", path, "err", err)
+		return err
+	}
 	return nil
 }
 
@@ -607,16 +639,19 @@ func disconnectLinux(ctx context.Context) error {
 // This is used as a fallback when Wi-Fi connection fails
 func EnsureHotspotActive(ctx context.Context) error {
 	// Check if FxBlox connection exists and is active
-	stdout, _, err := runCommand(ctx, "nmcli -t -f NAME,STATE connection show --active")
+	stdout, stderr, err := runCommand(ctx, "nmcli -t -f NAME,STATE connection show --active")
 	if err == nil && strings.Contains(stdout, "FxBlox:activated") {
 		log.Info("FxBlox hotspot is already active")
 		return nil
 	}
+	if err != nil {
+		log.Warnf("Failed to check active connections: %v, stderr: %s", err, stderr)
+	}
 
 	// Try to activate existing FxBlox connection
-	_, _, err = runCommand(ctx, "nmcli connection up FxBlox")
+	_, stderr, err = runCommand(ctx, "nmcli connection up FxBlox")
 	if err != nil {
-		log.Warnf("Failed to activate existing FxBlox hotspot: %v", err)
+		log.Warnf("Failed to activate existing FxBlox hotspot: %v, stderr: %s", err, stderr)
 
 		// If activation fails, try to recreate the hotspot
 		return StartHotspot(ctx, true)
