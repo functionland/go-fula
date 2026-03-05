@@ -40,9 +40,33 @@ func (bl *FxBlockchain) handleAutoPinPair(from peer.ID, w http.ResponseWriter, r
 		props = make(map[string]interface{})
 	}
 
-	// Reject if already paired
-	if existingToken, ok := props["auto_pin_token"]; ok && existingToken != nil && existingToken != "" {
-		http.Error(w, `{"message":"already paired, unpair first"}`, http.StatusConflict)
+	// If already paired, return the existing credentials so the app can
+	// re-acquire them (e.g. after clearing storage). Update the token/endpoint
+	// in case they changed.
+	if existingSecret, ok := props["auto_pin_pairing_secret"]; ok && existingSecret != nil && existingSecret != "" {
+		// Update token and endpoint in case the cloud rotated them
+		props["auto_pin_token"] = req.PinningToken
+		props["auto_pin_endpoint"] = req.PinningEndpoint
+		if err := config.WriteProperties(props); err != nil {
+			log.Errorw("failed to update properties", "err", err)
+			http.Error(w, `{"message":"failed to update pairing config"}`, http.StatusInternalServerError)
+			return
+		}
+
+		hardwareID, err := wifi.GetHardwareID()
+		if err != nil {
+			log.Warnw("failed to get hardware ID", "err", err)
+			hardwareID = ""
+		}
+
+		resp := AutoPinPairResponse{
+			Status:        "already_paired",
+			PairingSecret: existingSecret.(string),
+			HardwareID:    hardwareID,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
