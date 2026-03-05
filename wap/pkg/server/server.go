@@ -454,16 +454,11 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the kubo peerID — mobile connects through kubo's libp2p, not the blox identity directly
-	kuboPeerID, err := wifi.GetKuboPeerID()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to get kubo peer ID: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+	// bloxPeerID is the kubo-derived peer ID (from deriveKuboKey in /app --initOnly).
+	// Use it directly — kubo hasn't started yet during initial setup, so GetKuboPeerID() would fail.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": kuboPeerID})
+	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": bloxPeerID})
 	if jsonErr != nil {
 		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		return
