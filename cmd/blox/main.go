@@ -20,6 +20,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -1089,7 +1090,23 @@ func action(ctx *cli.Context) error {
 	linkSystem := cidlink.DefaultLinkSystem()
 	linkSystem.StorageReadOpener = CustomStorageReadOpenerNone
 	linkSystem.StorageWriteOpener = CustomStorageWriteOpenerNone
-	nodeMultiAddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/5001")
+
+	// Read kubo API address from env (set in docker-compose.pc.yml for bridge networking)
+	kuboURL := os.Getenv("KUBO_API_URL")
+	if kuboURL == "" {
+		kuboURL = "http://127.0.0.1:5001"
+	}
+	kuboHostPort := strings.TrimPrefix(kuboURL, "http://")
+	kuboHost, kuboPort, err := net.SplitHostPort(kuboHostPort)
+	if err != nil {
+		kuboHost = kuboHostPort
+		kuboPort = "5001"
+	}
+	// Resolve hostname to IP for multiaddr (Docker DNS names like "kubo" → container IP)
+	if ips, err := net.LookupHost(kuboHost); err == nil && len(ips) > 0 {
+		kuboHost = ips[0]
+	}
+	nodeMultiAddr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", kuboHost, kuboPort))
 	if err != nil {
 		panic(fmt.Errorf("invalid multiaddress: %w", err))
 	}
@@ -1136,6 +1153,7 @@ func action(ctx *cli.Context) error {
 		blox.WithIpfsClient(node),
 		blox.WithPoolHostMode(app.poolHost),
 		blox.WithIpfsClusterAPI(ipfsClusterApi),
+		blox.WithKuboAPIAddr(kuboHostPort),
 	)
 	if err != nil {
 		return err

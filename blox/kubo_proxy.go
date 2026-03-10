@@ -67,7 +67,8 @@ func getProtocols() []p2pProtocol {
 // Detection order:
 //  1. docker0 interface IPv4 address (Docker default bridge gateway)
 //  2. Any Docker Compose bridge (br-<hash>) IPv4 address
-//  3. Fallback to 127.0.0.1 (works when kubo is also on host network)
+//  3. Container's own bridge IP (when go-fula runs inside a bridge-networked container)
+//  4. Fallback to 127.0.0.1 (works when kubo is also on host network)
 func resolveProxyTargetIP() string {
 	// 1. Try docker0 (default Docker bridge)
 	if ip := getIPv4FromInterface("docker0"); ip != "" {
@@ -88,7 +89,29 @@ func resolveProxyTargetIP() string {
 		}
 	}
 
-	// 3. Fallback
+	// 3. Container's own bridge IP (Docker bridge networking mode).
+	// When go-fula runs inside a container on a bridge network,
+	// docker0/br-* don't exist inside the container. Use the container's
+	// own IPv4 on its bridge interface (typically eth0), which is reachable
+	// from other containers on the same Docker Compose network.
+	if ifaces == nil {
+		ifaces, _ = net.Interfaces()
+	}
+	if ifaces != nil {
+		for _, iface := range ifaces {
+			if iface.Name == "lo" || strings.HasPrefix(iface.Name, "docker") ||
+				strings.HasPrefix(iface.Name, "br-") || strings.HasPrefix(iface.Name, "veth") {
+				continue
+			}
+			if ip := getIPv4FromInterface(iface.Name); ip != "" {
+				log.Infow("Detected container bridge IP for proxy target (bridge networking mode)",
+					"iface", iface.Name, "ip", ip)
+				return ip
+			}
+		}
+	}
+
+	// 4. Fallback
 	log.Debug("No Docker bridge interface found, using 127.0.0.1 for proxy target")
 	return "127.0.0.1"
 }
