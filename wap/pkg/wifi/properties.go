@@ -317,6 +317,9 @@ func GetClusterInfo() (GetClusterInfoResponse, error) {
 }
 
 func GetHardwareID() (string, error) {
+	if envID := os.Getenv("HARDWARE_ID"); envID != "" {
+		return envID, nil
+	}
 	cmd := "(cat /proc/cpuinfo | grep -i 'Serial' && cat /proc/cpuinfo | grep -i 'Hardware' && cat /proc/cpuinfo | grep -i 'Revision') | sha256sum | awk '{print $1}'"
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
