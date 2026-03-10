@@ -1198,7 +1198,7 @@ func (bl *FxBlockchain) discoverPoolAndChain(ctx context.Context, poolID uint32)
 
 		// Check if our peer ID is a member of this pool on this chain
 		membershipReq := IsMemberOfPoolRequest{
-			PeerID:    bl.selfPeerID.String(),
+			PeerID:    bl.clusterPeerID.String(),
 			PoolID:    poolID,
 			ChainName: chainName,
 		}

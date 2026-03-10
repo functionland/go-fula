@@ -33,6 +33,7 @@ type (
 		rpc                      *rpc.HttpApi
 		ipfsClusterApi           ipfsCluster.Client
 		selfPeerID               peer.ID      // Peer ID derived from private key, used for authorization checks
+		clusterPeerID            peer.ID      // IPFS cluster peer ID (original identity), used for on-chain pool membership
 		signingKey               crypto.PrivKey // Private key for signing outgoing requests (mobile client)
 		clientProtocolID         string        // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
 	}
@@ -222,6 +223,15 @@ func WithRelays(r []string) Option {
 func WithSelfPeerID(id peer.ID) Option {
 	return func(o *options) error {
 		o.selfPeerID = id
+		return nil
+	}
+}
+
+// WithClusterPeerID sets the IPFS cluster peer ID (original identity, not HMAC-derived).
+// This is the peer ID registered on-chain for pool membership checks.
+func WithClusterPeerID(id peer.ID) Option {
+	return func(o *options) error {
+		o.clusterPeerID = id
 		return nil
 	}
 }

@@ -24,6 +24,7 @@ type (
 	PoolNameGetter  func() string
 	options         struct {
 		selfPeerID            peer.ID
+		clusterPeerID         peer.ID
 		name                  string
 		topicName             string
 		chainName             string
@@ -121,6 +122,15 @@ func WithAuthorizer(id peer.ID) Option {
 func WithSelfPeerID(id peer.ID) Option {
 	return func(o *options) error {
 		o.selfPeerID = id
+		return nil
+	}
+}
+
+// WithClusterPeerID sets the IPFS cluster peer ID (original identity, not HMAC-derived).
+// This is the peer ID registered on-chain for pool membership.
+func WithClusterPeerID(id peer.ID) Option {
+	return func(o *options) error {
+		o.clusterPeerID = id
 		return nil
 	}
 }

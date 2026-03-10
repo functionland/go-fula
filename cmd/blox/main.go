@@ -1087,6 +1087,22 @@ func action(ctx *cli.Context) error {
 	}
 	logger.Infow("Derived kubo peer ID from private key", "peerID", selfPeerID.String())
 
+	// Compute cluster peer ID — the original identity (not HMAC-derived).
+	// This is the peer ID registered on-chain for pool membership.
+	clusterPrivKeyBytes, err := base64.StdEncoding.DecodeString(app.config.Identity)
+	if err != nil {
+		return fmt.Errorf("decoding cluster private key: %w", err)
+	}
+	clusterPrivKey, err := crypto.UnmarshalPrivateKey(clusterPrivKeyBytes)
+	if err != nil {
+		return fmt.Errorf("unmarshaling cluster private key: %w", err)
+	}
+	clusterPeerID, err := peer.IDFromPrivateKey(clusterPrivKey)
+	if err != nil {
+		return fmt.Errorf("deriving cluster peer ID: %w", err)
+	}
+	logger.Infow("Computed cluster peer ID (on-chain identity)", "clusterPeerID", clusterPeerID.String())
+
 	linkSystem := cidlink.DefaultLinkSystem()
 	linkSystem.StorageReadOpener = CustomStorageReadOpenerNone
 	linkSystem.StorageWriteOpener = CustomStorageWriteOpenerNone
@@ -1133,6 +1149,7 @@ func action(ctx *cli.Context) error {
 
 	bb, err := blox.New(
 		blox.WithSelfPeerID(selfPeerID),
+		blox.WithClusterPeerID(clusterPeerID),
 		blox.WithAuthorizer(authorizerPeerID),
 		blox.WithWg(&wg),
 		blox.WithLinkSystem(&linkSystem),

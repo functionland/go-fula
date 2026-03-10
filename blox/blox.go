@@ -81,6 +81,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithBlockchainEndPoint(p.blockchainEndpoint),
 		blockchain.WithSecretsPath(p.secretsPath),
 		blockchain.WithSelfPeerID(p.selfPeerID),
+		blockchain.WithClusterPeerID(p.clusterPeerID),
 		blockchain.WithTimeout(65),
 		blockchain.WithWg(p.wg),
 		blockchain.WithFetchFrequency(1*time.Minute),
@@ -456,7 +457,7 @@ func (p *Blox) Start(ctx context.Context) error {
 
 		for {
 			attempt++
-			log.Infow("Starting pool discovery", "attempt", attempt, "PeerID", p.selfPeerID.String())
+			log.Infow("Starting pool discovery", "attempt", attempt, "PeerID", p.selfPeerID.String(), "clusterPeerID", p.clusterPeerID.String())
 
 			// Try each chain
 			for _, chainName := range chainList {
@@ -481,7 +482,7 @@ func (p *Blox) Start(ctx context.Context) error {
 
 					// peerID format for membership check
 					membershipReq := blockchain.IsMemberOfPoolRequest{
-						PeerID:    p.selfPeerID.String(),
+						PeerID:    p.clusterPeerID.String(),
 						PoolID:    pool.ID,
 						ChainName: chainName,
 					}
@@ -537,7 +538,7 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 
 		if !found {
-			log.Warnw("Could not find pool membership on any chain", "peerID", p.selfPeerID.String(), "chains", chainList)
+			log.Warnw("Could not find pool membership on any chain", "clusterPeerID", p.clusterPeerID.String(), "chains", chainList)
 		}
 	}
 
