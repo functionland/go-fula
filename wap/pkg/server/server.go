@@ -172,6 +172,17 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 			response["ipfs_cluster_peer_id"] = clusterInfo.ClusterPeerID
 		}
 
+		// Include authorizer from config.yaml if not already in box_props.json.
+		// The PC installer's mDNS advertiser reads this to broadcast pairing state.
+		if response["authorizer"] == nil || response["authorizer"] == "" {
+			if cfgData, err := os.ReadFile(config.FULA_CONFIG_PATH); err == nil {
+				var fulaConfig Config
+				if err := yaml.Unmarshal(cfgData, &fulaConfig); err == nil && fulaConfig.Authorizer != "" {
+					response["authorizer"] = fulaConfig.Authorizer
+				}
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		jsonErr := json.NewEncoder(w).Encode(response)
