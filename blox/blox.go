@@ -566,6 +566,26 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 	}()
 	go func() {
+		// Wait for IPFS Cluster API to be reachable before calling RecoverAll.
+		clusterReady := false
+		for i := 0; i < 30; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			resp, err := http.Get("http://127.0.0.1:9094/id")
+			if err == nil {
+				resp.Body.Close()
+				clusterReady = true
+				break
+			}
+			time.Sleep(5 * time.Second)
+		}
+		if !clusterReady {
+			log.Warn("IPFS Cluster not reachable after waiting, skipping RecoverAll")
+			return
+		}
 		err := p.ipfsClusterApi.RecoverAll(ctx, true, recoverOut)
 		if err != nil {
 			log.Errorw("RecoverAll error", "err", err.Error())
