@@ -64,7 +64,8 @@ func newOptions(o ...Option) (*options, error) {
 		}
 	}
 	if opts.name == "" {
-		return nil, errors.New("blox pool name must be specified")
+		log.Warn("Pool name is empty, setting to '0' to trigger auto-discovery")
+		opts.name = "0"
 	}
 	if opts.pingCount <= 0 {
 		log.Warnf("ping count is not specified, using default of 5 instead of %d", opts.pingCount)
