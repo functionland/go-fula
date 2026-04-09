@@ -445,15 +445,19 @@ func (p *Blox) Start(ctx context.Context) error {
 		found := false
 		foundChain := ""
 
-		// Initial delay in seconds
+		// Initial delay before first attempt to allow network to come up
+		log.Infow("Waiting 30 seconds before pool discovery to allow network to stabilize")
+		time.Sleep(30 * time.Second)
+
+		// Delay between retries
 		delay := time.Duration(60) * time.Second
 		// Maximum number of retries
 		maxRetries := 5
 		// Attempt counter
 		attempt := 0
 
-		// List of chains to check (skale first as default)
-		chainList := []string{"skale", "base"}
+		// List of chains to check (base first as most pools are there)
+		chainList := []string{"base", "skale"}
 
 		for {
 			attempt++
