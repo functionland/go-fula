@@ -2,7 +2,6 @@ package blox
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"net/http"
 	"path"
