@@ -80,7 +80,11 @@ type IPFSConfig struct {
 		PeerID  string `json:"PeerID"`
 		PrivKey string `json:"PrivKey"`
 	} `json:"Identity"`
-	Internal struct{} `json:"Internal"`
+	// Use map[string]interface{} (not struct{}) so unknown nested fields like
+	// Internal.Libp2pForceReachability survive the read-modify-write cycle
+	// initipfs runs on the deployed config. Declaring this as struct{} would
+	// silently drop everything inside Internal on every fula_go startup.
+	Internal map[string]interface{} `json:"Internal"`
 	Ipns     struct {
 		RecordLifetime   string `json:"RecordLifetime"`
 		RepublishPeriod  string `json:"RepublishPeriod"`
@@ -449,6 +453,9 @@ func updateIPFSConfigBootstrap(ipfsCfg *IPFSConfig, predefinedBootstraps, bootst
 func writeIPFSConfig(path string, cfg IPFSConfig) {
 	if cfg.Bootstrap == nil {
 		cfg.Bootstrap = []string{}
+	}
+	if cfg.Internal == nil {
+		cfg.Internal = map[string]interface{}{}
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
