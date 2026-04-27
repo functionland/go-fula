@@ -31,6 +31,23 @@ const (
 
 	poolsAPIEndpoint             = "https://pools.fx.land/pools/"
 	serverKuboPeerIDCachePath    = "/internal/.tmp/pool_%s_server_kubo.tmp"
+
+	// Static relay PeerID — matches Peering.Peers / Swarm.RelayClient.StaticRelays
+	// in the kubo template config. The watchdog gates fula restarts on actual
+	// relay reachability so we don't restart-loop while internet is genuinely down.
+	staticRelayPeerID = "12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"
+
+	// Layer-2 fail-safe thresholds (silent when Layer 1's kubo
+	// Internal.Libp2pForceReachability=private keeps /p2p-circuit advertised).
+	relayCircuitMissingThreshold = 2               // 2 × healthCheckInterval ≈ 60s
+	minTimeBetweenFulaRestarts   = 5 * time.Minute // cooldown to prevent restart loops
+
+	// Marker file the host's commands.sh watches; mounted from /home/pi/commands
+	// (docker-compose.yml: /home/pi/:/home:rw,rshared on the go-fula service).
+	// The host handler runs `docker compose restart` (not just kubo) because
+	// ipfs-cluster's init-time peering registrations on kubo are lost on a
+	// kubo-only restart and only re-applied when cluster's init re-runs.
+	fulaRestartCommandPath = "/home/commands/.command_restart_fula"
 )
 
 type p2pProtocol struct {
@@ -264,6 +281,15 @@ func waitForKuboAndRegister(ctx context.Context, kuboAPI string) error {
 
 // watchKuboP2P periodically checks that kubo p2p listeners are active.
 // If kubo restarts, re-registers all protocols and the cluster forward.
+//
+// Also runs a Layer-2 fail-safe: if kubo's Identify Addresses lacks a
+// /p2p-circuit address for relayCircuitMissingThreshold consecutive cycles
+// while the static relay is still reachable, signal the host to restart
+// the fula stack (compose restart, not just kubo, so ipfs-cluster's init
+// re-runs and re-registers its peering/forward setup against the fresh
+// kubo). When Layer 1 (Internal.Libp2pForceReachability=private in the
+// kubo config) is in effect this path is silent because /p2p-circuit
+// stays continuously advertised.
 func (p *Blox) watchKuboP2P(ctx context.Context) {
 	kuboAPI := p.kuboAPIAddr
 	if kuboAPI == "" {
@@ -273,11 +299,15 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 	ticker := time.NewTicker(healthCheckInterval)
 	defer ticker.Stop()
 
+	var consecutiveCircuitMissing int
+	var lastRestartAt time.Time
+
 	for {
 		select {
 		case <-ticker.C:
 			if !checkKuboAlive(kuboAPI) {
 				log.Warn("Kubo not responding, will re-register when available")
+				consecutiveCircuitMissing = 0
 				continue
 			}
 			if !checkKuboP2PListeners(kuboAPI) {
@@ -302,6 +332,35 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 					}
 				}
 			}
+
+			if checkKuboHasCircuitAddress(kuboAPI) {
+				consecutiveCircuitMissing = 0
+				continue
+			}
+			consecutiveCircuitMissing++
+			log.Warnw("Kubo Identify is missing /p2p-circuit address",
+				"consecutive", consecutiveCircuitMissing,
+				"threshold", relayCircuitMissingThreshold)
+			if consecutiveCircuitMissing < relayCircuitMissingThreshold {
+				continue
+			}
+			if !checkRelayPeerConnected(kuboAPI, staticRelayPeerID) {
+				log.Debug("Relay peer not connected; deferring fula restart until connectivity returns")
+				consecutiveCircuitMissing = 0
+				continue
+			}
+			if time.Since(lastRestartAt) < minTimeBetweenFulaRestarts {
+				log.Infow("Skipping fula restart — cooldown not elapsed",
+					"elapsed", time.Since(lastRestartAt))
+				continue
+			}
+			log.Warn("Kubo has no circuit reservation; signaling host to restart fula stack")
+			if err := signalFulaRestart(); err != nil {
+				log.Errorw("Failed to signal fula restart", "err", err)
+				continue
+			}
+			lastRestartAt = time.Now()
+			consecutiveCircuitMissing = 0
 		case <-ctx.Done():
 			return
 		}
@@ -427,4 +486,90 @@ func checkClusterForward(kuboAPI string) bool {
 		}
 	}
 	return false
+}
+
+// checkKuboHasCircuitAddress returns true if kubo's /api/v0/id Addresses list
+// contains a /p2p-circuit address. That's the only address reachable from peers
+// behind NAT (which is everyone, including the mobile app), so its absence
+// means the device is unreachable over the internet — the bug this watchdog
+// catches if Layer 1 (Internal.Libp2pForceReachability=private) doesn't apply.
+func checkKuboHasCircuitAddress(kuboAPI string) bool {
+	url := fmt.Sprintf("http://%s/api/v0/id", kuboAPI)
+	resp, err := http.Post(url, "", nil)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var result struct {
+		Addresses []string `json:"Addresses"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false
+	}
+	for _, a := range result.Addresses {
+		if strings.Contains(a, "/p2p-circuit/") {
+			return true
+		}
+	}
+	return false
+}
+
+// checkRelayPeerConnected returns true if the static relay's PeerID appears in
+// kubo's swarm peers list. Gates kubo bounces on actual relay reachability: if
+// internet is down, bouncing won't acquire a reservation either, so we wait
+// until connectivity returns instead of restart-looping.
+func checkRelayPeerConnected(kuboAPI, relayPeerID string) bool {
+	url := fmt.Sprintf("http://%s/api/v0/swarm/peers", kuboAPI)
+	resp, err := http.Post(url, "", nil)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var result struct {
+		Peers []struct {
+			Peer string `json:"Peer"`
+		} `json:"Peers"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false
+	}
+	for _, p := range result.Peers {
+		if p.Peer == relayPeerID {
+			return true
+		}
+	}
+	return false
+}
+
+// signalFulaRestart drops a marker file the host's commands.sh watches via
+// inotify. The host handler runs `docker compose restart` for the whole fula
+// stack, not just kubo, because ipfs-cluster's init-time setup on kubo
+// (peering and p2p forward registrations) is lost on a kubo-only restart.
+// Removes any stale marker first so the create event fires reliably even if
+// commands.sh hasn't yet processed a previous file.
+func signalFulaRestart() error {
+	if err := os.MkdirAll(filepath.Dir(fulaRestartCommandPath), 0755); err != nil {
+		return fmt.Errorf("mkdir commands dir: %w", err)
+	}
+	_ = os.Remove(fulaRestartCommandPath)
+	f, err := os.Create(fulaRestartCommandPath)
+	if err != nil {
+		return fmt.Errorf("create command file: %w", err)
+	}
+	return f.Close()
+}
+
+// cleanupStaleRestartMarker removes any leftover marker file from a previous
+// process. Runs once at startup so a stale file never triggers an unwanted
+// restart on first commands.sh wake-up.
+func cleanupStaleRestartMarker() {
+	if err := os.Remove(fulaRestartCommandPath); err != nil && !os.IsNotExist(err) {
+		log.Warnw("Failed to clean stale fula-restart marker", "err", err)
+	}
 }

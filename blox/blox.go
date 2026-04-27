@@ -407,6 +407,10 @@ func (p *Blox) Start(ctx context.Context) error {
 		return err
 	}
 
+	// Clear any leftover restart-marker file from a previous process so it
+	// doesn't trigger an unwanted fula restart on first commands.sh tick.
+	cleanupStaleRestartMarker()
+
 	// Wait for kubo and register p2p protocols
 	kuboAPI := getKuboAPIAddr(p.kuboAPIAddr)
 	if err := waitForKuboAndRegister(ctx, kuboAPI); err != nil {
