@@ -40,7 +40,20 @@ const (
 	// Layer-2 fail-safe thresholds (silent when Layer 1's kubo
 	// Internal.Libp2pForceReachability=private keeps /p2p-circuit advertised).
 	relayCircuitMissingThreshold = 2               // 2 × healthCheckInterval ≈ 60s
-	minTimeBetweenFulaRestarts   = 5 * time.Minute // cooldown to prevent restart loops
+	minTimeBetweenFulaRestarts   = 5 * time.Minute // min interval between bounces
+
+	// Hard rate limit: at most this many bounces in any rolling restartRateWindow.
+	// Bounds worst-case downtime if bouncing doesn't fix the issue (e.g., relay
+	// genuinely unreachable from this network, or a bug we haven't seen yet).
+	maxRestartsPerWindow = 3
+	restartRateWindow    = 1 * time.Hour
+
+	// After a bounce, give kubo this long to come back and re-acquire a circuit
+	// before we judge the bounce as "did not help". Multiple consecutive
+	// unhelpful bounces escalate to a long cooldown.
+	bounceVerifyGracePeriod      = 3 * time.Minute
+	maxConsecutiveFailedRestarts = 3
+	longCooldownAfterFailures    = 1 * time.Hour
 
 	// Marker file the host's commands.sh watches; mounted from /home/pi/commands
 	// (docker-compose.yml: /home/pi/:/home:rw,rshared on the go-fula service).
@@ -301,6 +314,10 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 
 	var consecutiveCircuitMissing int
 	var lastRestartAt time.Time
+	var consecutiveFailedRestarts int
+	var longCooldownUntil time.Time
+	// Sliding window of recent restart timestamps for rate-limiting.
+	var restartHistory []time.Time
 
 	for {
 		select {
@@ -334,6 +351,16 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 			}
 
 			if checkKuboHasCircuitAddress(kuboAPI) {
+				// Circuit is present. If a restart was triggered within the
+				// last bounceVerifyGracePeriod, treat the recovery as
+				// successful and reset the consecutive-failure counter.
+				if !lastRestartAt.IsZero() && time.Since(lastRestartAt) < bounceVerifyGracePeriod {
+					if consecutiveFailedRestarts > 0 {
+						log.Infow("Last fula restart appears to have restored circuit; resetting failure counter",
+							"previousFailures", consecutiveFailedRestarts)
+					}
+					consecutiveFailedRestarts = 0
+				}
 				consecutiveCircuitMissing = 0
 				continue
 			}
@@ -344,22 +371,86 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 			if consecutiveCircuitMissing < relayCircuitMissingThreshold {
 				continue
 			}
+
+			// Gate 1: don't bounce while internet is genuinely down.
+			// The static relay must be reachable for a fresh reservation
+			// attempt to succeed.
 			if !checkRelayPeerConnected(kuboAPI, staticRelayPeerID) {
 				log.Debug("Relay peer not connected; deferring fula restart until connectivity returns")
 				consecutiveCircuitMissing = 0
 				continue
 			}
+
+			// Gate 2: long cooldown after repeated unhelpful bounces.
+			// If the last few bounces did not restore the circuit (within
+			// bounceVerifyGracePeriod), back off for longCooldownAfterFailures.
+			if !longCooldownUntil.IsZero() && time.Now().Before(longCooldownUntil) {
+				log.Infow("Skipping fula restart — extended cooldown after repeated failed bounces",
+					"remaining", time.Until(longCooldownUntil),
+					"failedRestarts", consecutiveFailedRestarts)
+				continue
+			}
+
+			// If a previous bounce already verified as failed, count it.
+			// We judge a bounce as failed if circuit is still missing
+			// bounceVerifyGracePeriod after the bounce.
+			if !lastRestartAt.IsZero() && time.Since(lastRestartAt) >= bounceVerifyGracePeriod {
+				// Only count once per failed bounce (next gate-1 reset clears it).
+				if consecutiveFailedRestarts == 0 || lastRestartAt.After(time.Now().Add(-bounceVerifyGracePeriod-minTimeBetweenFulaRestarts)) {
+					// no-op; we account for it on the actual bounce decision below
+				}
+			}
+
+			// Gate 3: short cooldown between back-to-back bounces.
 			if time.Since(lastRestartAt) < minTimeBetweenFulaRestarts {
 				log.Infow("Skipping fula restart — cooldown not elapsed",
 					"elapsed", time.Since(lastRestartAt))
 				continue
 			}
+
+			// Gate 4: sliding-window rate limit.
+			// Drop restart timestamps older than restartRateWindow.
+			now := time.Now()
+			cutoff := now.Add(-restartRateWindow)
+			pruned := restartHistory[:0]
+			for _, t := range restartHistory {
+				if t.After(cutoff) {
+					pruned = append(pruned, t)
+				}
+			}
+			restartHistory = pruned
+			if len(restartHistory) >= maxRestartsPerWindow {
+				log.Warnw("Skipping fula restart — sliding-window rate limit hit",
+					"restarts", len(restartHistory),
+					"window", restartRateWindow,
+					"oldestInWindow", now.Sub(restartHistory[0]))
+				continue
+			}
+
+			// All gates passed. If the previous bounce was already past
+			// its grace period and circuit is still missing, count it as failed.
+			if !lastRestartAt.IsZero() && time.Since(lastRestartAt) >= bounceVerifyGracePeriod {
+				consecutiveFailedRestarts++
+				log.Warnw("Previous fula restart did not restore circuit",
+					"consecutiveFailedRestarts", consecutiveFailedRestarts,
+					"max", maxConsecutiveFailedRestarts)
+				if consecutiveFailedRestarts >= maxConsecutiveFailedRestarts {
+					longCooldownUntil = now.Add(longCooldownAfterFailures)
+					log.Warnw("Too many consecutive failed restarts; entering extended cooldown",
+						"until", longCooldownUntil,
+						"duration", longCooldownAfterFailures)
+					consecutiveCircuitMissing = 0
+					continue
+				}
+			}
+
 			log.Warn("Kubo has no circuit reservation; signaling host to restart fula stack")
 			if err := signalFulaRestart(); err != nil {
 				log.Errorw("Failed to signal fula restart", "err", err)
 				continue
 			}
-			lastRestartAt = time.Now()
+			lastRestartAt = now
+			restartHistory = append(restartHistory, now)
 			consecutiveCircuitMissing = 0
 		case <-ctx.Done():
 			return
