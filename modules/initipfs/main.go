@@ -460,42 +460,57 @@ func writeIPFSConfig(path string, cfg IPFSConfig) {
 }
 
 func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
-	// Write version file
-	if err := os.WriteFile(ipfsDataPath+"/version", []byte("17"), 0644); err != nil {
-		fmt.Printf("Failed to write version file: %v\n", err)
+	// Write version file ONLY if it doesn't exist. Kubo manages this file —
+	// in particular, kubo bumps it during fs-repo migrations (e.g., 17→18 in
+	// kubo 0.40+). Unconditionally writing "17" here would overwrite kubo's
+	// updated value, causing kubo to re-run the migration on every startup,
+	// which in turn re-serialises the config and drops fields the migration's
+	// Config struct doesn't know about (e.g., Internal.Libp2pForceReachability).
+	versionPath := ipfsDataPath + "/version"
+	if _, err := os.Stat(versionPath); os.IsNotExist(err) {
+		if err := os.WriteFile(versionPath, []byte("17"), 0644); err != nil {
+			fmt.Printf("Failed to write version file: %v\n", err)
+			os.Exit(1)
+		}
+	} else if err != nil {
+		fmt.Printf("Failed to stat version file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Write datastore_spec file
-	// Populate the new structure
-
-	dsConfig := DatastoreConfig{
-		Mounts: []MountSingle{
-			{
-				Mountpoint: "/blocks",
-				Path:       ipfsDatastorePath + "/blocks",
-				ShardFunc:  "/repo/flatfs/shard/v1/next-to-last/2",
-				Type:       "flatfs",
+	// Write datastore_spec file ONLY if it doesn't exist. Kubo manages this
+	// file too; rewriting it on every start can mismatch kubo's actual
+	// datastore layout (especially after migrations like flatfs→pebbleds).
+	datastoreSpecPath := ipfsDataPath + "/datastore_spec"
+	if _, err := os.Stat(datastoreSpecPath); os.IsNotExist(err) {
+		dsConfig := DatastoreConfig{
+			Mounts: []MountSingle{
+				{
+					Mountpoint: "/blocks",
+					Path:       ipfsDatastorePath + "/blocks",
+					ShardFunc:  "/repo/flatfs/shard/v1/next-to-last/2",
+					Type:       "flatfs",
+				},
+				{
+					Mountpoint: "/",
+					Path:       ipfsDatastorePath + "/datastore",
+					Type:       "pebbleds",
+				},
 			},
-			{
-				Mountpoint: "/",
-				Path:       ipfsDatastorePath + "/datastore",
-				Type:       "pebbleds",
-			},
-		},
-		Type: "mount",
-	}
+			Type: "mount",
+		}
 
-	// Marshal the structure into JSON
-	dsConfigJSON, err := json.Marshal(dsConfig)
-	if err != nil {
-		fmt.Printf("Failed to marshal datastore config: %v\n", err)
-		os.Exit(1)
-	}
+		dsConfigJSON, err := json.Marshal(dsConfig)
+		if err != nil {
+			fmt.Printf("Failed to marshal datastore config: %v\n", err)
+			os.Exit(1)
+		}
 
-	// Write the JSON to the datastore_spec file
-	if err := os.WriteFile(ipfsDataPath+"/datastore_spec", dsConfigJSON, 0644); err != nil {
-		fmt.Printf("Failed to write datastore_spec file: %v\n", err)
+		if err := os.WriteFile(datastoreSpecPath, dsConfigJSON, 0644); err != nil {
+			fmt.Printf("Failed to write datastore_spec file: %v\n", err)
+			os.Exit(1)
+		}
+	} else if err != nil {
+		fmt.Printf("Failed to stat datastore_spec file: %v\n", err)
 		os.Exit(1)
 	}
 }
