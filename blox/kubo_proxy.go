@@ -319,6 +319,21 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 	// Sliding window of recent restart timestamps for rate-limiting.
 	var restartHistory []time.Time
 
+	// hasSeenCircuit tracks whether kubo has EVER acquired a /p2p-circuit
+	// address since this watchdog goroutine started. We don't trigger restarts
+	// until kubo has successfully bootstrapped at least one circuit reservation.
+	// This avoids:
+	//   - false-positive restarts during initial bootstrap (kubo can take
+	//     30-90s to acquire its first reservation after a fresh start);
+	//   - restart loops on devices where the relay is genuinely unreachable
+	//     (no point bouncing if a fresh start can't get a circuit either).
+	// Combined with the bootstrapGracePeriod below, this means: if the device
+	// reaches a healthy state once, the watchdog activates and protects against
+	// later flaps; if it never reaches a healthy state, we stay silent.
+	var hasSeenCircuit bool
+	startupAt := time.Now()
+	const bootstrapGracePeriod = 5 * time.Minute
+
 	for {
 		select {
 		case <-ticker.C:
@@ -351,6 +366,11 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 			}
 
 			if checkKuboHasCircuitAddress(kuboAPI) {
+				if !hasSeenCircuit {
+					log.Infow("Watchdog activated: kubo acquired its first /p2p-circuit address",
+						"sinceStartup", time.Since(startupAt))
+					hasSeenCircuit = true
+				}
 				// Circuit is present. If a restart was triggered within the
 				// last bounceVerifyGracePeriod, treat the recovery as
 				// successful and reset the consecutive-failure counter.
@@ -364,10 +384,32 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 				consecutiveCircuitMissing = 0
 				continue
 			}
+
+			// Bootstrap guard: don't accumulate misses or trigger restarts
+			// until kubo has successfully acquired at least one /p2p-circuit
+			// address. This prevents false-positive restarts during the
+			// initial libp2p bootstrap period, which can take 30-90s on a
+			// fresh start (or longer on slow networks). Also prevents
+			// restart loops on devices where the relay is genuinely
+			// unreachable from this network.
+			//
+			// As a safety hatch: if kubo has been up for longer than
+			// bootstrapGracePeriod and still has no circuit, we DO start
+			// counting — at that point something is genuinely wrong and
+			// the rate-limited restart logic below is appropriate.
+			if !hasSeenCircuit && time.Since(startupAt) < bootstrapGracePeriod {
+				log.Debugw("Bootstrap phase: deferring watchdog action until first /p2p-circuit",
+					"sinceStartup", time.Since(startupAt),
+					"grace", bootstrapGracePeriod)
+				consecutiveCircuitMissing = 0
+				continue
+			}
+
 			consecutiveCircuitMissing++
 			log.Warnw("Kubo Identify is missing /p2p-circuit address",
 				"consecutive", consecutiveCircuitMissing,
-				"threshold", relayCircuitMissingThreshold)
+				"threshold", relayCircuitMissingThreshold,
+				"hasSeenCircuit", hasSeenCircuit)
 			if consecutiveCircuitMissing < relayCircuitMissingThreshold {
 				continue
 			}
