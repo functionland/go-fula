@@ -466,29 +466,58 @@ func writeIPFSConfig(path string, cfg IPFSConfig) {
 	}
 }
 
+// missingOrEmpty returns true if the file at path does not exist or has zero
+// length. Treating an empty file like a missing one is important: older
+// fula-ota install scripts pre-touched these placeholders, and any code path
+// that crashes between create() and write() would leave an empty file behind.
+// Kubo refuses to start in either case.
+func missingOrEmpty(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return info.Size() == 0, nil
+}
+
 func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
-	// Write version file ONLY if it doesn't exist. Kubo manages this file —
-	// in particular, kubo bumps it during fs-repo migrations (e.g., 17→18 in
-	// kubo 0.40+). Unconditionally writing "17" here would overwrite kubo's
-	// updated value, causing kubo to re-run the migration on every startup,
-	// which in turn re-serialises the config and drops fields the migration's
-	// Config struct doesn't know about (e.g., Internal.Libp2pForceReachability).
+	// Write version file ONLY if it doesn't exist or is empty. Kubo manages
+	// this file once kubo is running — in particular, kubo bumps it during
+	// fs-repo migrations. Don't overwrite an existing non-empty value: kubo
+	// re-running a migration on startup re-serialises the config and drops
+	// fields the migration's Config struct doesn't know about (e.g.,
+	// Internal.Libp2pForceReachability).
+	//
+	// Write "18" to match kubo 0.41's current RepoVersion. The 17→18 migration
+	// only merges Provider+Reprovider into Provide; kubo-container-init.d.sh
+	// already strips both before kubo starts, so the migration is a no-op for
+	// us. Writing "18" directly skips it entirely.
 	versionPath := ipfsDataPath + "/version"
-	if _, err := os.Stat(versionPath); os.IsNotExist(err) {
-		if err := os.WriteFile(versionPath, []byte("17"), 0644); err != nil {
-			fmt.Printf("Failed to write version file: %v\n", err)
-			os.Exit(1)
-		}
-	} else if err != nil {
+	needWrite, err := missingOrEmpty(versionPath)
+	if err != nil {
 		fmt.Printf("Failed to stat version file: %v\n", err)
 		os.Exit(1)
 	}
+	if needWrite {
+		if err := os.WriteFile(versionPath, []byte("18"), 0644); err != nil {
+			fmt.Printf("Failed to write version file: %v\n", err)
+			os.Exit(1)
+		}
+	}
 
-	// Write datastore_spec file ONLY if it doesn't exist. Kubo manages this
-	// file too; rewriting it on every start can mismatch kubo's actual
-	// datastore layout (especially after migrations like flatfs→pebbleds).
+	// Write datastore_spec file ONLY if it doesn't exist or is empty. Kubo
+	// manages this file too; rewriting it on every start can mismatch kubo's
+	// actual datastore layout (especially after migrations like
+	// flatfs→pebbleds).
 	datastoreSpecPath := ipfsDataPath + "/datastore_spec"
-	if _, err := os.Stat(datastoreSpecPath); os.IsNotExist(err) {
+	needWrite, err = missingOrEmpty(datastoreSpecPath)
+	if err != nil {
+		fmt.Printf("Failed to stat datastore_spec file: %v\n", err)
+		os.Exit(1)
+	}
+	if needWrite {
 		dsConfig := DatastoreConfig{
 			Mounts: []MountSingle{
 				{
@@ -516,8 +545,5 @@ func writePredefinedFiles(ipfsDataPath, ipfsDatastorePath string) {
 			fmt.Printf("Failed to write datastore_spec file: %v\n", err)
 			os.Exit(1)
 		}
-	} else if err != nil {
-		fmt.Printf("Failed to stat datastore_spec file: %v\n", err)
-		os.Exit(1)
 	}
 }
