@@ -187,7 +187,20 @@ func handleServerLifecycle(ctx context.Context, serverControl chan bool) {
 			serverMutex.Lock()
 			if start {
 				if server == nil {
-					// Start the server
+					// Reload config so the mDNS TXT broadcast reflects
+					// fields that get populated AFTER the initial
+					// LoadConfig() call in handleAppState — most notably
+					// poolName and authorizer, which the blox process
+					// writes into config.yaml only AFTER pool discovery
+					// completes (~30s post-boot). Without this reload
+					// the wap process caches the bootstrap-time values
+					// ("NA") for its entire lifetime, the app's
+					// findAuthorizedBlox sees authorizer="NA" instead of
+					// the user's appPeerId, and discovery dashboards
+					// show the device as unauthorized with an empty pool.
+					// The 5s ticker that bounces this server now also
+					// gives us a free refresh cycle.
+					mdns.LoadConfig()
 					server = mdns.StartServer(ctx, 8080) // Adjust port as necessary
 					log.Debug("mDNS server started")
 				}
