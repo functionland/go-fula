@@ -3,8 +3,10 @@ package fulamobile
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/functionland/go-fula/blockchain"
@@ -32,6 +34,11 @@ import (
 
 var rootDatastoreKey = datastore.NewKey("/")
 
+// ErrClientClosed is returned by host-using operations (e.g. ConnectToBlox,
+// Ping) that are invoked after Shutdown has been called. After Shutdown the
+// Client is terminal and must be discarded; callers should create a new Client.
+var ErrClientClosed = errors.New("fula mobile client is closed")
+
 type Client struct {
 	h       host.Host
 	ds      datastore.Batching
@@ -47,7 +54,17 @@ type Client struct {
 	ipfsDHTCancel context.CancelFunc
 
 	streams map[string]*blockchain.StreamBuffer // Map of active streams
-	mu      sync.Mutex                          // Mutex for thread-safe access
+	mu      sync.Mutex                          // Mutex for thread-safe access (guards streams)
+
+	// Lifecycle synchronization (separate from `mu`, which only guards streams).
+	// Host-using operations (ConnectToBlox, Ping) run under beginOp/inflight so
+	// that Shutdown can cancel them and wait for them to finish BEFORE it closes
+	// the libp2p host / datastore — preventing use-during-shutdown crashes.
+	lifeMu   sync.Mutex         // serializes the "admit op" vs "begin shutdown" transition
+	closed   atomic.Bool        // set once by Shutdown; further ops are rejected
+	inflight sync.WaitGroup     // counts in-flight host-using operations
+	opCtx    context.Context    // parent context for host-using ops; cancelled by Shutdown
+	opCancel context.CancelFunc // cancels opCtx (and thus all in-flight ops)
 }
 
 func NewClient(cfg *Config) (*Client, error) {
@@ -59,7 +76,37 @@ func NewClient(cfg *Config) (*Client, error) {
 	// Initialize the streams map for managing active streaming sessions
 	mc.streams = make(map[string]*blockchain.StreamBuffer)
 
+	// Lifecycle context: parent for all host-using operations. Shutdown cancels
+	// this to abort in-flight ops promptly (rather than waiting out their own
+	// 60s timeouts).
+	mc.opCtx, mc.opCancel = context.WithCancel(context.Background())
+
 	return &mc, nil
+}
+
+// beginOp admits a host-using operation. It returns a context derived from the
+// client's lifecycle context (so Shutdown can cancel the op promptly) and a
+// release func that the caller MUST defer. If the client has already been shut
+// down it returns ErrClientClosed and the op must not run.
+//
+// The lifeMu lock makes the (closed-check + inflight.Add) here atomic with
+// respect to Shutdown's (closed-set + opCancel), which closes the classic
+// "WaitGroup Add after Wait" race: once Shutdown has set `closed` under lifeMu,
+// no new op can Add to inflight, so Shutdown's subsequent inflight.Wait() is
+// guaranteed to drain every op that will ever touch the host.
+func (c *Client) beginOp() (context.Context, func(), error) {
+	c.lifeMu.Lock()
+	defer c.lifeMu.Unlock()
+	if c.closed.Load() {
+		return nil, nil, ErrClientClosed
+	}
+	c.inflight.Add(1)
+	ctx, cancel := context.WithCancel(c.opCtx)
+	done := func() {
+		cancel()
+		c.inflight.Done()
+	}
+	return ctx, done, nil
 }
 
 // ensureConnected attempts to connect to blox using peerstore addresses (direct + relay),
@@ -129,10 +176,16 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 // direct → relay → DHT fallback. This function can be used to check if blox
 // is currently accessible.
 func (c *Client) ConnectToBlox() error {
+	opCtx, done, err := c.beginOp()
+	if err != nil {
+		return err
+	}
+	defer done()
+
 	if _, ok := c.ex.(exchange.NoopExchange); ok {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(opCtx, 60*time.Second)
 	defer cancel()
 	return c.ensureConnected(ctx)
 }
@@ -149,7 +202,13 @@ func (c *Client) Ping() ([]byte, error) {
 		Errors     []string `json:"errors"`
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	opCtx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+
+	ctx, cancel := context.WithTimeout(opCtx, 60*time.Second)
 	defer cancel()
 
 	// Ensure we're connected (direct → relay → DHT)
@@ -218,7 +277,28 @@ func (c *Client) SetAuth(on string, subject string, allow bool) error {
 
 // Shutdown closes all resources used by Client.
 // After calling this function Client must be discarded.
+//
+// Shutdown first marks the client closed (atomically with op-admission, under
+// lifeMu) and cancels the lifecycle context so any in-flight host-using
+// operation (ConnectToBlox/Ping) aborts promptly, then waits for those
+// operations to return BEFORE closing the libp2p host / datastore they use.
+// This prevents the use-during-shutdown crash where an orphaned ConnectToBlox
+// (e.g. one the mobile caller timed out on but could not interrupt) touches a
+// host/datastore that Shutdown has already closed. Idempotent.
 func (c *Client) Shutdown() error {
+	c.lifeMu.Lock()
+	if !c.closed.CompareAndSwap(false, true) {
+		c.lifeMu.Unlock()
+		return nil // already shut down
+	}
+	if c.opCancel != nil {
+		c.opCancel()
+	}
+	c.lifeMu.Unlock()
+
+	// Drain in-flight host-using ops (now cancelled) before freeing the host/DS.
+	c.inflight.Wait()
+
 	ctx := context.TODO()
 	xErr := c.ex.Shutdown(ctx)
 	// Shut down IPFS DHT before closing the host
