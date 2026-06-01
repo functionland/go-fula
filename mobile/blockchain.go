@@ -21,20 +21,32 @@ type PluginParam struct {
 // AccountExists requests blox at Config.BloxAddr to check if the account exists or not.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) AccountExists(account string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.AccountExists(ctx, c.bloxPid, blockchain.AccountExistsRequest{Account: account})
 }
 
 // AccountCreate requests blox at Config.BloxAddr to create a account.
 func (c *Client) AccountCreate() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.AccountCreate(ctx, c.bloxPid)
 }
 
 // AccountBalance requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) AccountBalance(account string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.AccountBalance(ctx, c.bloxPid, blockchain.AccountBalanceRequest{Account: account})
 }
 
@@ -45,7 +57,11 @@ type AssetsBalanceResponse struct {
 // AssetsBalance requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) AssetsBalance(account string, assetId int, classId int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	responseBytes, err := c.bl.AssetsBalance(ctx, c.bloxPid, blockchain.AssetsBalanceRequest{Account: account, AssetId: uint64(assetId), ClassId: uint64(classId)})
 	if err != nil {
 		return nil, err
@@ -75,7 +91,11 @@ func (c *Client) AssetsBalance(account string, assetId int, classId int) ([]byte
 // AccountFund requests blox at Config.BloxAddr to fund the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) AccountFund(account string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	amountString := "1000000000000000000"
 
 	// Create a new big.Int
@@ -92,7 +112,11 @@ func (c *Client) AccountFund(account string) ([]byte, error) {
 }
 
 func (c *Client) TransferToFula(amountStr string, walletAccount string, chain string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	// Convert amount from string to uint64
 	amount, err := strconv.ParseUint(amountStr, 10, 64)
 	if err != nil {
@@ -110,7 +134,11 @@ func (c *Client) TransferToFula(amountStr string, walletAccount string, chain st
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
 func (c *Client) PoolJoin(poolID int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{PoolID: poolID, PeerID: c.bloxPid.String()})
 }
 
@@ -118,7 +146,11 @@ func (c *Client) PoolJoin(poolID int) ([]byte, error) {
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
 func (c *Client) PoolJoinWithChain(poolID int, chainName string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolJoin(ctx, c.bloxPid, blockchain.PoolJoinRequest{
 		PoolID:    poolID,
 		PeerID:    c.bloxPid.String(),
@@ -130,28 +162,44 @@ func (c *Client) PoolJoinWithChain(poolID int, chainName string) ([]byte, error)
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
 func (c *Client) PoolCancelJoin(poolID int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolCancelJoin(ctx, c.bloxPid, blockchain.PoolCancelJoinRequest{PoolID: poolID})
 }
 
 // PoolListRequests requests blox at Config.BloxAddr to list the join request for a pool with the id.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) PoolRequests(poolID int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolRequests(ctx, c.bloxPid, blockchain.PoolRequestsRequest{PoolID: poolID})
 }
 
 // PoolList requests blox at Config.BloxAddr to list the pools.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) PoolList() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolList(ctx, c.bloxPid, blockchain.PoolListRequest{})
 }
 
 // PoolUserList requests blox at Config.BloxAddr to list the input pool users.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) PoolUserList(poolID int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolUserList(ctx, c.bloxPid, blockchain.PoolUserListRequest{PoolID: poolID})
 }
 
@@ -159,7 +207,11 @@ func (c *Client) PoolUserList(poolID int) ([]byte, error) {
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
 func (c *Client) PoolLeave(poolID int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{PoolID: poolID})
 }
 
@@ -167,7 +219,11 @@ func (c *Client) PoolLeave(poolID int) ([]byte, error) {
 // the addr must be a valid multiaddr that includes peer ID.
 // Note that this call is only allowed on a user's own blox
 func (c *Client) PoolLeaveWithChain(poolID int, chainName string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.PoolLeave(ctx, c.bloxPid, blockchain.PoolLeaveRequest{
 		PoolID:    poolID,
 		ChainName: chainName,
@@ -177,18 +233,32 @@ func (c *Client) PoolLeaveWithChain(poolID int, chainName string) ([]byte, error
 // ManifestAvailable requests blox at Config.BloxAddr to list manifests
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) ManifestAvailable(poolID int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.ManifestAvailable(ctx, c.bloxPid, blockchain.ManifestAvailableRequest{PoolID: poolID})
 }
 
 func (c *Client) BatchUploadManifest(cidsBytes []byte, poolID int, replicationFactor int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	cidArray := strings.Split(string(cidsBytes), "|")
 	return c.bl.ManifestBatchUpload(ctx, c.bloxPid, blockchain.ManifestBatchUploadMobileRequest{Cid: cidArray, PoolID: poolID, ReplicationFactor: replicationFactor})
 }
 
 func (c *Client) ReplicateInPool(cidsBytes []byte, account string, poolID int) []byte {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		errJSON := map[string]string{"error": err.Error()}
+		errBytes, _ := json.Marshal(errJSON)
+		return errBytes
+	}
+	defer done()
 	cidArray := strings.Split(string(cidsBytes), "|")
 
 	responseBytes, err := c.bl.ReplicateInPool(ctx, c.bloxPid, blockchain.ReplicateRequest{Cids: cidArray, Account: account, PoolID: poolID})
@@ -212,31 +282,51 @@ func (c *Client) ReplicateInPool(cidsBytes []byte, account string, poolID int) [
 
 // BloxFreeSpace requests the blox avail/used free space information.
 func (c *Client) BloxFreeSpace() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.BloxFreeSpace(ctx, c.bloxPid)
 }
 
 // EraseBlData requests the blox to erase the data related to blockchain
 func (c *Client) EraseBlData() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.EraseBlData(ctx, c.bloxPid)
 }
 
 // WifiRemoveall requests the blox to remove all saved wifis
 func (c *Client) WifiRemoveall() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.WifiRemoveall(ctx, c.bloxPid)
 }
 
 // Reboot requests the blox to reboot
 func (c *Client) Reboot() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.Reboot(ctx, c.bloxPid)
 }
 
 // Reboot requests the blox to reboot
 func (c *Client) DeleteWifi(name string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	// Create the DeleteWifiRequest
 	req := wifi.DeleteWifiRequest{
 		ConnectionName: name,
@@ -246,7 +336,11 @@ func (c *Client) DeleteWifi(name string) ([]byte, error) {
 
 // Reboot requests the blox to reboot
 func (c *Client) DisconnectWifi(name string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	// Create the DeleteWifiRequest
 	req := wifi.DeleteWifiRequest{
 		ConnectionName: name,
@@ -256,34 +350,57 @@ func (c *Client) DisconnectWifi(name string) ([]byte, error) {
 
 // Partition requests the blox to partition ssd and nvme
 func (c *Client) Partition() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.Partition(ctx, c.bloxPid)
 }
 
 // DeleteFulaConfig deletes config.yaml file
 func (c *Client) DeleteFulaConfig() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.DeleteFulaConfig(ctx, c.bloxPid)
 }
 
 // GetAccount requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) GetAccount() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetAccount(ctx, c.bloxPid)
 }
 
 // GetAccount requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) FetchContainerLogs(ContainerName string, TailCount string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.FetchContainerLogs(ctx, c.bloxPid, wifi.FetchContainerLogsRequest{ContainerName: ContainerName, TailCount: TailCount})
 }
 
 func (c *Client) ChatWithAI(aiModel string, userMessage string) ([]byte, error) {
-	ctx := context.TODO()
+	// Gate the initial request so it can't race Shutdown and nil-deref c.bl.
+	// Use context.TODO (not the op ctx) for the call itself so the streaming
+	// buffer outlives this function; done() only needs to bound the setup call.
+	_, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 
-	buffer, err := c.bl.ChatWithAI(ctx, c.bloxPid, wifi.ChatWithAIRequest{
+	buffer, err := c.bl.ChatWithAI(context.TODO(), c.bloxPid, wifi.ChatWithAIRequest{
 		AIModel:     aiModel,
 		UserMessage: userMessage,
 	})
@@ -339,77 +456,129 @@ func (c *Client) GetStreamIterator(streamID string) (*StreamIterator, error) {
 // GetAccount requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) FindBestAndTargetInLogs(NodeContainerName string, TailCount string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.FindBestAndTargetInLogs(ctx, c.bloxPid, wifi.FindBestAndTargetInLogsRequest{NodeContainerName: NodeContainerName, TailCount: TailCount})
 }
 
 // GetAccount requests blox at Config.BloxAddr to get the balance of the account.
 // the addr must be a valid multiaddr that includes peer ID.
 func (c *Client) GetFolderSize(folderPath string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetFolderSize(ctx, c.bloxPid, wifi.GetFolderSizeRequest{FolderPath: folderPath})
 }
 
 func (c *Client) GetDatastoreSize() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetDatastoreSize(ctx, c.bloxPid, wifi.GetDatastoreSizeRequest{})
 }
 
 // GetDockerImageBuildDates fetches build dates of all Docker images running on the blox.
 func (c *Client) GetDockerImageBuildDates() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetDockerImageBuildDates(ctx, c.bloxPid)
 }
 
 // GetClusterInfo fetches the ipfs-cluster peer ID and peer name from the blox.
 func (c *Client) GetClusterInfo() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetClusterInfo(ctx, c.bloxPid)
 }
 
 // ListPlugins requests the blox to list all available plugins
 func (c *Client) ListPlugins() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.ListPlugins(ctx, c.bloxPid)
 }
 
 func (c *Client) ListActivePlugins() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.ListActivePlugins(ctx, c.bloxPid)
 }
 
 // InstallPlugin requests the blox to install a specific plugin
 func (c *Client) InstallPlugin(pluginName string, params string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.InstallPlugin(ctx, c.bloxPid, pluginName, params)
 }
 
 // UninstallPlugin requests the blox to uninstall a specific plugin
 func (c *Client) UninstallPlugin(pluginName string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.UninstallPlugin(ctx, c.bloxPid, pluginName)
 }
 
 // ShowPluginStatus requests the status of a specific plugin
 func (c *Client) ShowPluginStatus(pluginName string, lines int) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.ShowPluginStatus(ctx, pluginName, lines)
 }
 
 // InstallPlugin requests the blox to install a specific plugin
 func (c *Client) GetInstallOutput(pluginName string, params string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetInstallOutput(ctx, c.bloxPid, pluginName, params)
 }
 
 // InstallPlugin requests the blox to install a specific plugin
 func (c *Client) GetInstallStatus(pluginName string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.GetInstallStatus(ctx, c.bloxPid, pluginName)
 }
 
 func (c *Client) UpdatePlugin(pluginName string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.UpdatePlugin(ctx, c.bloxPid, pluginName)
 }
 
@@ -419,7 +588,11 @@ func (c *Client) UpdatePlugin(pluginName string) ([]byte, error) {
 
 // AutoPinPair sends a pairing request to the blox with pinning service credentials.
 func (c *Client) AutoPinPair(token string, endpoint string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.AutoPinPair(ctx, c.bloxPid, blockchain.AutoPinPairRequest{
 		PinningToken:    token,
 		PinningEndpoint: endpoint,
@@ -428,7 +601,11 @@ func (c *Client) AutoPinPair(token string, endpoint string) ([]byte, error) {
 
 // AutoPinRefresh refreshes the pinning service token on the blox.
 func (c *Client) AutoPinRefresh(token string) ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.AutoPinRefresh(ctx, c.bloxPid, blockchain.AutoPinRefreshRequest{
 		PinningToken: token,
 	})
@@ -436,6 +613,10 @@ func (c *Client) AutoPinRefresh(token string) ([]byte, error) {
 
 // AutoPinUnpair removes auto-pin configuration from the blox.
 func (c *Client) AutoPinUnpair() ([]byte, error) {
-	ctx := context.TODO()
+	ctx, done, err := c.beginOp()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return c.bl.AutoPinUnpair(ctx, c.bloxPid)
 }
