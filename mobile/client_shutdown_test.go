@@ -108,3 +108,39 @@ func TestShutdownIsIdempotent(t *testing.T) {
 	require.NoError(t, c.Shutdown())
 	require.NoError(t, c.Shutdown())
 }
+
+// TestBlockchainMethodsAfterShutdownReturnErrClosed is the regression test for
+// the re-setup crash (Android SIGSEGV nil-deref, addr=0xb8 -> SIGABRT): the
+// ~40 c.bl.* blockchain/hardware methods were NOT gated by beginOp, so when the
+// shared client was torn down (logout + Shutdown + newClient on re-setup) while
+// Blox.screen kept polling, an in-flight read (BloxFreeSpace / GetFolderSize /
+// ListActivePlugins) dereferenced freed client state and crashed the process.
+//
+// #241 only gated ConnectToBlox/Ping; this asserts the blockchain reads named in
+// the crash log are now rejected with ErrClientClosed after Shutdown instead of
+// proceeding to touch the closed client. Pre-fix these panic/return-garbage;
+// post-fix they return ErrClientClosed.
+func TestBlockchainMethodsAfterShutdownReturnErrClosed(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(c *Client) error
+	}{
+		{"BloxFreeSpace", func(c *Client) error { _, err := c.BloxFreeSpace(); return err }},
+		{"GetFolderSize", func(c *Client) error { _, err := c.GetFolderSize("/uniondrive/chain"); return err }},
+		{"GetDatastoreSize", func(c *Client) error { _, err := c.GetDatastoreSize(); return err }},
+		{"ListActivePlugins", func(c *Client) error { _, err := c.ListActivePlugins(); return err }},
+		{"GetClusterInfo", func(c *Client) error { _, err := c.GetClusterInfo(); return err }},
+		{"PoolList", func(c *Client) error { _, err := c.PoolList(); return err }},
+		{"AccountExists", func(c *Client) error { _, err := c.AccountExists("acct"); return err }},
+		{"ChatWithAI", func(c *Client) error { _, err := c.ChatWithAI("model", "hi"); return err }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newNoopClient(t)
+			require.NoError(t, c.Shutdown())
+			err := tc.call(c)
+			require.ErrorIs(t, err, ErrClientClosed,
+				"%s after Shutdown must return ErrClientClosed, not proceed to use the closed client", tc.name)
+		})
+	}
+}
