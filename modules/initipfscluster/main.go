@@ -67,6 +67,18 @@ func main() {
 		}
 	}
 
+	// Docker bind-mount footgun guard: a plugin's *file* bind-mount (blox-ai) can
+	// create identity.json as a DIRECTORY when the real file is absent at
+	// container-create time. os.WriteFile below would then fail ("is a directory")
+	// and panic, leaving the cluster wedged. Remove a directory-shaped path so the
+	// real (deterministic) file can be written.
+	if fi, err := os.Stat(identityPath); err == nil && fi.IsDir() {
+		fmt.Println("identity.json is a directory (bind-mount artifact); removing before write")
+		if err := os.RemoveAll(identityPath); err != nil {
+			panic(fmt.Errorf("removing directory-shaped identity.json: %v", err))
+		}
+	}
+
 	// Create directory and write identity.json
 	if err := os.MkdirAll(clusterDir, 0755); err != nil {
 		panic(fmt.Errorf("creating ipfs-cluster directory: %v", err))
