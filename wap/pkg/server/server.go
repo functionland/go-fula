@@ -890,19 +890,22 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 					break
 				}
 
-				// Check if the interface with the target IP exists
-				interfaces, err := net.Interfaces()
-				if err != nil {
-					log.Warnw("Failed to get network interfaces", "err", err)
+				// Check if the interface with the target IP exists.
+				// NOTE: these must NOT be `err` — the outer `err` is what line ~956 checks to decide whether the
+				// server starts, and shadowing it here meant a successful late bind below never cleared the
+				// original "cannot assign requested address" failure. See the bind block for the full story.
+				interfaces, ifaceErr := net.Interfaces()
+				if ifaceErr != nil {
+					log.Warnw("Failed to get network interfaces", "err", ifaceErr)
 					time.Sleep(attemptDelay)
 					continue
 				}
 
 				interfaceFound := false
 				for _, iface := range interfaces {
-					addrs, err := iface.Addrs()
-					if err != nil {
-						log.Warnw("Failed to get addresses for interface", "interface", iface.Name, "err", err)
+					addrs, addrErr := iface.Addrs()
+					if addrErr != nil {
+						log.Warnw("Failed to get addresses for interface", "interface", iface.Name, "err", addrErr)
 						continue
 					}
 
@@ -924,7 +927,13 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 					}
 				}
 
-				// If interface is found, try to bind
+				// If interface is found, try to bind.
+				// `err` here is deliberately the OUTER err (assigned, not declared): it is what the check after
+				// this loop tests. Before this was fixed, `net.Interfaces()` above shadowed it, so a successful
+				// bind left the outer err holding the original failure and the server logged
+				// "Successfully bound ..." immediately followed by "... Server will not start." — the whole
+				// wait-for-hotspot path could only ever fail, and the bound listener was dropped unused.
+				// Any fula_go restart while the AP was down therefore left the box with no WAP API until reboot.
 				if interfaceFound {
 					ln, err = net.Listen("tcp", listenAddr)
 					if err == nil {
