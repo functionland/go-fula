@@ -871,6 +871,13 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 
 	// Try to listen on the target address
 	ln, err := net.Listen("tcp", listenAddr)
+
+	// Bring up the listeners that do NOT depend on the hotspot before waiting for it. The wait loop below
+	// blocks this function for up to 10 minutes, and the on-box scripts talk to 127.0.0.1:3500 — so starting
+	// loopback afterwards meant that after any restart with the AP down, nothing on the box could reach the
+	// API for ten minutes, and a box whose AP never returned got no server at all.
+	startAuxListeners(mc, &successfulAddresses, mux, port, ip)
+
 	if err != nil {
 		log.Errorw("Failed to use default IP address for serve", "err", err)
 
@@ -961,10 +968,16 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 			}
 		}
 
-		// If we still can't bind to the target IP after waiting, return without starting the server
+		// If we still can't bind to the target IP after waiting, carry on WITHOUT the hotspot listener.
+		//
+		// This used to `return mc`, which also skipped the loopback and LAN listeners below — so a box whose
+		// AP was down (the normal state once it has joined Wi-Fi, and what a container restart leaves behind,
+		// since the FxBlox connection has autoconnect=no) ended up with no WAP API at all, not even on
+		// 127.0.0.1. The on-box scripts talk to 127.0.0.1:3500, so they lost it too. Losing the hotspot
+		// address is not a reason to serve nothing.
 		if err != nil {
-			log.Errorf("Failed to bind to %s after waiting. Server will not start.", listenAddr)
-			return mc // Return empty closer
+			log.Errorf("Failed to bind to %s after waiting; continuing without the hotspot listener.", listenAddr)
+			ln = nil
 		}
 	}
 
@@ -980,20 +993,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		}()
 	}
 
-	// Try second listener (localhost)
-	localhostAddr := "127.0.0.1:" + port
-	ln1, err1 := net.Listen("tcp", localhostAddr)
-	if err1 == nil {
-		mc.listeners = append(mc.listeners, ln1)
-		successfulAddresses = append(successfulAddresses, localhostAddr)
-		go func() {
-			if err := http.Serve(ln1, withCORS(mux)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
-				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
-			}
-		}()
-	} else {
-		log.Errorw("Failed to use 127.0.0.1 for serve", "err", err1)
-	}
+	// (loopback and the unowned-box LAN listeners were started before the hotspot wait — see startAuxListeners)
 
 	// Print summary of successful listeners
 	if len(successfulAddresses) > 0 {
