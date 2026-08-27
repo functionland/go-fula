@@ -116,8 +116,8 @@ func startAuxListeners(mc *multiCloser, addrs *[]string, mux http.Handler, port 
 		mc.listeners = append(mc.listeners, ln)
 		*addrs = append(*addrs, localhostAddr)
 		go func() {
-			if err := http.Serve(ln, withCORS(mux)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
-				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
+			if serveErr := http.Serve(ln, withCORS(mux)); serveErr != nil && !strings.Contains(serveErr.Error(), "use of closed network connection") {
+				log.Errorw("Serve could not initialize on 127.0.0.1", "err", serveErr)
 			}
 		}()
 	} else {

@@ -445,10 +445,13 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 	clusterPeerID := ""
 	privKeyBytes, err := base64.StdEncoding.DecodeString(bloxPrivKey)
 	if err == nil {
-		privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
-		if err == nil {
-			pid, err := peer.IDFromPrivateKey(privKey)
-			if err == nil {
+		// Distinct names rather than a shadowing `err` ladder: this package is gated by the shadow analyzer
+		// (see .github/workflows/go-check.yml) because a shadowed err here once left the WAP server refusing
+		// to start after a successful bind. These particular shadows were harmless; the gate cannot tell.
+		privKey, keyErr := crypto.UnmarshalPrivateKey(privKeyBytes)
+		if keyErr == nil {
+			pid, pidErr := peer.IDFromPrivateKey(privKey)
+			if pidErr == nil {
 				clusterPeerID = pid.String()
 			}
 		}

@@ -18,14 +18,14 @@ var defaultCORSOrigins = []string{
 var localDevOrigin = regexp.MustCompile(`^http://(localhost|127\.0\.0\.1)(:\d+)?$`)
 
 // Routes that have side effects but can be driven by a GET (historical API shape). A cross-site page cannot read
-// their responses, but a plain <img>/<script> fetch would still trigger them and carries NO Origin header —
+// their responses, but a plain <img>/<script> fetch would still trigger them and carries NO Origin header â€”
 // Chromium does send Sec-Fetch-Site on every request, so those are guarded on that header instead.
 //
 // Two distinct reasons a route is listed here:
 //   - /ap/enable and /ap/disable enforce GET explicitly.
 //   - /pools/* enforce NO method at all and read their parameters with r.FormValue, which happily takes them from
-//     the query string. So `GET /pools/join?poolID=…` mutates /internal/config.yaml. Without them in this map the
-//     guard below classifies such a request as non-mutating and lets it straight through — i.e. the Origin guard
+//     the query string. So `GET /pools/join?poolID=â€¦` mutates /internal/config.yaml. Without them in this map the
+//     guard below classifies such a request as non-mutating and lets it straight through â€” i.e. the Origin guard
 //     would look like it protects the box while `<img src="http://10.42.0.1:3500/pools/join?poolID=evil">` on any
 //     page the owner visits still worked. Keep this map in sync with the handlers in server.go: any route that
 //     does not reject non-POST requests and has side effects belongs here.
@@ -70,7 +70,7 @@ func originAllowed(origin string) bool {
 //     non-allow-listed Origin (cross-site form POST), and the side-effecting GET routes when the browser reports
 //     Sec-Fetch-Site other than same-origin/none (cross-site <img>/<script> fetches, which carry no Origin).
 //
-// Requests without Origin or Sec-Fetch-Site headers — the mobile app, curl, the on-device BLE proxy — are passed
+// Requests without Origin or Sec-Fetch-Site headers â€” the mobile app, curl, the on-device BLE proxy â€” are passed
 // through untouched (including a bare OPTIONS). Responses that depend on Origin carry `Vary: Origin`.
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ func withCORS(next http.Handler) http.Handler {
 				// Private Network Access. The whole point of this server is to be reached at 10.42.0.1 from a
 				// page on the public internet (https://blox.fx.land), which is exactly the cross-address-space
 				// request Chrome gates. When the browser asserts a local/private target it sends this preflight
-				// header, and WITHOUT the matching allow header the fetch fails outright — not with a CORS error
+				// header, and WITHOUT the matching allow header the fetch fails outright â€” not with a CORS error
 				// the app can explain, but a bare "TypeError: Failed to fetch". Observed on real hardware.
 				if strings.EqualFold(r.Header.Get("Access-Control-Request-Private-Network"), "true") {
 					h.Set("Access-Control-Allow-Private-Network", "true")
