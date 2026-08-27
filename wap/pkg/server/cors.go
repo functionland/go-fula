@@ -17,6 +17,14 @@ var defaultCORSOrigins = []string{
 
 var localDevOrigin = regexp.MustCompile(`^http://(localhost|127\.0\.0\.1)(:\d+)?$`)
 
+// GET routes that have side effects (historical API shape). A cross-site page cannot read their responses, but a
+// plain <img>/<script> fetch would still trigger them and carries NO Origin header — Chromium does send
+// Sec-Fetch-Site on every request, so those are guarded on that header instead.
+var mutatingGETPaths = map[string]bool{
+	"/ap/enable":  true,
+	"/ap/disable": true,
+}
+
 func allowedCORSOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv("WAP_CORS_ORIGINS"))
 	if raw == "" {
@@ -46,37 +54,44 @@ func originAllowed(origin string) bool {
 // withCORS wraps the WAP mux for browser clients:
 //   - adds CORS response headers for allow-listed origins;
 //   - answers CORS preflights (OPTIONS with an Origin header) itself, since the route handlers reject OPTIONS with 405;
-//   - rejects state-changing requests that carry a NON-allow-listed Origin (a cross-site form POST from any
-//     page a user visits while on the FxBlox hotspot). Browsers always send Origin on cross-origin POSTs.
+//   - rejects state-changing requests from non-allow-listed browser contexts: any non-GET/HEAD request carrying a
+//     non-allow-listed Origin (cross-site form POST), and the side-effecting GET routes when the browser reports
+//     Sec-Fetch-Site other than same-origin/none (cross-site <img>/<script> fetches, which carry no Origin).
 //
-// Requests without an Origin header — the mobile app, curl, the on-device BLE proxy — are passed through untouched
-// (including a bare OPTIONS). Responses that depend on Origin always carry `Vary: Origin` so caches never serve an
-// origin-specific answer to another origin.
+// Requests without Origin or Sec-Fetch-Site headers — the mobile app, curl, the on-device BLE proxy — are passed
+// through untouched (including a bare OPTIONS). Responses that depend on Origin carry `Vary: Origin`.
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin == "" {
+		sfs := strings.ToLower(r.Header.Get("Sec-Fetch-Site"))
+		crossSiteFetch := sfs != "" && sfs != "same-origin" && sfs != "none"
+		if origin == "" && !crossSiteFetch {
 			next.ServeHTTP(w, r)
 			return
 		}
-		h := w.Header()
-		h.Add("Vary", "Origin")
+
 		allowed := originAllowed(origin)
-		if allowed {
-			h.Set("Access-Control-Allow-Origin", origin)
-			h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			h.Set("Access-Control-Allow-Headers", "content-type")
-			h.Set("Access-Control-Max-Age", "600")
-		}
-		if r.Method == http.MethodOptions {
+		if origin != "" {
+			h := w.Header()
+			h.Add("Vary", "Origin")
 			if allowed {
-				w.WriteHeader(http.StatusNoContent)
-			} else {
-				http.Error(w, "origin not allowed", http.StatusForbidden)
+				h.Set("Access-Control-Allow-Origin", origin)
+				h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				h.Set("Access-Control-Allow-Headers", "content-type")
+				h.Set("Access-Control-Max-Age", "600")
 			}
-			return
+			if r.Method == http.MethodOptions {
+				if allowed {
+					w.WriteHeader(http.StatusNoContent)
+				} else {
+					http.Error(w, "origin not allowed", http.StatusForbidden)
+				}
+				return
+			}
 		}
-		if !allowed && r.Method != http.MethodGet && r.Method != http.MethodHead {
+
+		mutating := (r.Method != http.MethodGet && r.Method != http.MethodHead) || mutatingGETPaths[r.URL.Path]
+		if mutating && !allowed {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
 			return
 		}
