@@ -17,12 +17,24 @@ var defaultCORSOrigins = []string{
 
 var localDevOrigin = regexp.MustCompile(`^http://(localhost|127\.0\.0\.1)(:\d+)?$`)
 
-// GET routes that have side effects (historical API shape). A cross-site page cannot read their responses, but a
-// plain <img>/<script> fetch would still trigger them and carries NO Origin header — Chromium does send
-// Sec-Fetch-Site on every request, so those are guarded on that header instead.
+// Routes that have side effects but can be driven by a GET (historical API shape). A cross-site page cannot read
+// their responses, but a plain <img>/<script> fetch would still trigger them and carries NO Origin header —
+// Chromium does send Sec-Fetch-Site on every request, so those are guarded on that header instead.
+//
+// Two distinct reasons a route is listed here:
+//   - /ap/enable and /ap/disable enforce GET explicitly.
+//   - /pools/* enforce NO method at all and read their parameters with r.FormValue, which happily takes them from
+//     the query string. So `GET /pools/join?poolID=…` mutates /internal/config.yaml. Without them in this map the
+//     guard below classifies such a request as non-mutating and lets it straight through — i.e. the Origin guard
+//     would look like it protects the box while `<img src="http://10.42.0.1:3500/pools/join?poolID=evil">` on any
+//     page the owner visits still worked. Keep this map in sync with the handlers in server.go: any route that
+//     does not reject non-POST requests and has side effects belongs here.
 var mutatingGETPaths = map[string]bool{
-	"/ap/enable":  true,
-	"/ap/disable": true,
+	"/ap/enable":    true,
+	"/ap/disable":   true,
+	"/pools/join":   true,
+	"/pools/leave":  true,
+	"/pools/cancel": true,
 }
 
 func allowedCORSOrigins() []string {
@@ -92,6 +104,10 @@ func withCORS(next http.Handler) http.Handler {
 
 		mutating := (r.Method != http.MethodGet && r.Method != http.MethodHead) || mutatingGETPaths[r.URL.Path]
 		if mutating && !allowed {
+			// Logged because in the field this is indistinguishable from "the box is broken": the web app just
+			// sees 403. A wrong WAP_CORS_ORIGINS, or a client that unexpectedly sends an Origin, shows up here.
+			log.Warnw("rejected a state-changing request from a non-allow-listed browser context",
+				"path", r.URL.Path, "method", r.Method, "origin", origin, "secFetchSite", sfs)
 			http.Error(w, "origin not allowed", http.StatusForbidden)
 			return
 		}

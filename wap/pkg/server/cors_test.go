@@ -38,6 +38,15 @@ func TestWithCORS(t *testing.T) {
 		{"preflight from unknown origin is 403", http.MethodOptions, "/properties", "https://evil.example", "cross-site", http.StatusForbidden, "", false},
 		{"cross-site POST from unknown origin is 403 (Origin guard)", http.MethodPost, "/wifi/connect", "https://evil.example", "cross-site", http.StatusForbidden, "", false},
 		{"cross-site GET from unknown origin passes but gets no ACAO (unreadable by the browser)", http.MethodGet, "/properties", "https://evil.example", "cross-site", http.StatusOK, "", true},
+		// The /pools/* handlers enforce no method and read poolID with r.FormValue, so a bare cross-site GET
+		// mutates /internal/config.yaml. These carry no Origin (an <img>/<script> fetch never does), so the
+		// Sec-Fetch-Site arm is the only thing standing between a visited page and the owner's pool membership.
+		{"cross-site GET /pools/join is blocked (no Origin, <img> CSRF)", http.MethodGet, "/pools/join", "", "cross-site", http.StatusForbidden, "", false},
+		{"cross-site GET /pools/leave is blocked", http.MethodGet, "/pools/leave", "", "cross-site", http.StatusForbidden, "", false},
+		{"cross-site GET /pools/cancel is blocked", http.MethodGet, "/pools/cancel", "", "cross-site", http.StatusForbidden, "", false},
+		{"cross-site GET /pools/join from an allow-listed origin is permitted", http.MethodGet, "/pools/join", "https://blox.fx.land", "cross-site", http.StatusOK, "https://blox.fx.land", true},
+		{"same-origin GET /pools/join is untouched", http.MethodGet, "/pools/join", "", "same-origin", http.StatusOK, "", true},
+		{"native GET /pools/join (no Origin, no Sec-Fetch-Site) still passes", http.MethodGet, "/pools/join", "", "", http.StatusOK, "", true},
 		{"cross-site <img> GET to /ap/disable (no Origin, Sec-Fetch-Site: cross-site) is 403", http.MethodGet, "/ap/disable", "", "cross-site", http.StatusForbidden, "", false},
 		{"cross-site <img> GET to /ap/enable is 403", http.MethodGet, "/ap/enable", "", "cross-site", http.StatusForbidden, "", false},
 		{"cross-site <img> GET to a read-only route passes (nothing to protect)", http.MethodGet, "/properties", "", "cross-site", http.StatusOK, "", true},
