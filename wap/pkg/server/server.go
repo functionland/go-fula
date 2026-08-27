@@ -965,7 +965,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		successfulAddresses = append(successfulAddresses, listenAddr)
 		log.Info("Starting server at " + listenAddr)
 		go func() {
-			if err := http.Serve(ln, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			if err := http.Serve(ln, withCORS(mux)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 				log.Errorw("Serve could not initialize", "err", err)
 			}
 		}()
@@ -978,7 +978,7 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		mc.listeners = append(mc.listeners, ln1)
 		successfulAddresses = append(successfulAddresses, localhostAddr)
 		go func() {
-			if err := http.Serve(ln1, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			if err := http.Serve(ln1, withCORS(mux)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
 			}
 		}()
