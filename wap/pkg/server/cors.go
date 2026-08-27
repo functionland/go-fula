@@ -91,6 +91,14 @@ func withCORS(next http.Handler) http.Handler {
 				h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 				h.Set("Access-Control-Allow-Headers", "content-type")
 				h.Set("Access-Control-Max-Age", "600")
+				// Private Network Access. The whole point of this server is to be reached at 10.42.0.1 from a
+				// page on the public internet (https://blox.fx.land), which is exactly the cross-address-space
+				// request Chrome gates. When the browser asserts a local/private target it sends this preflight
+				// header, and WITHOUT the matching allow header the fetch fails outright — not with a CORS error
+				// the app can explain, but a bare "TypeError: Failed to fetch". Observed on real hardware.
+				if strings.EqualFold(r.Header.Get("Access-Control-Request-Private-Network"), "true") {
+					h.Set("Access-Control-Allow-Private-Network", "true")
+				}
 			}
 			if r.Method == http.MethodOptions {
 				if allowed {
