@@ -45,19 +45,25 @@ func originAllowed(origin string) bool {
 
 // withCORS wraps the WAP mux for browser clients:
 //   - adds CORS response headers for allow-listed origins;
-//   - answers OPTIONS preflights itself (route handlers reject OPTIONS with 405);
+//   - answers CORS preflights (OPTIONS with an Origin header) itself, since the route handlers reject OPTIONS with 405;
 //   - rejects state-changing requests that carry a NON-allow-listed Origin (a cross-site form POST from any
 //     page a user visits while on the FxBlox hotspot). Browsers always send Origin on cross-origin POSTs.
 //
-// Requests without an Origin header — the mobile app, curl, the on-device BLE proxy — are passed through untouched.
+// Requests without an Origin header — the mobile app, curl, the on-device BLE proxy — are passed through untouched
+// (including a bare OPTIONS). Responses that depend on Origin always carry `Vary: Origin` so caches never serve an
+// origin-specific answer to another origin.
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
+		if origin == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		h := w.Header()
+		h.Add("Vary", "Origin")
 		allowed := originAllowed(origin)
 		if allowed {
-			h := w.Header()
 			h.Set("Access-Control-Allow-Origin", origin)
-			h.Add("Vary", "Origin")
 			h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			h.Set("Access-Control-Allow-Headers", "content-type")
 			h.Set("Access-Control-Max-Age", "600")
@@ -70,7 +76,7 @@ func withCORS(next http.Handler) http.Handler {
 			}
 			return
 		}
-		if origin != "" && !allowed && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if !allowed && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "origin not allowed", http.StatusForbidden)
 			return
 		}

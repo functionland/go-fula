@@ -24,6 +24,7 @@ func TestWithCORS(t *testing.T) {
 	}{
 		{"no origin GET passes through (mobile app / curl)", http.MethodGet, "", http.StatusOK, "", true},
 		{"no origin POST passes through", http.MethodPost, "", http.StatusOK, "", true},
+		{"no origin OPTIONS passes through untouched (not a CORS preflight)", http.MethodOptions, "", http.StatusOK, "", true},
 		{"allow-listed origin GET gets ACAO", http.MethodGet, "https://blox.fx.land", http.StatusOK, "https://blox.fx.land", true},
 		{"staging origin POST gets ACAO", http.MethodPost, "https://functionland.github.io", http.StatusOK, "https://functionland.github.io", true},
 		{"docs.fx.land staging origin (org Pages custom domain) allowed", http.MethodPost, "https://docs.fx.land", http.StatusOK, "https://docs.fx.land", true},
@@ -57,9 +58,14 @@ func TestWithCORS(t *testing.T) {
 				if rec.Header().Get("Access-Control-Allow-Methods") != "GET, POST, OPTIONS" {
 					t.Fatalf("missing Allow-Methods")
 				}
-				if rec.Header().Get("Vary") != "Origin" {
-					t.Fatalf("missing Vary: Origin")
-				}
+			}
+			// Every response whose content depends on Origin must be Vary: Origin (cache poisoning guard);
+			// responses to requests without Origin must not be touched at all.
+			if tc.origin != "" && rec.Header().Get("Vary") != "Origin" {
+				t.Fatalf("missing Vary: Origin on an Origin-dependent response")
+			}
+			if tc.origin == "" && rec.Header().Get("Vary") != "" {
+				t.Fatalf("Vary must not be added for requests without Origin")
 			}
 		})
 	}
