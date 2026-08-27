@@ -11,7 +11,8 @@ import (
 // and local development). Override with WAP_CORS_ORIGINS="https://a.example,https://b.example".
 var defaultCORSOrigins = []string{
 	"https://blox.fx.land",
-	"https://functionland.github.io",
+	"https://docs.fx.land",           // functionland.github.io project pages are served under this custom domain (staging)
+	"https://functionland.github.io", // kept in case the org site's custom domain is ever removed
 }
 
 var localDevOrigin = regexp.MustCompile(`^http://(localhost|127\.0\.0\.1)(:\d+)?$`)

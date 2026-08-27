@@ -26,6 +26,7 @@ func TestWithCORS(t *testing.T) {
 		{"no origin POST passes through", http.MethodPost, "", http.StatusOK, "", true},
 		{"allow-listed origin GET gets ACAO", http.MethodGet, "https://blox.fx.land", http.StatusOK, "https://blox.fx.land", true},
 		{"staging origin POST gets ACAO", http.MethodPost, "https://functionland.github.io", http.StatusOK, "https://functionland.github.io", true},
+		{"docs.fx.land staging origin (org Pages custom domain) allowed", http.MethodPost, "https://docs.fx.land", http.StatusOK, "https://docs.fx.land", true},
 		{"localhost dev origin allowed", http.MethodPost, "http://localhost:5173", http.StatusOK, "http://localhost:5173", true},
 		{"127.0.0.1 dev origin allowed", http.MethodGet, "http://127.0.0.1:4173", http.StatusOK, "http://127.0.0.1:4173", true},
 		{"preflight from allow-listed origin is 204 and never reaches the mux", http.MethodOptions, "https://blox.fx.land", http.StatusNoContent, "https://blox.fx.land", false},
