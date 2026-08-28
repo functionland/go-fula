@@ -218,7 +218,9 @@ func TestCloseStopsTheHotspotWatch(t *testing.T) {
 	defer restore()
 
 	startHotspotWatch(mc, http.NewServeMux(), addr)
-	if err := mc.Close(); err != nil {
+	// Assign, not declare: this package is a hard shadow gate in CI, because a shadowed `err` here is what
+	// once made Serve() log a successful bind and then refuse to start.
+	if err = mc.Close(); err != nil {
 		t.Fatal(err)
 	}
 
