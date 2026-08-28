@@ -248,6 +248,9 @@ func startAuxListeners(mc *multiCloser, addrs *[]string, mux http.Handler, port 
 	// The LAN address usually does NOT exist yet at this point: wap starts with the box, and the network comes
 	// up later (DHCP, or a cable the user plugs in after powering it on). Binding once at startup would mean
 	// LAN setup only ever worked on a box that happened to be wired before boot.
+	//
+	// `bound` is handed over here and must not be touched again — see startLANSetupWatch. It is the last
+	// statement of this function, so it cannot be: keep it that way.
 	startLANSetupWatch(mc, mux, port, apIP, bound)
 }
 
@@ -272,6 +275,10 @@ func lanWatchIntervalForTests(d time.Duration) func() {
 // It stops the moment the box gains an owner. `lanSetupGuard` would refuse the requests anyway — it re-checks
 // ownership per request — but a listener opened after setup is a socket that should not exist, and relying on
 // the guard to cover for the watcher would be leaning on the second line of defence.
+//
+// OWNERSHIP: `bound` is HANDED OVER. The caller seeds it with the addresses it bound synchronously and must
+// not read or write it again — from here on it belongs to the watcher goroutine alone, which is the whole
+// reason it needs no lock. A caller that keeps using its copy introduces a data race.
 func startLANSetupWatch(mc *multiCloser, mux http.Handler, port string, apIP string, bound map[string]bool) {
 	if bloxHasOwner() {
 		return // already claimed: there is no setup window to keep open
