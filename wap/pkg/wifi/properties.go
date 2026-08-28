@@ -229,6 +229,30 @@ func GetKuboPeerID() (string, error) {
 	return kuboConfig.Identity.PeerID, nil
 }
 
+// GetKuboConfiguredPeerID returns the identity kubo will use on its NEXT start, read only from the config file.
+//
+// This differs from GetKuboPeerID, which prefers the running daemon. Setting up a Blox that already had an
+// identity (a re-pair after a factory reset) writes a newly derived identity into kubo's config, but the daemon
+// keeps serving the old one until it restarts. During that window the two disagree, and a client that stored
+// either one alone would be wrong: the live ID stops working after the restart, and the configured ID cannot be
+// dialled yet — every attempt fails with NO_RESERVATION because the relay holds a reservation for the old peer.
+// Observed on hardware during a re-setup. Callers use this together with GetKuboPeerID to detect that window.
+func GetKuboConfiguredPeerID() (string, error) {
+	kuboConfigData, err := os.ReadFile("/internal/ipfs_data/config")
+	if err != nil {
+		return "", fmt.Errorf("could not read kubo config: %w", err)
+	}
+	var kuboConfig struct {
+		Identity struct {
+			PeerID string `json:"PeerID"`
+		} `json:"Identity"`
+	}
+	if err := json.Unmarshal(kuboConfigData, &kuboConfig); err != nil || kuboConfig.Identity.PeerID == "" {
+		return "", fmt.Errorf("kubo config has no PeerID")
+	}
+	return kuboConfig.Identity.PeerID, nil
+}
+
 // GetClusterPeerIDFromIdentity derives the ipfs-cluster peerID from the identity
 // field in config.yaml. The identity is the base64-encoded private key that
 // ipfs-cluster uses directly (no HMAC derivation like kubo).

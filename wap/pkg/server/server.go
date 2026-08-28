@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
@@ -44,18 +45,47 @@ type Config struct {
 	IpniPublisherIdentity     string   `yaml:"ipniPublisherIdentity"`
 }
 
+// multiCloser owns every listener the server opened. The hotspot watcher can add one long after Serve() has
+// returned, while Close() may be running, so access is guarded.
 type multiCloser struct {
+	mu        sync.Mutex
 	listeners []io.Closer
+	closed    bool
+	// stopWatch is closed by Close() to end the background hotspot watcher. Deliberately not Serve()'s
+	// context: that one is `defer cancel()`-ed, so it dies the moment Serve returns, and a watcher hung off
+	// it would exit on its first tick without ever retrying. The watcher lives until the server is closed.
+	stopWatch chan struct{}
+}
+
+// add registers a listener, or closes it immediately and reports false if the server is already shutting down
+// (otherwise a listener opened by the watcher during shutdown would leak and keep the port bound).
+func (mc *multiCloser) add(l io.Closer) bool {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if mc.closed {
+		_ = l.Close()
+		return false
+	}
+	mc.listeners = append(mc.listeners, l)
+	return true
 }
 
 // Implement Close method for multiCloser
 func (mc *multiCloser) Close() error {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.closed = true
+	if mc.stopWatch != nil {
+		close(mc.stopWatch)
+		mc.stopWatch = nil
+	}
 	var err error
 	for _, l := range mc.listeners {
 		if cerr := l.Close(); cerr != nil {
 			err = cerr
 		}
 	}
+	mc.listeners = nil
 	return err
 }
 
@@ -166,6 +196,7 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			response["kubo_peer_id"] = kuboPeerID
 		}
+		addKuboIdentityState(response, kuboPeerID)
 
 		clusterInfo, err := wifi.GetClusterInfo()
 		if err == nil {
@@ -307,6 +338,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		p["kubo_peer_id"] = kuboPeerID
 	}
+	addKuboIdentityState(p, kuboPeerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -445,10 +477,13 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 	clusterPeerID := ""
 	privKeyBytes, err := base64.StdEncoding.DecodeString(bloxPrivKey)
 	if err == nil {
-		privKey, err := crypto.UnmarshalPrivateKey(privKeyBytes)
-		if err == nil {
-			pid, err := peer.IDFromPrivateKey(privKey)
-			if err == nil {
+		// Distinct names rather than a shadowing `err` ladder: this package is gated by the shadow analyzer
+		// (see .github/workflows/go-check.yml) because a shadowed err here once left the WAP server refusing
+		// to start after a successful bind. These particular shadows were harmless; the gate cannot tell.
+		privKey, keyErr := crypto.UnmarshalPrivateKey(privKeyBytes)
+		if keyErr == nil {
+			pid, pidErr := peer.IDFromPrivateKey(privKey)
+			if pidErr == nil {
 				clusterPeerID = pid.String()
 			}
 		}
@@ -466,7 +501,7 @@ func exchangePeersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// bloxPeerID is the kubo-derived peer ID (from deriveKuboKey in /app --initOnly).
-	// Use it directly — kubo hasn't started yet during initial setup, so GetKuboPeerID() would fail.
+	// Use it directly â€” kubo hasn't started yet during initial setup, so GetKuboPeerID() would fail.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{"peer_id": bloxPeerID})
@@ -871,6 +906,13 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 
 	// Try to listen on the target address
 	ln, err := net.Listen("tcp", listenAddr)
+
+	// Bring up the listeners that do NOT depend on the hotspot before waiting for it. The wait loop below
+	// blocks this function for up to 10 minutes, and the on-box scripts talk to 127.0.0.1:3500 â€” so starting
+	// loopback afterwards meant that after any restart with the AP down, nothing on the box could reach the
+	// API for ten minutes, and a box whose AP never returned got no server at all.
+	startAuxListeners(mc, &successfulAddresses, mux, port, ip)
+
 	if err != nil {
 		log.Errorw("Failed to use default IP address for serve", "err", err)
 
@@ -890,19 +932,22 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 					break
 				}
 
-				// Check if the interface with the target IP exists
-				interfaces, err := net.Interfaces()
-				if err != nil {
-					log.Warnw("Failed to get network interfaces", "err", err)
+				// Check if the interface with the target IP exists.
+				// NOTE: these must NOT be `err` â€” the outer `err` is what line ~956 checks to decide whether the
+				// server starts, and shadowing it here meant a successful late bind below never cleared the
+				// original "cannot assign requested address" failure. See the bind block for the full story.
+				interfaces, ifaceErr := net.Interfaces()
+				if ifaceErr != nil {
+					log.Warnw("Failed to get network interfaces", "err", ifaceErr)
 					time.Sleep(attemptDelay)
 					continue
 				}
 
 				interfaceFound := false
 				for _, iface := range interfaces {
-					addrs, err := iface.Addrs()
-					if err != nil {
-						log.Warnw("Failed to get addresses for interface", "interface", iface.Name, "err", err)
+					addrs, addrErr := iface.Addrs()
+					if addrErr != nil {
+						log.Warnw("Failed to get addresses for interface", "interface", iface.Name, "err", addrErr)
 						continue
 					}
 
@@ -924,7 +969,13 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 					}
 				}
 
-				// If interface is found, try to bind
+				// If interface is found, try to bind.
+				// `err` here is deliberately the OUTER err (assigned, not declared): it is what the check after
+				// this loop tests. Before this was fixed, `net.Interfaces()` above shadowed it, so a successful
+				// bind left the outer err holding the original failure and the server logged
+				// "Successfully bound ..." immediately followed by "... Server will not start." â€” the whole
+				// wait-for-hotspot path could only ever fail, and the bound listener was dropped unused.
+				// Any fula_go restart while the AP was down therefore left the box with no WAP API until reboot.
 				if interfaceFound {
 					ln, err = net.Listen("tcp", listenAddr)
 					if err == nil {
@@ -952,10 +1003,16 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 			}
 		}
 
-		// If we still can't bind to the target IP after waiting, return without starting the server
+		// If we still can't bind to the target IP after waiting, carry on WITHOUT the hotspot listener.
+		//
+		// This used to `return mc`, which also skipped the loopback and LAN listeners below â€” so a box whose
+		// AP was down (the normal state once it has joined Wi-Fi, and what a container restart leaves behind,
+		// since the FxBlox connection has autoconnect=no) ended up with no WAP API at all, not even on
+		// 127.0.0.1. The on-box scripts talk to 127.0.0.1:3500, so they lost it too. Losing the hotspot
+		// address is not a reason to serve nothing.
 		if err != nil {
-			log.Errorf("Failed to bind to %s after waiting. Server will not start.", listenAddr)
-			return mc // Return empty closer
+			log.Errorf("Failed to bind to %s after waiting; will keep watching for the hotspot in the background.", listenAddr)
+			ln = nil
 		}
 	}
 
@@ -965,25 +1022,25 @@ func Serve(peerFn func(clientPeerId string, bloxSeed string) (string, error), ip
 		successfulAddresses = append(successfulAddresses, listenAddr)
 		log.Info("Starting server at " + listenAddr)
 		go func() {
-			if err := http.Serve(ln, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			if err := http.Serve(ln, withCORS(mux)); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 				log.Errorw("Serve could not initialize", "err", err)
 			}
 		}()
 	}
 
-	// Try second listener (localhost)
-	localhostAddr := "127.0.0.1:" + port
-	ln1, err1 := net.Listen("tcp", localhostAddr)
-	if err1 == nil {
-		mc.listeners = append(mc.listeners, ln1)
-		successfulAddresses = append(successfulAddresses, localhostAddr)
-		go func() {
-			if err := http.Serve(ln1, mux); err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
-				log.Errorw("Serve could not initialize on 127.0.0.1", "err", err)
-			}
-		}()
-	} else {
-		log.Errorw("Failed to use 127.0.0.1 for serve", "err", err1)
+	// (loopback and the unowned-box LAN listeners were started before the hotspot wait â€” see startAuxListeners)
+
+	// If the hotspot never showed up, keep watching for it instead of giving up for the life of the process.
+	// The 10-minute wait above expiring is not the end of the story: FxBlox has autoconnect=no, so the AP is
+	// routinely down (and restarting fula_go tears it down), and it may be enabled minutes or hours later by
+	// readiness-check, /ap/enable, or a person. Without this, a box in that state serves only loopback forever
+	// â€” someone joins the FxBlox hotspot, gets nothing on 10.42.0.1:3500, and the only cure is another restart,
+	// which itself drops the AP again. Observed on hardware.
+	//
+	// Note it does NOT take `ctx`: this function's context is `defer cancel()`-ed, so it is already dead by
+	// the time a watcher's first tick arrives. startHotspotWatch owns a lifetime that ends at Close().
+	if ln == nil {
+		startHotspotWatch(mc, mux, listenAddr)
 	}
 
 	// Print summary of successful listeners

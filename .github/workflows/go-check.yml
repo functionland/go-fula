@@ -35,6 +35,22 @@ jobs:
       - name: go vet
         if: success() || failure()
         run: go vet ./...
+      - name: Install shadow analyzer
+        if: success() || failure()
+        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
+      # A shadowed `err` in wap/pkg/server once left the WAP API refusing to start after a SUCCESSFUL bind:
+      # the retry loop redeclared err, so the outer err still held the original failure and Serve() logged
+      # "Successfully bound ..." immediately followed by "... Server will not start." `go vet` does not catch
+      # this class; the shadow analyzer does. That package is network-facing and is now kept clean, so it is
+      # a hard gate. The rest of the repo has ~80 pre-existing (mostly benign) shadows, so it is reported for
+      # visibility without failing the build — tighten the scope as packages get cleaned up.
+      - name: shadow (blocking — wap/pkg/server)
+        if: success() || failure()
+        run: shadow ./wap/pkg/server/...
+      - name: shadow (advisory — rest of the repo)
+        if: success() || failure()
+        continue-on-error: true
+        run: shadow ./...
       - name: staticcheck
         if: success() || failure()
         run: |
