@@ -11,17 +11,14 @@ import (
 	"time"
 
 	"github.com/functionland/go-fula/blox"
-	"github.com/functionland/go-fula/exchange"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/fluent"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/core/protocol"
 )
 
 var log = logging.Logger("fula/dhttest")
@@ -309,18 +306,9 @@ func Example_provideAfterPull() {
 	n1, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h1),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -339,18 +327,9 @@ func Example_provideAfterPull() {
 	n2, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h2),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -369,18 +348,9 @@ func Example_provideAfterPull() {
 	n3, err := blox.New(
 		blox.WithPoolName(poolName),
 		blox.WithTopicName(poolName),
-		blox.WithHost(h3),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -399,18 +369,9 @@ func Example_provideAfterPull() {
 	n4, err := blox.New(
 		blox.WithPoolName("0"),
 		blox.WithTopicName("0"),
-		blox.WithHost(h4),
 		blox.WithUpdatePoolName(updatePoolName),
 		blox.WithBlockchainEndPoint("127.0.0.1:4001"),
 		blox.WithRelays([]string{"/dns/relay.dev.fx.land/tcp/4001/p2p/12D3KooWDRrBaAfPwsGJivBoUw5fE7ZpDiyfUjqgiURq2DEcL835"}),
-		blox.WithExchangeOpts(
-			exchange.WithDhtProviderOptions(
-				dht.ProtocolExtension(protocol.ID("/"+poolName)),
-				dht.ProtocolPrefix("/fula"),
-				dht.Resiliency(1),
-				dht.Mode(dht.ModeAutoServer),
-			),
-		),
 	)
 	if err != nil {
 		panic(err)
@@ -671,7 +632,7 @@ func Example_poolExchangeDagBetweenPoolNodes() {
 	if err != nil {
 		panic(err)
 	}
-	n1, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h1))
+	n1, err := blox.New(blox.WithPoolName(poolName))
 	if err != nil {
 		panic(err)
 	}
@@ -686,7 +647,7 @@ func Example_poolExchangeDagBetweenPoolNodes() {
 	if err != nil {
 		panic(err)
 	}
-	n2, err := blox.New(blox.WithPoolName(poolName), blox.WithHost(h2))
+	n2, err := blox.New(blox.WithPoolName(poolName))
 	if err != nil {
 		panic(err)
 	}

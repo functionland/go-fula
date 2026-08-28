@@ -40,7 +40,6 @@ func TestBloxCreation(t *testing.T) {
 
 	// Create blox instance
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("test-pool"),
@@ -49,8 +48,9 @@ func TestBloxCreation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, blox)
 
-	// Test that blox has required components
-	assert.NotNil(t, blox.h)
+	// Test that blox has required components.
+	// The libp2p host assertion is gone with the host itself: go-fula stopped embedding a libp2p host
+	// (4d82de1) and reaches the network through kubo instead, so Blox has no `h` to check.
 	assert.NotNil(t, blox.ls)
 	assert.Equal(t, "test-pool", blox.name)
 }
@@ -72,7 +72,6 @@ func TestBloxStoreAndLoad(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("test-pool"),
@@ -114,7 +113,6 @@ func TestBloxHas(t *testing.T) {
 
 	// Create blox instance - it will set up its own link system that writes to the datastore
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithPoolName("test-pool"),
 	)
@@ -156,7 +154,6 @@ func TestBloxStoreCid(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("test-pool"),
@@ -195,7 +192,6 @@ func TestBloxStoreManifest(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("test-pool"),
@@ -243,7 +239,6 @@ func TestBloxPushPull(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("test-pool"),
@@ -292,7 +287,6 @@ func TestBloxOptions(t *testing.T) {
 
 	// Test with various options
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("test-pool"),
@@ -332,7 +326,6 @@ func TestBloxEVMChainIntegration(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("1"),
@@ -431,7 +424,6 @@ func TestBloxEVMPoolOperations(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("1"),
@@ -548,7 +540,6 @@ func TestBloxEVMChainValidation(t *testing.T) {
 	ls.SetWriteStorage(store)
 
 	blox, err := New(
-		WithHost(h),
 		WithDatastore(ds),
 		WithLinkSystem(&ls),
 		WithPoolName("1"),
