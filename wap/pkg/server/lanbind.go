@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
 	"github.com/functionland/go-fula/wap/pkg/wifi"
@@ -106,6 +107,77 @@ func lanListenAddrs(port string, apIP string) []string {
 		}
 	}
 	return out
+}
+
+// How often the background watcher retries the hotspot bind once the startup wait has given up.
+var hotspotWatchInterval = 15 * time.Second
+
+// hotspotWatchIntervalForTests shortens the retry cadence so a test does not wait a real interval.
+func hotspotWatchIntervalForTests(d time.Duration) func() {
+	prev := hotspotWatchInterval
+	hotspotWatchInterval = d
+	return func() { hotspotWatchInterval = prev }
+}
+
+// startHotspotWatch begins watching for the hotspot with a lifetime that ends at mc.Close(), and nowhere else.
+//
+// It takes no context on purpose. Serve() creates its own `ctx` with `defer cancel()`, so handing that one to a
+// background goroutine gives it a context that is already cancelled by the time the goroutine's first tick
+// arrives — the watcher would return immediately and the give-up bug would look fixed while doing nothing.
+// Owning the lifetime here means no caller can make that mistake.
+func startHotspotWatch(mc *multiCloser, mux http.Handler, listenAddr string) {
+	mc.mu.Lock()
+	if mc.closed {
+		mc.mu.Unlock() // shutting down already; never start the goroutine
+		return
+	}
+	if mc.stopWatch == nil {
+		mc.stopWatch = make(chan struct{})
+	}
+	stop := mc.stopWatch
+	mc.mu.Unlock()
+
+	watchForHotspot(stop, mc, mux, listenAddr)
+}
+
+// watchForHotspot keeps trying to bind the hotspot address until it succeeds or `stop` is closed.
+//
+// Serve()'s startup wait is bounded (10 minutes), and when it expires the process previously served only
+// loopback for the rest of its life. That is the wrong shape for this device: the FxBlox connection has
+// autoconnect=no, so the AP is routinely down — restarting fula_go tears it down too — and it may be brought
+// up much later by readiness-check, /ap/enable, or a person. A box in that state answered nothing on
+// 10.42.0.1:3500, so joining the FxBlox hotspot appeared to fail, and the only cure was another restart which
+// dropped the AP again. Observed on hardware, and the reason a user who joined the hotspot got "cannot
+// connect" on a perfectly healthy box.
+//
+// Binding is the readiness test: net.Listen fails with "cannot assign requested address" until the interface
+// holds the IP, so no separate interface polling is needed.
+func watchForHotspot(stop <-chan struct{}, mc *multiCloser, mux http.Handler, listenAddr string) {
+	go func() {
+		ticker := time.NewTicker(hotspotWatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+			}
+			ln, err := net.Listen("tcp", listenAddr)
+			if err != nil {
+				continue
+			}
+			if !mc.add(ln) {
+				return // shutting down; add() already closed it
+			}
+			log.Infof("Hotspot appeared later than expected — now also serving %s", listenAddr)
+			go func() {
+				if serveErr := http.Serve(ln, withCORS(mux)); serveErr != nil && !strings.Contains(serveErr.Error(), "use of closed network connection") {
+					log.Errorw("Hotspot server stopped", "err", serveErr)
+				}
+			}()
+			return
+		}
+	}()
 }
 
 // addKuboIdentityState reports whether kubo is still running an identity it is about to replace.

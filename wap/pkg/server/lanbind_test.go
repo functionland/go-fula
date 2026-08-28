@@ -1,11 +1,14 @@
 package server
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
 )
@@ -110,6 +113,141 @@ func TestAddKuboIdentityStateIsSilentWhenSettled(t *testing.T) {
 			t.Fatalf("must not report a pending identity when the config cannot be read: %v", out)
 		}
 	})
+}
+
+// The startup wait is bounded, so the watcher is what keeps a box reachable when its AP comes up later —
+// which is the normal case (FxBlox has autoconnect=no, and restarting fula_go drops it). Without this, a user
+// who joins the hotspot on a healthy box gets nothing on 10.42.0.1:3500 until yet another restart.
+func TestWatchForHotspotBindsWhenTheAddressAppears(t *testing.T) {
+	// Occupy the address so the first attempts fail exactly as they do while the AP is down.
+	blocker, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := blocker.Addr().String()
+
+	mc := &multiCloser{}
+	stop := make(chan struct{})
+	defer close(stop)
+
+	restore := hotspotWatchIntervalForTests(20 * time.Millisecond)
+	defer restore()
+
+	watchForHotspot(stop, mc, http.NewServeMux(), addr)
+
+	// Still taken: the watcher must not have grabbed anything yet.
+	time.Sleep(60 * time.Millisecond)
+	mc.mu.Lock()
+	early := len(mc.listeners)
+	mc.mu.Unlock()
+	if early != 0 {
+		t.Fatalf("watcher bound while the address was still occupied (%d listeners)", early)
+	}
+
+	// The "AP appears": the address frees up.
+	_ = blocker.Close()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mc.mu.Lock()
+		n := len(mc.listeners)
+		mc.mu.Unlock()
+		if n > 0 {
+			_ = mc.Close()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("watcher never bound the address after it became available")
+}
+
+// The watcher must outlive the function that starts it.
+//
+// Serve() runs under `ctx, cancel := context.WithTimeout(...)` + `defer cancel()`, so any context it owns is
+// cancelled the instant it returns. A watcher wired to that context would exit on its first tick — the fix
+// would look present in the code and do absolutely nothing on the device. startHotspotWatch therefore takes no
+// context at all; this test pins that behaviour by starting the watch from a function that cancels its own
+// context on the way out, exactly as Serve does.
+func TestHotspotWatchOutlivesTheFunctionThatStartedIt(t *testing.T) {
+	blocker, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := blocker.Addr().String()
+
+	mc := &multiCloser{}
+	defer func() { _ = mc.Close() }()
+
+	restore := hotspotWatchIntervalForTests(20 * time.Millisecond)
+	defer restore()
+
+	// Stand-in for Serve(): owns a context, starts the watch, cancels on return.
+	func() {
+		_, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		startHotspotWatch(mc, http.NewServeMux(), addr)
+	}()
+
+	// The "AP appears" well after that function returned.
+	time.Sleep(60 * time.Millisecond)
+	_ = blocker.Close()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mc.mu.Lock()
+		n := len(mc.listeners)
+		mc.mu.Unlock()
+		if n > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the watcher stopped when its starter returned, so a late hotspot is never served")
+}
+
+// Close() must stop the watcher, or a closed server keeps racing to re-bind the port it just released.
+func TestCloseStopsTheHotspotWatch(t *testing.T) {
+	blocker, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := blocker.Addr().String()
+
+	mc := &multiCloser{}
+	restore := hotspotWatchIntervalForTests(10 * time.Millisecond)
+	defer restore()
+
+	startHotspotWatch(mc, http.NewServeMux(), addr)
+	if err := mc.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Free the address; a stopped watcher must not take it.
+	_ = blocker.Close()
+	time.Sleep(200 * time.Millisecond)
+
+	probe, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatalf("the watcher grabbed the address after Close(): %v", err)
+	}
+	_ = probe.Close()
+}
+
+// A listener opened while the server is shutting down must not be kept, or it would hold the port open.
+func TestMultiCloserRefusesListenersAfterClose(t *testing.T) {
+	mc := &multiCloser{}
+	_ = mc.Close()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mc.add(ln) {
+		t.Fatal("add() accepted a listener after Close()")
+	}
+	// add() must have closed it: a second close returns an error on an already-closed listener.
+	if cerr := ln.Close(); cerr == nil {
+		t.Fatal("add() did not close the listener it refused")
+	}
 }
 
 func TestSkipLANInterface(t *testing.T) {
