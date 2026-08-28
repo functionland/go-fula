@@ -76,7 +76,19 @@ func skipLANInterface(name string) bool {
 
 // lanListenAddrs returns "<ip>:<port>" for each private IPv4 address the box holds on a real LAN interface,
 // excluding the hotspot address (bound separately) and loopback.
-func lanListenAddrs(port string, apIP string) []string {
+//
+// Indirected through a variable so a test can drive "a cable was plugged in" without reconfiguring the host's
+// interfaces, which is neither portable nor safe to do on a developer machine.
+var lanListenAddrs = realLANListenAddrs
+
+// lanListenAddrsForTests swaps the address source and returns a restore func.
+func lanListenAddrsForTests(fn func(port string, apIP string) []string) func() {
+	prev := lanListenAddrs
+	lanListenAddrs = fn
+	return func() { lanListenAddrs = prev }
+}
+
+func realLANListenAddrs(port string, apIP string) []string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		log.Warnw("LAN setup bind: could not list interfaces", "err", err)
@@ -215,7 +227,7 @@ func addKuboIdentityState(out map[string]interface{}, livePeerID string) {
 func startAuxListeners(mc *multiCloser, addrs *[]string, mux http.Handler, port string, apIP string) {
 	localhostAddr := "127.0.0.1:" + port
 	if ln, err := net.Listen("tcp", localhostAddr); err == nil {
-		mc.listeners = append(mc.listeners, ln)
+		mc.add(ln)
 		*addrs = append(*addrs, localhostAddr)
 		go func() {
 			if serveErr := http.Serve(ln, withCORS(mux)); serveErr != nil && !strings.Contains(serveErr.Error(), "use of closed network connection") {
@@ -226,10 +238,96 @@ func startAuxListeners(mc *multiCloser, addrs *[]string, mux http.Handler, port 
 		log.Errorw("Failed to use 127.0.0.1 for serve", "err", err)
 	}
 
+	bound := map[string]bool{}
 	for _, ln := range startLANSetupListeners(mux, port, apIP) {
-		mc.listeners = append(mc.listeners, ln)
-		*addrs = append(*addrs, ln.Addr().String())
+		mc.add(ln)
+		a := ln.Addr().String()
+		bound[a] = true
+		*addrs = append(*addrs, a)
 	}
+	// The LAN address usually does NOT exist yet at this point: wap starts with the box, and the network comes
+	// up later (DHCP, or a cable the user plugs in after powering it on). Binding once at startup would mean
+	// LAN setup only ever worked on a box that happened to be wired before boot.
+	startLANSetupWatch(mc, mux, port, apIP, bound)
+}
+
+// How often the watcher re-checks which LAN addresses exist. Cheap: net.Interfaces() and, at most, a bind.
+var lanWatchInterval = 15 * time.Second
+
+// lanWatchIntervalForTests shortens the cadence so a test does not wait a real interval.
+func lanWatchIntervalForTests(d time.Duration) func() {
+	prev := lanWatchInterval
+	lanWatchInterval = d
+	return func() { lanWatchInterval = prev }
+}
+
+// startLANSetupWatch keeps the unowned-box LAN listeners in step with the interfaces that actually exist.
+//
+// Unlike the hotspot watcher this is NOT a retry-until-success loop, for three reasons: the addresses are not
+// known in advance, there can be several, and a second interface can appear long after the first one bound. So
+// it re-evaluates `lanListenAddrs` each tick and binds whatever is new, tracking what it already holds so a
+// steady state costs one interface enumeration and no bind attempts (otherwise every tick would retry an
+// address it already owns and fill the log with EADDRINUSE).
+//
+// It stops the moment the box gains an owner. `lanSetupGuard` would refuse the requests anyway — it re-checks
+// ownership per request — but a listener opened after setup is a socket that should not exist, and relying on
+// the guard to cover for the watcher would be leaning on the second line of defence.
+func startLANSetupWatch(mc *multiCloser, mux http.Handler, port string, apIP string, bound map[string]bool) {
+	if bloxHasOwner() {
+		return // already claimed: there is no setup window to keep open
+	}
+
+	mc.mu.Lock()
+	if mc.closed {
+		mc.mu.Unlock()
+		return
+	}
+	if mc.stopWatch == nil {
+		mc.stopWatch = make(chan struct{})
+	}
+	stop := mc.stopWatch
+	mc.mu.Unlock()
+
+	if bound == nil {
+		bound = map[string]bool{}
+	}
+	handler := lanSetupGuard(withCORS(mux))
+
+	go func() {
+		ticker := time.NewTicker(lanWatchInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+			}
+			if bloxHasOwner() {
+				log.Info("Blox now has an owner — no longer watching for LAN setup addresses")
+				return
+			}
+			for _, addr := range lanListenAddrs(port, apIP) {
+				if bound[addr] {
+					continue
+				}
+				ln, err := net.Listen("tcp", addr)
+				if err != nil {
+					log.Warnw("LAN setup bind failed", "addr", addr, "err", err)
+					continue
+				}
+				if !mc.add(ln) {
+					return // shutting down; add() already closed it
+				}
+				bound[addr] = true
+				log.Infof("A LAN address appeared — also serving setup on %s", addr)
+				go func(l net.Listener) {
+					if serveErr := http.Serve(l, handler); serveErr != nil && !strings.Contains(serveErr.Error(), "use of closed network connection") {
+						log.Errorw("LAN setup server stopped", "err", serveErr)
+					}
+				}(ln)
+			}
+		}
+	}()
 }
 
 // startLANSetupListeners binds the LAN addresses for first-time setup and returns the listeners it opened.

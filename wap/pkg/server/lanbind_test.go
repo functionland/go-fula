@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -233,6 +234,154 @@ func TestCloseStopsTheHotspotWatch(t *testing.T) {
 		t.Fatalf("the watcher grabbed the address after Close(): %v", err)
 	}
 	_ = probe.Close()
+}
+
+// The LAN address usually does not exist when wap starts: the box boots, and the network arrives later (DHCP,
+// or a cable plugged in afterwards). Binding only at startup would mean LAN setup worked exclusively on a box
+// that happened to be wired before boot.
+func TestLANSetupWatchBindsAnAddressThatAppearsLater(t *testing.T) {
+	writeConfig(t, "", true) // unowned
+	restore := lanWatchIntervalForTests(15 * time.Millisecond)
+	defer restore()
+
+	// The address set is what the watcher polls; drive it directly rather than reconfiguring the host.
+	var mu sync.Mutex
+	addrs := []string{}
+	restoreAddrs := lanListenAddrsForTests(func(string, string) []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string{}, addrs...)
+	})
+	defer restoreAddrs()
+
+	mc := &multiCloser{}
+	defer func() { _ = mc.Close() }()
+	startLANSetupWatch(mc, http.NewServeMux(), "0", "10.42.0.1", nil)
+
+	time.Sleep(50 * time.Millisecond)
+	mc.mu.Lock()
+	early := len(mc.listeners)
+	mc.mu.Unlock()
+	if early != 0 {
+		t.Fatalf("bound something before any LAN address existed (%d)", early)
+	}
+
+	// "The user plugs in the cable."
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appeared := probe.Addr().String()
+	_ = probe.Close()
+	mu.Lock()
+	addrs = append(addrs, appeared)
+	mu.Unlock()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		mc.mu.Lock()
+		n := len(mc.listeners)
+		mc.mu.Unlock()
+		if n > 0 {
+			return
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	t.Fatal("a LAN address appeared and the watcher never bound it")
+}
+
+// A steady state must cost no bind attempts: re-binding an address it already holds would fail with
+// EADDRINUSE every tick and fill the log.
+func TestLANSetupWatchDoesNotRebindWhatItAlreadyHolds(t *testing.T) {
+	writeConfig(t, "", true)
+	restore := lanWatchIntervalForTests(10 * time.Millisecond)
+	defer restore()
+
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := probe.Addr().String()
+	_ = probe.Close()
+
+	restoreAddrs := lanListenAddrsForTests(func(string, string) []string { return []string{addr} })
+	defer restoreAddrs()
+
+	mc := &multiCloser{}
+	defer func() { _ = mc.Close() }()
+	startLANSetupWatch(mc, http.NewServeMux(), "0", "10.42.0.1", nil)
+
+	time.Sleep(200 * time.Millisecond) // many ticks
+	mc.mu.Lock()
+	n := len(mc.listeners)
+	mc.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("expected exactly one listener for one address across many ticks, got %d", n)
+	}
+}
+
+// Once the box is claimed the watcher must stop opening listeners. `lanSetupGuard` would refuse the requests
+// anyway, but a socket opened after setup should not exist at all — the guard is the second line of defence,
+// not a licence for the watcher to keep going.
+func TestLANSetupWatchStopsOnceTheBloxHasAnOwner(t *testing.T) {
+	writeConfig(t, "", true) // unowned to begin with
+	restore := lanWatchIntervalForTests(10 * time.Millisecond)
+	defer restore()
+
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := probe.Addr().String()
+	_ = probe.Close()
+
+	// The address only appears AFTER ownership is set, so a watcher that ignored ownership would bind it.
+	var mu sync.Mutex
+	addrs := []string{}
+	restoreAddrs := lanListenAddrsForTests(func(string, string) []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string{}, addrs...)
+	})
+	defer restoreAddrs()
+
+	mc := &multiCloser{}
+	defer func() { _ = mc.Close() }()
+	startLANSetupWatch(mc, http.NewServeMux(), "0", "10.42.0.1", nil)
+
+	writeConfig(t, "12D3KooWPnaMDrD7QLZKiT2iktjm9Kucx7XEPrSCUS6TTBbYuiRj", true) // claimed
+	mu.Lock()
+	addrs = append(addrs, addr)
+	mu.Unlock()
+
+	time.Sleep(200 * time.Millisecond)
+	mc.mu.Lock()
+	n := len(mc.listeners)
+	mc.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("watcher opened %d listener(s) after the Blox was claimed", n)
+	}
+}
+
+// An already-owned box must never start the watcher in the first place.
+func TestLANSetupWatchNotStartedWhenAlreadyOwned(t *testing.T) {
+	writeConfig(t, "12D3KooWPnaMDrD7QLZKiT2iktjm9Kucx7XEPrSCUS6TTBbYuiRj", true)
+	restore := lanWatchIntervalForTests(10 * time.Millisecond)
+	defer restore()
+	restoreAddrs := lanListenAddrsForTests(func(string, string) []string { return []string{"127.0.0.1:0"} })
+	defer restoreAddrs()
+
+	mc := &multiCloser{}
+	defer func() { _ = mc.Close() }()
+	startLANSetupWatch(mc, http.NewServeMux(), "0", "10.42.0.1", nil)
+
+	time.Sleep(120 * time.Millisecond)
+	mc.mu.Lock()
+	n := len(mc.listeners)
+	mc.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("started a setup watcher on an owned box (%d listeners)", n)
+	}
 }
 
 // A listener opened while the server is shutting down must not be kept, or it would hold the port open.
