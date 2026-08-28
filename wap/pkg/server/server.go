@@ -166,6 +166,7 @@ func propertiesHandler(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			response["kubo_peer_id"] = kuboPeerID
 		}
+		addKuboIdentityState(response, kuboPeerID)
 
 		clusterInfo, err := wifi.GetClusterInfo()
 		if err == nil {
@@ -307,6 +308,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		p["kubo_peer_id"] = kuboPeerID
 	}
+	addKuboIdentityState(p, kuboPeerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

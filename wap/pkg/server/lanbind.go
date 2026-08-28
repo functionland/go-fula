@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/functionland/go-fula/wap/pkg/config"
+	"github.com/functionland/go-fula/wap/pkg/wifi"
 	"gopkg.in/yaml.v3"
 )
 
@@ -105,6 +106,35 @@ func lanListenAddrs(port string, apIP string) []string {
 		}
 	}
 	return out
+}
+
+// addKuboIdentityState reports whether kubo is still running an identity it is about to replace.
+//
+// Setting up a Blox that already had an identity — a re-pair after a factory reset — derives a new one and
+// writes it into kubo's config, but the running daemon keeps serving the old identity until it restarts.
+// A client that finishes setup during that window stores a peer ID it cannot reach: dialling the newly
+// configured ID fails with NO_RESERVATION (the relay holds a reservation for the OLD peer), while the live ID
+// stops working as soon as kubo restarts. Reproduced on hardware, and the app's own log showed exactly that —
+// four dial candidates, all NO_RESERVATION, until kubo was restarted and both IDs agreed.
+//
+// `kubo_peer_id` keeps its existing meaning (the running daemon) so nothing that reads it today changes.
+// These fields are added only when the two genuinely disagree, so a settled box's response is byte-identical
+// to before:
+//
+//	kubo_configured_peer_id  the identity kubo will use after its next restart
+//	kubo_identity_pending    true — setup has not fully taken effect yet
+//
+// A client seeing `kubo_identity_pending` should treat the configured ID as the Blox's real identity and wait
+// for the restart before expecting to reach it, rather than recording whichever value it happened to read.
+func addKuboIdentityState(out map[string]interface{}, livePeerID string) {
+	configured, err := wifi.GetKuboConfiguredPeerID()
+	if err != nil || configured == "" || livePeerID == "" || configured == livePeerID {
+		return
+	}
+	out["kubo_configured_peer_id"] = configured
+	out["kubo_identity_pending"] = true
+	log.Warnw("kubo is running an identity that its config has already replaced; a restart is required",
+		"live", livePeerID, "configured", configured)
 }
 
 // startAuxListeners brings up every listener that does not depend on the hotspot interface: loopback always,

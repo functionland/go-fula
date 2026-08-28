@@ -90,6 +90,28 @@ func TestStartLANSetupListenersSkippedWhenOwned(t *testing.T) {
 	}
 }
 
+// A settled box must look exactly as it did before this field existed: anything reading /properties or
+// /readiness today sees no new keys unless kubo is genuinely mid-identity-change.
+func TestAddKuboIdentityStateIsSilentWhenSettled(t *testing.T) {
+	t.Run("no live id → nothing added", func(t *testing.T) {
+		out := map[string]interface{}{}
+		addKuboIdentityState(out, "")
+		if len(out) != 0 {
+			t.Fatalf("expected no fields, got %v", out)
+		}
+	})
+
+	// With no readable kubo config (the usual case in a unit test) the helper must stay quiet rather than
+	// guess that an identity change is under way.
+	t.Run("unreadable kubo config → nothing added", func(t *testing.T) {
+		out := map[string]interface{}{}
+		addKuboIdentityState(out, "12D3KooWLive")
+		if _, pending := out["kubo_identity_pending"]; pending {
+			t.Fatalf("must not report a pending identity when the config cannot be read: %v", out)
+		}
+	})
+}
+
 func TestSkipLANInterface(t *testing.T) {
 	for _, name := range []string{"lo", "docker0", "br-afcaa0d61177", "veth24873a8", "dummy0"} {
 		if !skipLANInterface(name) {
