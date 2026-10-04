@@ -624,6 +624,11 @@ func (bl *FxBlockchain) dispatch(from peer.ID, action string, w http.ResponseWri
 		actionAutoPinUnpair: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
 			bl.handleAutoPinUnpair(from, w, r)
 		},
+
+		// Storage access (owner-only; see authorized())
+		actionNasCredentials: func(from peer.ID, w http.ResponseWriter, r *http.Request) {
+			bl.handleNasCredentials(from, w, r)
+		},
 	}
 
 	// Look up the function in the map and call it
@@ -1018,7 +1023,9 @@ func (bl *FxBlockchain) authorized(pid peer.ID, action string) bool {
 		_, ok := bl.authorizedPeers[pid]
 		bl.authorizedPeersLock.RUnlock()
 		return ok
-	case actionAuth:
+	case actionAuth, actionNasCredentials:
+		// Owner only: the NAS password is a secret, so delegated peers in
+		// authorizedPeers are deliberately excluded.
 		return pid == bl.authorizer && bl.authorizer != ""
 	default:
 		return false

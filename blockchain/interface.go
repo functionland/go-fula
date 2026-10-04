@@ -74,6 +74,9 @@ const (
 	actionAutoPinPair    = "auto-pin-pair"
 	actionAutoPinRefresh = "auto-pin-refresh"
 	actionAutoPinUnpair  = "auto-pin-unpair"
+
+	// Storage access (Samba NAS credentials; owner-only, read-only)
+	actionNasCredentials = "nas-credentials"
 )
 
 type ReplicateRequest struct {
@@ -541,6 +544,23 @@ type AutoPinUnpairResponse struct {
 	Status string `json:"status"`
 }
 
+// NAS credentials (Samba SharedFolder; owner-only, read-only)
+type NasCredentialsRequest struct {
+	// BloxPeerID must equal this blox's kubo peer ID. The request signature
+	// covers action + timestamp + body hash with no nonce and no target, so
+	// binding the target blox in the signed body stops an owner-signed request
+	// from being replayed to another blox of the same owner.
+	BloxPeerID string `json:"blox_peer_id"`
+}
+type NasCredentialsResponse struct {
+	Status    string `json:"status"`
+	Username  string `json:"username,omitempty"`
+	Password  string `json:"password,omitempty"`
+	Share     string `json:"share,omitempty"`
+	CreatedAt string `json:"created_at,omitempty"`
+	Hostname  string `json:"hostname,omitempty"`
+}
+
 type Blockchain interface {
 	Seeded(context.Context, peer.ID, SeededRequest) ([]byte, error)
 	AccountExists(context.Context, peer.ID, AccountExistsRequest) ([]byte, error)
@@ -602,6 +622,9 @@ type Blockchain interface {
 	AutoPinPair(context.Context, peer.ID, AutoPinPairRequest) ([]byte, error)
 	AutoPinRefresh(context.Context, peer.ID, AutoPinRefreshRequest) ([]byte, error)
 	AutoPinUnpair(context.Context, peer.ID) ([]byte, error)
+
+	// Storage access
+	NasCredentials(context.Context, peer.ID, NasCredentialsRequest) ([]byte, error)
 }
 
 var requestTypes = map[string]reflect.Type{
@@ -666,6 +689,9 @@ var requestTypes = map[string]reflect.Type{
 	actionAutoPinPair:    reflect.TypeOf(AutoPinPairRequest{}),
 	actionAutoPinRefresh: reflect.TypeOf(AutoPinRefreshRequest{}),
 	actionAutoPinUnpair:  reflect.TypeOf(AutoPinUnpairRequest{}),
+
+	// Storage access
+	actionNasCredentials: reflect.TypeOf(NasCredentialsRequest{}),
 }
 
 var responseTypes = map[string]reflect.Type{
@@ -730,4 +756,7 @@ var responseTypes = map[string]reflect.Type{
 	actionAutoPinPair:    reflect.TypeOf(AutoPinPairResponse{}),
 	actionAutoPinRefresh: reflect.TypeOf(AutoPinRefreshResponse{}),
 	actionAutoPinUnpair:  reflect.TypeOf(AutoPinUnpairResponse{}),
+
+	// Storage access
+	actionNasCredentials: reflect.TypeOf(NasCredentialsResponse{}),
 }
