@@ -1194,7 +1194,9 @@ func (bl *FxBlockchain) validatePoolOnChain(ctx context.Context, poolID uint32, 
 // cluster peer is neither a member of the pool nor waiting to join it:
 //   - 202: removed on-chain (or never there) → pool and chain cleared from config, fula services restarted so
 //     ipfs-cluster leaves the old pool;
-//   - 409: the device is configured for a different pool, or the chain still lists it (the app's tx not mined yet);
+//   - 202 without changes when no pool is configured;
+//   - 409: the device is configured for a different pool or chain, or the chain still lists it (the app's tx not
+//     mined yet);
 //   - 503: the chain could not be read, or the cluster peer id is unknown — config untouched, safe to retry.
 func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", action, "from", from)
@@ -1230,15 +1232,24 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 			fmt.Sprintf("This Blox is configured for pool %s, not pool %d", configuredPool, poolID))
 		return
 	}
+	// Nothing configured (e.g. a reconcile already cleared it): nothing to clean up or restart.
+	if configuredPool == "" || configuredPool == "0" {
+		log.Infow("Pool leave: no pool configured, nothing to do", "poolID", poolID, "chain", chainName)
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(PoolLeaveResponse{PoolID: req.PoolID, ChainName: chainName}); err != nil {
+			log.Error("failed to write response: %v", err)
+		}
+		return
+	}
+	configuredChain := ""
+	if bl.getChainName != nil {
+		configuredChain = bl.getChainName()
+	}
 
 	// If no chain name provided, try to determine it from current configuration
 	if chainName == "" {
-		var currentChain string
-		if bl.getChainName != nil {
-			currentChain = bl.getChainName()
-		}
-		if currentChain != "" {
-			chainName = currentChain
+		if configuredChain != "" {
+			chainName = configuredChain
 			log.Debugw("Using current chain configuration", "poolID", poolID, "chain", chainName)
 		} else {
 			// Try to discover which chain this pool exists on
@@ -1252,6 +1263,13 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 				log.Warnw("Failed to discover chain, defaulting to skale", "poolID", poolID, "error", err)
 			}
 		}
+	}
+	// Pool ids repeat across chains (a Blox can even be in pool 1 on both): a leave on another chain than the one
+	// this Blox is configured for must not clear its config.
+	if configuredChain != "" && configuredChain != chainName {
+		writeError(http.StatusConflict, "Chain mismatch",
+			fmt.Sprintf("This Blox is configured for pool %s on %s, not on %s", configuredPool, configuredChain, chainName))
+		return
 	}
 
 	// The app sends this right after its removeMemberPeerId tx is mined; a public RPC can lag a block or two.

@@ -210,6 +210,34 @@ func TestHandlePoolLeave_OtherConfiguredPoolIs409WithoutRPC(t *testing.T) {
 	assert.Equal(t, "2", cfg.getPool())
 }
 
+func TestHandlePoolLeave_OtherConfiguredChainIs409WithoutRPC(t *testing.T) {
+	// Pool 1 exists on both chains; a leave of Base pool 1 must not clear a SKALE pool-1 config.
+	cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+	rec := leave(bl, 1, "base")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "configured for pool 1 on skale, not on base")
+	assert.Equal(t, 0, chain.calls)
+	assert.Equal(t, "1", cfg.getPool())
+	assert.Equal(t, "skale", cfg.getChain())
+}
+
+func TestHandlePoolLeave_NothingConfiguredIs202WithoutRestart(t *testing.T) {
+	cfg := &poolConfig{pool: "0", chain: "", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+	rec := leave(bl, 1, "skale")
+
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Equal(t, 0, chain.calls)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, cfg.hookCalls, "no services restart when there was nothing to clear")
+}
+
 func TestHandlePoolLeave_UnverifiableIs503AndKeepsConfig(t *testing.T) {
 	t.Run("rpc error", func(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
