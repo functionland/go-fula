@@ -96,6 +96,13 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithIpfsClient(p.rpc),
 		blockchain.WithMinSuccessPingCount(p.minSuccessRate*p.pingCount/100),
 		blockchain.WithIpfsClusterAPI(p.ipfsClusterApi),
+		// After a pool leave / reconcile cleared the config, restart the fula services so ipfs-cluster re-reads
+		// the (now empty) pool instead of following the old one until the next reboot.
+		blockchain.WithOnPoolConfigCleared(func() {
+			if err := signalFulaRestart(); err != nil {
+				log.Errorw("Failed to signal fula restart after the pool was cleared", "err", err)
+			}
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -427,6 +434,10 @@ func (p *Blox) Start(ctx context.Context) error {
 		p.watchKuboP2P(ctx)
 	}()
 
+	// Drop a configured pool this Blox no longer belongs to on-chain (left from the app while it was offline, or the
+	// leave notice never arrived); discovery below then runs as for a fresh device.
+	p.reconcilePool(ctx)
+
 	// Register cluster tunnel forward immediately if pool is already known from config,
 	// before potentially blocking on chain discovery for up to ~15 minutes.
 	if p.topicName != "0" {
@@ -637,6 +648,7 @@ func (p *Blox) Start(ctx context.Context) error {
 			for {
 				select {
 				case <-ticker.C:
+					p.reconcilePool(p.ctx)
 					// instead of FetchAvailableManifestsAndStore See what are the new manifests from ther last time we checked in blockstore
 					// A method that checks the last time we checked for stored blocks file
 					// then it checks the stored files under /uniondrive/ipfs_datastore/blocks/{folders that are not .temp}

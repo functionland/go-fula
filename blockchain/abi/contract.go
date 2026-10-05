@@ -83,12 +83,14 @@ var MethodSignatures = struct {
 	IsPeerIdMemberOfPool string
 	GetMemberPeerIds     string
 	RemoveMemberPeerId   string
+	JoinRequests         string
 }{
 	Pools:                "0xced08b2d", // pools(uint32) - updated signature
 	PoolIds:              "0x69883b4e", // poolIds(uint256) - index-based pool discovery
 	IsPeerIdMemberOfPool: "0xb098a605", // isPeerIdMemberOfPool(uint32,bytes32) - corrected from block explorer
 	GetMemberPeerIds:     "0x31db3ae8", // getMemberPeerIds(uint32,address)
-	RemoveMemberPeerId:   "0x12345678", // removeMemberPeerId(uint32,bytes32) - TODO: Update with actual signature
+	RemoveMemberPeerId:   "0x3d71233a", // removeMemberPeerId(uint32,bytes32) — keccak256 of the signature
+	JoinRequests:         "0xccc9fc03", // joinRequests(uint32,bytes32) — keccak256 of the signature
 }
 
 // DecodePoolsResult decodes the result from pools(uint32) contract call
@@ -393,4 +395,36 @@ func EncodeRemoveMemberPeerIdCall(poolID uint32, peerIDBytes32 string) string {
 	}
 
 	return fmt.Sprintf("%s%064x%s", MethodSignatures.RemoveMemberPeerId, poolID, peerIDBytes32)
+}
+
+// EncodeJoinRequestsCall encodes the joinRequests(uint32,bytes32) public-mapping getter call
+func EncodeJoinRequestsCall(poolID uint32, peerIDBytes32 string) string {
+	// Remove 0x prefix from peerIDBytes32 if present
+	if strings.HasPrefix(peerIDBytes32, "0x") {
+		peerIDBytes32 = peerIDBytes32[2:]
+	}
+
+	return fmt.Sprintf("%s%064x%s", MethodSignatures.JoinRequests, poolID, peerIDBytes32)
+}
+
+// DecodeJoinRequestStatus returns the status field of a joinRequests(uint32,bytes32) result: the getter returns
+// (account, poolId, timestamp, index, approvals, rejections, status, peerId), 8 words; status 1 = pending,
+// 0 = no request.
+func DecodeJoinRequestStatus(data string) (uint8, error) {
+	// Remove 0x prefix
+	if strings.HasPrefix(data, "0x") {
+		data = data[2:]
+	}
+
+	// 8 * 32 bytes = 512 hex chars
+	if len(data) < 512 {
+		return 0, fmt.Errorf("insufficient data length: %d, expected 512", len(data))
+	}
+
+	status, err := strconv.ParseUint(data[6*64:7*64], 16, 8)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse join request status: %w", err)
+	}
+
+	return uint8(status), nil
 }
