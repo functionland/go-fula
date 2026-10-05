@@ -1300,7 +1300,11 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 	}
 
 	// Clean up local configuration and state
-	bl.cleanLeaveJoinPool(ctx, poolID)
+	if err := bl.clearPoolConfig(ctx, poolID); err != nil {
+		log.Errorw("Pool leave: could not clear the pool from the config", "poolID", poolID, "error", err)
+		writeError(http.StatusInternalServerError, "Failed to update the Blox config", err.Error())
+		return
+	}
 
 	statusCode := http.StatusAccepted
 	res = PoolLeaveResponse{
@@ -1481,7 +1485,22 @@ func (bl *FxBlockchain) ReconcilePoolConfig(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	log.Infow("Pool reconcile: this Blox is no longer in the configured pool on-chain; clearing it", "pool", pool, "chain", chainName)
-	bl.cleanLeaveJoinPool(ctx, int(poolID))
+	if err := bl.clearPoolConfig(ctx, int(poolID)); err != nil {
+		return false, err
+	}
 	bl.signalPoolConfigCleared(0)
 	return true, nil
+}
+
+// clearPoolConfig drops the pool from the config (cleanLeaveJoinPool) and confirms it took effect. The services are
+// only restarted after a confirmed clear: if the config write failed, a restart would find the pool again, clear
+// and restart again — a loop.
+func (bl *FxBlockchain) clearPoolConfig(ctx context.Context, poolID int) error {
+	bl.cleanLeaveJoinPool(ctx, poolID)
+	if bl.getPoolName != nil {
+		if pool := bl.getPoolName(); pool != "" && pool != "0" {
+			return fmt.Errorf("pool is still %q in the config after clearing it", pool)
+		}
+	}
+	return nil
 }

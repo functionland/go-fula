@@ -75,11 +75,12 @@ func (f *fakeChain) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 type poolConfig struct {
-	mu        sync.Mutex
-	pool      string
-	chain     string
-	cleared   chan struct{}
-	hookCalls int
+	mu         sync.Mutex
+	pool       string
+	chain      string
+	cleared    chan struct{}
+	hookCalls  int
+	failWrites bool // simulate a config.yaml that can't be written
 }
 
 func (c *poolConfig) getPool() string  { c.mu.Lock(); defer c.mu.Unlock(); return c.pool }
@@ -87,6 +88,9 @@ func (c *poolConfig) getChain() string { c.mu.Lock(); defer c.mu.Unlock(); retur
 func (c *poolConfig) setPool(p string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.failWrites {
+		return fmt.Errorf("read-only file system")
+	}
 	c.pool = p
 	return nil
 }
@@ -236,6 +240,27 @@ func TestHandlePoolLeave_NothingConfiguredIs202WithoutRestart(t *testing.T) {
 	assert.Equal(t, 0, chain.calls)
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, 0, cfg.hookCalls, "no services restart when there was nothing to clear")
+}
+
+func TestConfigWriteFailureNeverRestarts(t *testing.T) {
+	// A restart after a failed write would find the pool again, clear, restart again — a loop.
+	t.Run("leave", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1), failWrites: true}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		rec := leave(bl, 1, "skale")
+		assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("reconcile", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1), failWrites: true}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		assert.Error(t, err)
+		assert.False(t, cleared)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
 }
 
 func TestHandlePoolLeave_UnverifiableIs503AndKeepsConfig(t *testing.T) {

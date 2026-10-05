@@ -435,8 +435,9 @@ func (p *Blox) Start(ctx context.Context) error {
 	}()
 
 	// Drop a configured pool this Blox no longer belongs to on-chain (left from the app while it was offline, or the
-	// leave notice never arrived); discovery below then runs as for a fresh device.
-	p.reconcilePool(ctx)
+	// leave notice never arrived). Runs in the background a little after start, never on pool hosts; a clear
+	// restarts the fula services, after which discovery runs as for a fresh device.
+	p.startPoolReconcile(ctx)
 
 	// Register cluster tunnel forward immediately if pool is already known from config,
 	// before potentially blocking on chain discovery for up to ~15 minutes.

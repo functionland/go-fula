@@ -5,11 +5,16 @@ import (
 	"time"
 )
 
-// poolReconcileTimeout bounds one reconcile pass (two chain reads, each with retries).
-const poolReconcileTimeout = 60 * time.Second
+const (
+	// poolReconcileTimeout bounds one reconcile pass (two chain reads, each with retries).
+	poolReconcileTimeout = 60 * time.Second
+	// poolReconcileStartupDelay keeps the first pass off the startup path and lets the network settle after a boot.
+	poolReconcileStartupDelay = 2 * time.Minute
+)
 
 // reconcilePool clears the configured pool when the chain definitively says this Blox left it (see
-// blockchain.ReconcilePoolConfig). Read errors keep the config; the next pass (startup or the 6 h loop) retries.
+// blockchain.ReconcilePoolConfig); the services restart that follows reloads the pool state. Read errors keep the
+// config; the next pass (the 6 h loop) retries.
 func (p *Blox) reconcilePool(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, poolReconcileTimeout)
 	defer cancel()
@@ -19,7 +24,24 @@ func (p *Blox) reconcilePool(ctx context.Context) {
 		return
 	}
 	if cleared {
-		p.topicName = "0"
-		p.chainName = ""
+		log.Info("Pool reconcile cleared the configured pool; fula services restart requested")
 	}
+}
+
+// startPoolReconcile runs the first reconcile pass in the background, poolReconcileStartupDelay after start. Pool
+// hosts are skipped: their own pool is not a membership the chain lists for them.
+func (p *Blox) startPoolReconcile(ctx context.Context) {
+	if p.poolHostMode {
+		return
+	}
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(poolReconcileStartupDelay):
+		}
+		p.reconcilePool(ctx)
+	}()
 }
