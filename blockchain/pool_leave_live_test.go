@@ -51,9 +51,12 @@ func livePeer(t *testing.T, s string) peer.ID {
 // newLiveBlockchain uses the real chain RPCs (default http client) with fake config callbacks.
 func newLiveBlockchain(t *testing.T, clusterPeer peer.ID, cfg *poolConfig) *FxBlockchain {
 	t.Helper()
-	PoolJoinedAtFilePath = t.TempDir() + "/pool_joined_at.tmp"
+	dir := t.TempDir()
+	PoolJoinedAtFilePath = dir + "/pool_joined_at.tmp"
+	PoolReconcileClearedAtFilePath = dir + "/pool_reconcile_cleared_at.tmp"
 	poolLeaveCheckInterval = 2 * time.Second
 	poolConfigClearedRestartDelay = 0
+	poolReconcileConfirmDelay = 2 * time.Second
 	bl, err := NewFxBlockchain(NewSimpleKeyStorer(""),
 		WithTimeout(60),
 		WithClusterPeerID(clusterPeer),

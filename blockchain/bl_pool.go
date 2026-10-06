@@ -328,8 +328,8 @@ func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
 			log.Errorw("Failed to reset chain name", "error", err)
 		}
 	}
-	bl.topicName = "0"
-	bl.chainName = ""
+	// (In-memory topic/chain names are not touched here — other request goroutines read them; the services restart
+	// that follows a clear reloads them from the config.)
 	clearPoolJoinTime()
 
 	bl.StopPingServer(ctx)
@@ -1329,25 +1329,29 @@ const (
 	// the Blox yet: a join writes the config immediately, but the join server's addMember (or approval votes for a
 	// contract join) lands later.
 	PoolJoinGracePeriod = 24 * time.Hour
-	joinRequestPending  = 1 // JoinRequest.status of a request still waiting for votes
+	// PoolReconcileMinInterval caps automatic (reconcile) clears — and the services restart each one triggers — to
+	// one per interval, so no combination of chain / RPC answers can make a restart loop.
+	PoolReconcileMinInterval = 24 * time.Hour
+	joinRequestPending       = 1 // JoinRequest.status of a request still waiting for votes
 )
 
 // Variables (not constants) so tests can shorten them.
 var (
 	poolLeaveCheckInterval        = 4 * time.Second
 	poolConfigClearedRestartDelay = 3 * time.Second
+	poolReconcileConfirmDelay     = 30 * time.Second
 )
 
-// PoolJoinedAtFilePath records when HandlePoolJoin last wrote a pool into the config (see PoolJoinGracePeriod).
-// A variable so tests can point it at a temp dir.
-var PoolJoinedAtFilePath = "/internal/.tmp/pool_joined_at.tmp"
+// Marker files (variables so tests can point them at a temp dir). PoolJoinedAtFilePath records when HandlePoolJoin
+// last wrote a pool into the config (see PoolJoinGracePeriod); PoolReconcileClearedAtFilePath when
+// ReconcilePoolConfig last cleared one (see PoolReconcileMinInterval).
+var (
+	PoolJoinedAtFilePath           = "/internal/.tmp/pool_joined_at.tmp"
+	PoolReconcileClearedAtFilePath = "/internal/.tmp/pool_reconcile_cleared_at.tmp"
+)
 
 func recordPoolJoinTime(t time.Time) {
-	if err := os.MkdirAll(filepath.Dir(PoolJoinedAtFilePath), 0755); err != nil {
-		log.Warnw("Failed to create directory for pool join time", "err", err)
-		return
-	}
-	if err := os.WriteFile(PoolJoinedAtFilePath, []byte(t.UTC().Format(time.RFC3339)), 0644); err != nil {
+	if err := writeTimeMarker(PoolJoinedAtFilePath, t); err != nil {
 		log.Warnw("Failed to record pool join time", "err", err)
 	}
 }
@@ -1361,15 +1365,7 @@ func clearPoolJoinTime() {
 // PoolJoinedAt returns when the configured pool was joined from this device; false when unknown (e.g. joins made
 // before this marker existed), which counts as an old join.
 func PoolJoinedAt() (time.Time, bool) {
-	b, err := os.ReadFile(PoolJoinedAtFilePath)
-	if err != nil {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(b)))
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
+	return readTimeMarker(PoolJoinedAtFilePath)
 }
 
 // signalPoolConfigCleared runs the WithOnPoolConfigCleared hook (the blox wires it to a fula services restart, so
@@ -1473,16 +1469,35 @@ func (bl *FxBlockchain) ReconcilePoolConfig(ctx context.Context) (bool, error) {
 		log.Debugw("Pool reconcile: join is recent, keeping config", "pool", pool, "chain", chainName, "joinedAt", joinedAt)
 		return false, nil
 	}
+	// At most one reconcile clear (and services restart) per PoolReconcileMinInterval, whatever the RPCs answer.
+	if clearedAt, ok := readTimeMarker(PoolReconcileClearedAtFilePath); ok && time.Since(clearedAt) < PoolReconcileMinInterval {
+		log.Debugw("Pool reconcile: cleared recently, skipping", "clearedAt", clearedAt)
+		return false, nil
+	}
 	poolID, err := strconv.ParseUint(pool, 10, 32)
 	if err != nil {
 		return false, fmt.Errorf("invalid configured pool %q: %w", pool, err)
 	}
-	member, pending, err := bl.ClusterPeerPoolStatus(ctx, uint32(poolID), chainName)
-	if err != nil {
-		return false, err
+	// Two definitive "not listed" answers, a little apart, before acting (RPC nodes can briefly disagree).
+	for check := 1; check <= 2; check++ {
+		if check == 2 {
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(poolReconcileConfirmDelay):
+			}
+		}
+		member, pending, err := bl.ClusterPeerPoolStatus(ctx, uint32(poolID), chainName)
+		if err != nil {
+			return false, err
+		}
+		if member || pending {
+			return false, nil
+		}
 	}
-	if member || pending {
-		return false, nil
+	// Record the clear before doing it: if the record can't be written, the rate limit couldn't hold, so don't clear.
+	if err := writeTimeMarker(PoolReconcileClearedAtFilePath, time.Now()); err != nil {
+		return false, fmt.Errorf("cannot record the reconcile time, not clearing: %w", err)
 	}
 	log.Infow("Pool reconcile: this Blox is no longer in the configured pool on-chain; clearing it", "pool", pool, "chain", chainName)
 	if err := bl.clearPoolConfig(ctx, int(poolID)); err != nil {
@@ -1496,11 +1511,40 @@ func (bl *FxBlockchain) ReconcilePoolConfig(ctx context.Context) (bool, error) {
 // only restarted after a confirmed clear: if the config write failed, a restart would find the pool again, clear
 // and restart again — a loop.
 func (bl *FxBlockchain) clearPoolConfig(ctx context.Context, poolID int) error {
-	bl.cleanLeaveJoinPool(ctx, poolID)
+	if bl.updatePoolName != nil {
+		if err := bl.updatePoolName("0"); err != nil {
+			return fmt.Errorf("failed to clear the pool in the config: %w", err)
+		}
+	}
+	if bl.updateChainName != nil {
+		if err := bl.updateChainName(""); err != nil {
+			return fmt.Errorf("failed to clear the chain in the config: %w", err)
+		}
+	}
+	bl.cleanLeaveJoinPool(ctx, poolID) // the config writes above make its own resets no-ops
 	if bl.getPoolName != nil {
 		if pool := bl.getPoolName(); pool != "" && pool != "0" {
 			return fmt.Errorf("pool is still %q in the config after clearing it", pool)
 		}
 	}
 	return nil
+}
+
+func readTimeMarker(path string) (time.Time, bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(b)))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func writeTimeMarker(path string, t time.Time) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(t.UTC().Format(time.RFC3339)), 0644)
 }

@@ -25,11 +25,12 @@ import (
 // fakeChain answers the pool contract's eth_calls for every chain RPC (the chain URLs are hard-coded, so the
 // http.Client transport is swapped instead).
 type fakeChain struct {
-	mu      sync.Mutex
-	member  bool  // isPeerIdMemberOfPool result
-	status  uint8 // joinRequests(...).status
-	failRPC bool  // answer every call with a JSON-RPC error
-	calls   int
+	mu            sync.Mutex
+	member        bool   // isPeerIdMemberOfPool result
+	memberAnswers []bool // if set, consumed one per isPeerIdMemberOfPool call (then `member`)
+	status        uint8  // joinRequests(...).status
+	failRPC       bool   // answer every call with a JSON-RPC error
+	calls         int
 }
 
 func (f *fakeChain) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -55,8 +56,12 @@ func (f *fakeChain) RoundTrip(req *http.Request) (*http.Response, error) {
 	case f.failRPC:
 		resp["error"] = map[string]interface{}{"code": -32000, "message": "upstream unavailable"}
 	case strings.HasPrefix(data, abi.MethodSignatures.IsPeerIdMemberOfPool):
+		answer := f.member
+		if len(f.memberAnswers) > 0 {
+			answer, f.memberAnswers = f.memberAnswers[0], f.memberAnswers[1:]
+		}
 		isMember := uint64(0)
-		if f.member {
+		if answer {
 			isMember = 1
 		}
 		resp["result"] = "0x" + word(isMember) + word(0)
@@ -103,9 +108,12 @@ func (c *poolConfig) setChain(ch string) error {
 
 func newLeaveTestBlockchain(t *testing.T, chain *fakeChain, cfg *poolConfig, withClusterPeer bool) *FxBlockchain {
 	t.Helper()
-	PoolJoinedAtFilePath = filepath.Join(t.TempDir(), "pool_joined_at.tmp")
+	dir := t.TempDir()
+	PoolJoinedAtFilePath = filepath.Join(dir, "pool_joined_at.tmp")
+	PoolReconcileClearedAtFilePath = filepath.Join(dir, "pool_reconcile_cleared_at.tmp")
 	poolLeaveCheckInterval = 10 * time.Millisecond
 	poolConfigClearedRestartDelay = 0
+	poolReconcileConfirmDelay = 0
 
 	opts := []Option{
 		WithTimeout(30),
@@ -164,7 +172,6 @@ func TestHandlePoolLeave_NotMemberClearsConfigAndRestarts(t *testing.T) {
 	assert.Equal(t, "skale", res.ChainName)
 	assert.Equal(t, "0", cfg.getPool())
 	assert.Equal(t, "", cfg.getChain())
-	assert.Equal(t, "0", bl.topicName)
 	_, ok := PoolJoinedAt()
 	assert.False(t, ok, "join marker is removed on leave")
 	waitCleared(t, cfg)
@@ -339,6 +346,52 @@ func TestReconcilePoolConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, cleared)
 		assert.Equal(t, 0, chain.calls)
+	})
+}
+
+func TestReconcilePoolConfigLoopGuards(t *testing.T) {
+	t.Run("at most one clear per interval: a second pass within 24 h does nothing", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		chain := &fakeChain{}
+		bl := newLeaveTestBlockchain(t, chain, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		require.True(t, cleared)
+		waitCleared(t, cfg)
+
+		// Something (e.g. discovery after the restart) puts a pool back; the chain still doesn't list the Blox.
+		require.NoError(t, cfg.setPool("1"))
+		require.NoError(t, cfg.setChain("skale"))
+		calls := chain.calls
+		cleared, err = bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, calls, chain.calls, "no chain reads while rate-limited")
+		assert.Equal(t, "1", cfg.getPool())
+		assert.Equal(t, 1, cfg.hookCalls)
+	})
+	t.Run("a second read that disagrees keeps the config", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{memberAnswers: []bool{false, true}}, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		_, recorded := readTimeMarker(PoolReconcileClearedAtFilePath)
+		assert.False(t, recorded)
+	})
+	t.Run("if the clear can't be recorded, nothing is cleared", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		blocker := filepath.Join(t.TempDir(), "not-a-dir")
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+		PoolReconcileClearedAtFilePath = filepath.Join(blocker, "marker.tmp") // parent is a file → unwritable
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		assert.Error(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, cfg.hookCalls)
 	})
 }
 

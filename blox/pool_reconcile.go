@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	// poolReconcileTimeout bounds one reconcile pass (two chain reads, each with retries).
-	poolReconcileTimeout = 60 * time.Second
+	// poolReconcileTimeout bounds one reconcile pass (two confirmed rounds of chain reads, each with retries).
+	poolReconcileTimeout = 3 * time.Minute
 	// poolReconcileStartupDelay keeps the first pass off the startup path and lets the network settle after a boot.
 	poolReconcileStartupDelay = 2 * time.Minute
 )
