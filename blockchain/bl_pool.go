@@ -1357,6 +1357,8 @@ var (
 
 func poolKey(chainName, pool string) string { return chainName + ":" + pool }
 
+// recordPoolMemberConfirmed is not locked: its only caller, ReconcilePoolConfig, runs once a few minutes after start
+// and then every 6 h, so calls never overlap (the leave handler only deletes the file). Add a lock if that changes.
 func recordPoolMemberConfirmed(chainName, pool string) {
 	if confirmed, ok := readPoolMemberConfirmed(); ok && confirmed == poolKey(chainName, pool) {
 		return
