@@ -31,6 +31,8 @@ type fakeChain struct {
 	status        uint8  // joinRequests(...).status
 	failRPC       bool   // answer every call with a JSON-RPC error
 	calls         int
+	memberCalls   int
+	onMemberCall  func(n int) // runs on each isPeerIdMemberOfPool call (1-based count)
 }
 
 func (f *fakeChain) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -56,6 +58,10 @@ func (f *fakeChain) RoundTrip(req *http.Request) (*http.Response, error) {
 	case f.failRPC:
 		resp["error"] = map[string]interface{}{"code": -32000, "message": "upstream unavailable"}
 	case strings.HasPrefix(data, abi.MethodSignatures.IsPeerIdMemberOfPool):
+		f.memberCalls++
+		if f.onMemberCall != nil {
+			f.onMemberCall(f.memberCalls)
+		}
 		answer := f.member
 		if len(f.memberAnswers) > 0 {
 			answer, f.memberAnswers = f.memberAnswers[0], f.memberAnswers[1:]
@@ -106,11 +112,12 @@ func (c *poolConfig) setChain(ch string) error {
 	return nil
 }
 
-func newLeaveTestBlockchain(t *testing.T, chain *fakeChain, cfg *poolConfig, withClusterPeer bool) *FxBlockchain {
+func newLeaveTestBlockchain(t *testing.T, chain *fakeChain, cfg *poolConfig, withClusterPeer bool, extra ...Option) *FxBlockchain {
 	t.Helper()
 	dir := t.TempDir()
-	PoolJoinedAtFilePath = filepath.Join(dir, "pool_joined_at.tmp")
+	PoolMemberConfirmedFilePath = filepath.Join(dir, "pool_member_confirmed.tmp")
 	PoolReconcileClearedAtFilePath = filepath.Join(dir, "pool_reconcile_cleared_at.tmp")
+	PoolReconcileDisabledFilePath = filepath.Join(dir, "disable_pool_reconcile")
 	poolLeaveCheckInterval = 10 * time.Millisecond
 	poolConfigClearedRestartDelay = 0
 	poolReconcileConfirmDelay = 0
@@ -135,7 +142,7 @@ func newLeaveTestBlockchain(t *testing.T, chain *fakeChain, cfg *poolConfig, wit
 		require.NoError(t, err)
 		opts = append(opts, WithClusterPeerID(id))
 	}
-	bl, err := NewFxBlockchain(NewSimpleKeyStorer(""), opts...)
+	bl, err := NewFxBlockchain(NewSimpleKeyStorer(""), append(opts, extra...)...)
 	require.NoError(t, err)
 	bl.ch = &http.Client{Transport: chain}
 	return bl
@@ -161,7 +168,7 @@ func waitCleared(t *testing.T, cfg *poolConfig) {
 func TestHandlePoolLeave_NotMemberClearsConfigAndRestarts(t *testing.T) {
 	cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
 	bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
-	recordPoolJoinTime(time.Now()) // a leave clears even a fresh join
+	recordPoolMemberConfirmed("skale", "1")
 
 	rec := leave(bl, 1, "skale")
 
@@ -172,8 +179,8 @@ func TestHandlePoolLeave_NotMemberClearsConfigAndRestarts(t *testing.T) {
 	assert.Equal(t, "skale", res.ChainName)
 	assert.Equal(t, "0", cfg.getPool())
 	assert.Equal(t, "", cfg.getChain())
-	_, ok := PoolJoinedAt()
-	assert.False(t, ok, "join marker is removed on leave")
+	_, ok := readPoolMemberConfirmed()
+	assert.False(t, ok, "the confirmed membership is dropped on leave")
 	waitCleared(t, cfg)
 }
 
@@ -249,6 +256,18 @@ func TestHandlePoolLeave_NothingConfiguredIs202WithoutRestart(t *testing.T) {
 	assert.Equal(t, 0, cfg.hookCalls, "no services restart when there was nothing to clear")
 }
 
+func TestHandlePoolLeave_PoolHostNeverLeaves(t *testing.T) {
+	cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true, WithPoolHost(true))
+
+	rec := leave(bl, 1, "skale")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, 0, chain.calls)
+	assert.Equal(t, "1", cfg.getPool())
+}
+
 func TestConfigWriteFailureNeverRestarts(t *testing.T) {
 	// A restart after a failed write would find the pool again, clear, restart again — a loop.
 	t.Run("leave", func(t *testing.T) {
@@ -262,6 +281,7 @@ func TestConfigWriteFailureNeverRestarts(t *testing.T) {
 	t.Run("reconcile", func(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1), failWrites: true}
 		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		cleared, err := bl.ReconcilePoolConfig(t.Context())
 		assert.Error(t, err)
 		assert.False(t, cleared)
@@ -289,9 +309,33 @@ func TestHandlePoolLeave_UnverifiableIs503AndKeepsConfig(t *testing.T) {
 }
 
 func TestReconcilePoolConfig(t *testing.T) {
-	t.Run("not a member and no join marker: cleared", func(t *testing.T) {
+	t.Run("running device whose pool was never seen as a membership: left alone", func(t *testing.T) {
+		// e.g. a join whose on-chain part never landed — such devices keep running exactly as before the update.
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
 		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		assert.Equal(t, "skale", cfg.getChain())
+		_, recorded := readTimeMarker(PoolReconcileClearedAtFilePath)
+		assert.False(t, recorded)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("member: kept, and the membership is recorded", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "base", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{member: true}, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		confirmed, ok := readPoolMemberConfirmed()
+		require.True(t, ok)
+		assert.Equal(t, "base:1", confirmed)
+	})
+	t.Run("was a member, has left: cleared and services restarted", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		cleared, err := bl.ReconcilePoolConfig(t.Context())
 		require.NoError(t, err)
 		assert.True(t, cleared)
@@ -299,52 +343,59 @@ func TestReconcilePoolConfig(t *testing.T) {
 		assert.Equal(t, "", cfg.getChain())
 		waitCleared(t, cfg)
 	})
-	t.Run("recent join: kept without reading the chain", func(t *testing.T) {
+	t.Run("membership confirmed for another pool or chain: left alone", func(t *testing.T) {
+		for _, confirmed := range [][2]string{{"base", "1"}, {"skale", "2"}} {
+			cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+			bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+			recordPoolMemberConfirmed(confirmed[0], confirmed[1])
+			cleared, err := bl.ReconcilePoolConfig(t.Context())
+			require.NoError(t, err)
+			assert.False(t, cleared, "confirmed %v", confirmed)
+			assert.Equal(t, "1", cfg.getPool())
+		}
+	})
+	t.Run("pending: kept", func(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
-		chain := &fakeChain{}
-		bl := newLeaveTestBlockchain(t, chain, cfg, true)
-		recordPoolJoinTime(time.Now().Add(-time.Hour))
+		bl := newLeaveTestBlockchain(t, &fakeChain{status: 1}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		cleared, err := bl.ReconcilePoolConfig(t.Context())
 		require.NoError(t, err)
 		assert.False(t, cleared)
 		assert.Equal(t, "1", cfg.getPool())
-		assert.Equal(t, 0, chain.calls)
-	})
-	t.Run("join older than the grace period: cleared", func(t *testing.T) {
-		cfg := &poolConfig{pool: "1", chain: "base", cleared: make(chan struct{}, 1)}
-		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
-		recordPoolJoinTime(time.Now().Add(-PoolJoinGracePeriod - time.Minute))
-		cleared, err := bl.ReconcilePoolConfig(t.Context())
-		require.NoError(t, err)
-		assert.True(t, cleared)
-		waitCleared(t, cfg)
-	})
-	t.Run("still a member or pending: kept", func(t *testing.T) {
-		for _, chain := range []*fakeChain{{member: true}, {status: 1}} {
-			cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
-			bl := newLeaveTestBlockchain(t, chain, cfg, true)
-			cleared, err := bl.ReconcilePoolConfig(t.Context())
-			require.NoError(t, err)
-			assert.False(t, cleared)
-			assert.Equal(t, "1", cfg.getPool())
-		}
 	})
 	t.Run("rpc error: kept, error returned", func(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
 		bl := newLeaveTestBlockchain(t, &fakeChain{failRPC: true}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		cleared, err := bl.ReconcilePoolConfig(t.Context())
 		assert.Error(t, err)
 		assert.False(t, cleared)
 		assert.Equal(t, "1", cfg.getPool())
 		assert.Equal(t, 0, cfg.hookCalls)
 	})
-	t.Run("no pool configured: nothing to do", func(t *testing.T) {
-		cfg := &poolConfig{pool: "0", chain: "", cleared: make(chan struct{}, 1)}
+	t.Run("nothing to do without a pool, on a pool host, or with the kill switch", func(t *testing.T) {
 		chain := &fakeChain{}
-		bl := newLeaveTestBlockchain(t, chain, cfg, true)
-		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		unset := &poolConfig{pool: "0", chain: "", cleared: make(chan struct{}, 1)}
+		cleared, err := newLeaveTestBlockchain(t, chain, unset, true).ReconcilePoolConfig(t.Context())
 		require.NoError(t, err)
 		assert.False(t, cleared)
+
+		host := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, chain, host, true, WithPoolHost(true))
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err = bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+
+		off := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl = newLeaveTestBlockchain(t, chain, off, true)
+		recordPoolMemberConfirmed("skale", "1")
+		require.NoError(t, os.WriteFile(PoolReconcileDisabledFilePath, nil, 0644))
+		cleared, err = bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", off.getPool())
+
 		assert.Equal(t, 0, chain.calls)
 	})
 }
@@ -354,14 +405,16 @@ func TestReconcilePoolConfigLoopGuards(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
 		chain := &fakeChain{}
 		bl := newLeaveTestBlockchain(t, chain, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		cleared, err := bl.ReconcilePoolConfig(t.Context())
 		require.NoError(t, err)
 		require.True(t, cleared)
 		waitCleared(t, cfg)
 
-		// Something (e.g. discovery after the restart) puts a pool back; the chain still doesn't list the Blox.
+		// Something puts the same pool back and it is (somehow) recorded as confirmed again; still rate-limited.
 		require.NoError(t, cfg.setPool("1"))
 		require.NoError(t, cfg.setChain("skale"))
+		recordPoolMemberConfirmed("skale", "1")
 		calls := chain.calls
 		cleared, err = bl.ReconcilePoolConfig(t.Context())
 		require.NoError(t, err)
@@ -373,6 +426,7 @@ func TestReconcilePoolConfigLoopGuards(t *testing.T) {
 	t.Run("a second read that disagrees keeps the config", func(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
 		bl := newLeaveTestBlockchain(t, &fakeChain{memberAnswers: []bool{false, true}}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		cleared, err := bl.ReconcilePoolConfig(t.Context())
 		require.NoError(t, err)
 		assert.False(t, cleared)
@@ -380,9 +434,25 @@ func TestReconcilePoolConfigLoopGuards(t *testing.T) {
 		_, recorded := readTimeMarker(PoolReconcileClearedAtFilePath)
 		assert.False(t, recorded)
 	})
+	t.Run("a join that lands while checking is not wiped", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		chain := &fakeChain{onMemberCall: func(n int) {
+			if n == 2 { // between the two reads: the user joins pool 2
+				_ = cfg.setPool("2")
+			}
+		}}
+		bl := newLeaveTestBlockchain(t, chain, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "2", cfg.getPool())
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
 	t.Run("if the clear can't be recorded, nothing is cleared", func(t *testing.T) {
 		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
 		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
 		blocker := filepath.Join(t.TempDir(), "not-a-dir")
 		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 		PoolReconcileClearedAtFilePath = filepath.Join(blocker, "marker.tmp") // parent is a file → unwritable
@@ -395,14 +465,15 @@ func TestReconcilePoolConfigLoopGuards(t *testing.T) {
 	})
 }
 
-func TestHandlePoolJoinRecordsJoinTime(t *testing.T) {
-	PoolJoinedAtFilePath = filepath.Join(t.TempDir(), "pool_joined_at.tmp")
-	before := time.Now().Add(-time.Second)
-	recordPoolJoinTime(time.Now())
-	at, ok := PoolJoinedAt()
+func TestPoolMemberConfirmedMarker(t *testing.T) {
+	PoolMemberConfirmedFilePath = filepath.Join(t.TempDir(), "pool_member_confirmed.tmp")
+	_, ok := readPoolMemberConfirmed()
+	assert.False(t, ok)
+	recordPoolMemberConfirmed("base", "3")
+	got, ok := readPoolMemberConfirmed()
 	require.True(t, ok)
-	assert.True(t, at.After(before))
-	clearPoolJoinTime()
-	_, err := os.Stat(PoolJoinedAtFilePath)
+	assert.Equal(t, "base:3", got)
+	clearPoolMemberConfirmed()
+	_, err := os.Stat(PoolMemberConfirmedFilePath)
 	assert.True(t, os.IsNotExist(err))
 }

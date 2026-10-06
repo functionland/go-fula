@@ -131,8 +131,6 @@ func (bl *FxBlockchain) HandlePoolJoin(method string, action string, from peer.I
 		return
 	}
 
-	recordPoolJoinTime(time.Now())
-
 	statusCode := http.StatusAccepted
 	res = PoolJoinResponse{
 		Account:   "",
@@ -330,7 +328,7 @@ func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
 	}
 	// (In-memory topic/chain names are not touched here — other request goroutines read them; the services restart
 	// that follows a clear reloads them from the config.)
-	clearPoolJoinTime()
+	clearPoolMemberConfirmed()
 
 	bl.StopPingServer(ctx)
 	// Announcements no longer used - pool joins handled via blockchain API
@@ -1222,6 +1220,11 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 	poolID := req.PoolID
 	chainName := req.ChainName
 
+	if bl.poolHost {
+		writeError(http.StatusConflict, "Pool host", "A pool host does not leave its pool")
+		return
+	}
+
 	// Never clear a different pool than the one asked about.
 	configuredPool := "0"
 	if bl.getPoolName != nil {
@@ -1325,10 +1328,6 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 
 const (
 	poolLeaveCheckAttempts = 3
-	// PoolJoinGracePeriod is how long after a join the configured pool is kept even though the chain doesn't list
-	// the Blox yet: a join writes the config immediately, but the join server's addMember (or approval votes for a
-	// contract join) lands later.
-	PoolJoinGracePeriod = 24 * time.Hour
 	// PoolReconcileMinInterval caps automatic (reconcile) clears — and the services restart each one triggers — to
 	// one per interval, so no combination of chain / RPC answers can make a restart loop.
 	PoolReconcileMinInterval = 24 * time.Hour
@@ -1342,30 +1341,47 @@ var (
 	poolReconcileConfirmDelay     = 30 * time.Second
 )
 
-// Marker files (variables so tests can point them at a temp dir). PoolJoinedAtFilePath records when HandlePoolJoin
-// last wrote a pool into the config (see PoolJoinGracePeriod); PoolReconcileClearedAtFilePath when
-// ReconcilePoolConfig last cleared one (see PoolReconcileMinInterval).
+// Marker files (variables so tests can point them at a temp dir):
+//   - PoolMemberConfirmedFilePath holds "<chain>:<pool>" that this firmware has seen the Blox's cluster peer be a
+//     member of. ReconcilePoolConfig only ever clears a configured pool it confirmed this way — a Blox that WAS a
+//     member and no longer is (e.g. it left from the app while offline). A configured pool never seen as a
+//     membership (a join that never landed on-chain, or any config from before this firmware that isn't a
+//     membership) is left alone, so devices in that state keep running exactly as before.
+//   - PoolReconcileClearedAtFilePath: when ReconcilePoolConfig last cleared one (see PoolReconcileMinInterval).
+//   - PoolReconcileDisabledFilePath: while it exists, ReconcilePoolConfig does nothing (operations kill switch).
 var (
-	PoolJoinedAtFilePath           = "/internal/.tmp/pool_joined_at.tmp"
+	PoolMemberConfirmedFilePath    = "/internal/.tmp/pool_member_confirmed.tmp"
 	PoolReconcileClearedAtFilePath = "/internal/.tmp/pool_reconcile_cleared_at.tmp"
+	PoolReconcileDisabledFilePath  = "/internal/.disable_pool_reconcile"
 )
 
-func recordPoolJoinTime(t time.Time) {
-	if err := writeTimeMarker(PoolJoinedAtFilePath, t); err != nil {
-		log.Warnw("Failed to record pool join time", "err", err)
+func poolKey(chainName, pool string) string { return chainName + ":" + pool }
+
+func recordPoolMemberConfirmed(chainName, pool string) {
+	if confirmed, ok := readPoolMemberConfirmed(); ok && confirmed == poolKey(chainName, pool) {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(PoolMemberConfirmedFilePath), 0755); err != nil {
+		log.Warnw("Failed to create directory for the confirmed pool membership", "err", err)
+		return
+	}
+	if err := os.WriteFile(PoolMemberConfirmedFilePath, []byte(poolKey(chainName, pool)), 0644); err != nil {
+		log.Warnw("Failed to record the confirmed pool membership", "err", err)
 	}
 }
 
-func clearPoolJoinTime() {
-	if err := os.Remove(PoolJoinedAtFilePath); err != nil && !os.IsNotExist(err) {
-		log.Warnw("Failed to remove pool join time", "err", err)
+func readPoolMemberConfirmed() (string, bool) {
+	b, err := os.ReadFile(PoolMemberConfirmedFilePath)
+	if err != nil {
+		return "", false
 	}
+	return strings.TrimSpace(string(b)), true
 }
 
-// PoolJoinedAt returns when the configured pool was joined from this device; false when unknown (e.g. joins made
-// before this marker existed), which counts as an old join.
-func PoolJoinedAt() (time.Time, bool) {
-	return readTimeMarker(PoolJoinedAtFilePath)
+func clearPoolMemberConfirmed() {
+	if err := os.Remove(PoolMemberConfirmedFilePath); err != nil && !os.IsNotExist(err) {
+		log.Warnw("Failed to remove the confirmed pool membership", "err", err)
+	}
 }
 
 // signalPoolConfigCleared runs the WithOnPoolConfigCleared hook (the blox wires it to a fula services restart, so
@@ -1453,20 +1469,22 @@ func (bl *FxBlockchain) strictEthCall(ctx context.Context, chainName string, cal
 	return rpcResponse.Result, nil
 }
 
-// ReconcilePoolConfig clears the configured pool when the chain definitively says this device is neither a member
-// of it nor waiting to join it — e.g. it was removed from the app while offline, or the app's leave notice never
-// arrived — unless the pool was joined from this device less than PoolJoinGracePeriod ago. Any read error keeps the
-// config. Returns true when the config was cleared (and the services restart was signalled).
+// ReconcilePoolConfig clears the configured pool when this firmware has previously seen the Blox be a member of it
+// (PoolMemberConfirmedFilePath) and the chain now definitively says it is neither a member nor waiting to join — i.e.
+// it left (e.g. from the app while offline, or the app's leave notice never arrived). It also records memberships it
+// sees, which is what makes a later leave eligible. A configured pool that was never seen as a membership is never
+// touched. Any read error keeps the config. Returns true when the config was cleared (and the services restart was
+// signalled).
 func (bl *FxBlockchain) ReconcilePoolConfig(ctx context.Context) (bool, error) {
-	if bl.getPoolName == nil || bl.getChainName == nil {
+	if _, err := os.Stat(PoolReconcileDisabledFilePath); err == nil {
+		log.Debugw("Pool reconcile disabled by flag file", "path", PoolReconcileDisabledFilePath)
+		return false, nil
+	}
+	if bl.poolHost || bl.getPoolName == nil || bl.getChainName == nil {
 		return false, nil
 	}
 	pool, chainName := bl.getPoolName(), bl.getChainName()
 	if pool == "" || pool == "0" || chainName == "" {
-		return false, nil
-	}
-	if joinedAt, ok := PoolJoinedAt(); ok && time.Since(joinedAt) < PoolJoinGracePeriod {
-		log.Debugw("Pool reconcile: join is recent, keeping config", "pool", pool, "chain", chainName, "joinedAt", joinedAt)
 		return false, nil
 	}
 	// At most one reconcile clear (and services restart) per PoolReconcileMinInterval, whatever the RPCs answer.
@@ -1491,9 +1509,25 @@ func (bl *FxBlockchain) ReconcilePoolConfig(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if member || pending {
+		if member {
+			recordPoolMemberConfirmed(chainName, pool)
 			return false, nil
 		}
+		if pending {
+			return false, nil
+		}
+		if check == 1 {
+			if confirmed, ok := readPoolMemberConfirmed(); !ok || confirmed != poolKey(chainName, pool) {
+				log.Debugw("Pool reconcile: configured pool was never seen as a membership of this Blox; leaving it alone",
+					"pool", pool, "chain", chainName)
+				return false, nil
+			}
+		}
+	}
+	// Abort if the config changed while checking (e.g. a join or rejoin landed meanwhile).
+	if bl.getPoolName() != pool || bl.getChainName() != chainName {
+		log.Infow("Pool reconcile: config changed while checking; leaving it alone", "pool", pool, "chain", chainName)
+		return false, nil
 	}
 	// Record the clear before doing it: if the record can't be written, the rate limit couldn't hold, so don't clear.
 	if err := writeTimeMarker(PoolReconcileClearedAtFilePath, time.Now()); err != nil {

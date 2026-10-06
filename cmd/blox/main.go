@@ -542,7 +542,14 @@ func before(ctx *cli.Context) error {
 	return os.WriteFile(app.configPath, yc, 0700)
 }
 
+// configMu serialises the runtime config.yaml accessors below: they all read the file into the shared app.config
+// and may write it back, and they are called from several goroutines (join / leave handlers, pool discovery,
+// pool reconcile, the 6 h loop).
+var configMu sync.Mutex
+
 func getPoolNameFromConfig() string {
+	configMu.Lock()
+	defer configMu.Unlock()
 	configData, err := os.ReadFile(app.configPath)
 	if err != nil {
 		return "0"
@@ -556,6 +563,8 @@ func getPoolNameFromConfig() string {
 }
 
 func getChainNameFromConfig() string {
+	configMu.Lock()
+	defer configMu.Unlock()
 	configData, err := os.ReadFile(app.configPath)
 	if err != nil {
 		return ""
@@ -569,6 +578,8 @@ func getChainNameFromConfig() string {
 }
 
 func updateChainName(newChainName string) error {
+	configMu.Lock()
+	defer configMu.Unlock()
 	// Load existing config file
 	configData, err := os.ReadFile(app.configPath)
 	if err != nil {
@@ -602,6 +613,8 @@ func updateChainName(newChainName string) error {
 }
 
 func updateConfig(p []peer.ID) error {
+	configMu.Lock()
+	defer configMu.Unlock()
 	// Load existing config file
 	configData, err := os.ReadFile(app.configPath)
 	if err != nil {
@@ -648,6 +661,8 @@ func updateConfig(p []peer.ID) error {
 }
 
 func updatePoolName(newPoolName string) error {
+	configMu.Lock()
+	defer configMu.Unlock()
 	// Load existing config file
 	configData, err := os.ReadFile(app.configPath)
 	if err != nil {

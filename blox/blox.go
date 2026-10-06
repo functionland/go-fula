@@ -96,6 +96,7 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithIpfsClient(p.rpc),
 		blockchain.WithMinSuccessPingCount(p.minSuccessRate*p.pingCount/100),
 		blockchain.WithIpfsClusterAPI(p.ipfsClusterApi),
+		blockchain.WithPoolHost(p.poolHostMode),
 		// After a pool leave / reconcile cleared the config, restart the fula services so ipfs-cluster re-reads
 		// the (now empty) pool instead of following the old one until the next reboot.
 		blockchain.WithOnPoolConfigCleared(func() {
@@ -434,11 +435,6 @@ func (p *Blox) Start(ctx context.Context) error {
 		p.watchKuboP2P(ctx)
 	}()
 
-	// Drop a configured pool this Blox no longer belongs to on-chain (left from the app while it was offline, or the
-	// leave notice never arrived). Runs in the background a little after start, never on pool hosts; a clear
-	// restarts the fula services, after which discovery runs as for a fresh device.
-	p.startPoolReconcile(ctx)
-
 	// Register cluster tunnel forward immediately if pool is already known from config,
 	// before potentially blocking on chain discovery for up to ~15 minutes.
 	if p.topicName != "0" {
@@ -576,6 +572,11 @@ func (p *Blox) Start(ctx context.Context) error {
 			}
 		}
 	}
+
+	// Only now (pool discovery above is done, so the two never touch the config at the same time): record this
+	// Blox's pool membership, and drop a pool it was a member of but has since left (e.g. from the app while it was
+	// offline). Background, a little later, never on pool hosts; a clear restarts the fula services.
+	p.startPoolReconcile(ctx)
 
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true, 15*time.Second); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)

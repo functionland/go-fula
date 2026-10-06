@@ -37,6 +37,7 @@ type (
 		signingKey               crypto.PrivKey // Private key for signing outgoing requests (mobile client)
 		clientProtocolID         string        // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
 		onPoolConfigCleared      func()        // Called after a leave / reconcile cleared the pool from the config
+		poolHost                 bool          // Pool host (--poolHost): never leaves / reconciles its pool
 	}
 )
 
@@ -251,6 +252,14 @@ func WithRequestSigning(key crypto.PrivKey) Option {
 func WithOnPoolConfigCleared(fn func()) Option {
 	return func(o *options) error {
 		o.onPoolConfigCleared = fn
+		return nil
+	}
+}
+
+// WithPoolHost marks the node as a pool host (--poolHost): pool leave requests and pool reconcile never clear its pool.
+func WithPoolHost(b bool) Option {
+	return func(o *options) error {
+		o.poolHost = b
 		return nil
 	}
 }

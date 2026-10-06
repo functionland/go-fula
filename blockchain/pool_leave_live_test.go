@@ -52,8 +52,9 @@ func livePeer(t *testing.T, s string) peer.ID {
 func newLiveBlockchain(t *testing.T, clusterPeer peer.ID, cfg *poolConfig) *FxBlockchain {
 	t.Helper()
 	dir := t.TempDir()
-	PoolJoinedAtFilePath = dir + "/pool_joined_at.tmp"
+	PoolMemberConfirmedFilePath = dir + "/pool_member_confirmed.tmp"
 	PoolReconcileClearedAtFilePath = dir + "/pool_reconcile_cleared_at.tmp"
+	PoolReconcileDisabledFilePath = dir + "/disable_pool_reconcile"
 	poolLeaveCheckInterval = 2 * time.Second
 	poolConfigClearedRestartDelay = 0
 	poolReconcileConfirmDelay = 2 * time.Second
@@ -141,11 +142,21 @@ func TestLiveReconcilePoolConfig(t *testing.T) {
 	cleared, err := newLiveBlockchain(t, member, cfg).ReconcilePoolConfig(t.Context())
 	require.NoError(t, err)
 	assert.False(t, cleared, "a real member keeps its pool")
+	confirmed, ok := readPoolMemberConfirmed()
+	assert.True(t, ok)
+	assert.Equal(t, chain+":1", confirmed, "and its membership is recorded")
 
 	cfg = &poolConfig{pool: "1", chain: chain, cleared: make(chan struct{}, 1)}
 	cleared, err = newLiveBlockchain(t, own, cfg).ReconcilePoolConfig(t.Context())
 	require.NoError(t, err)
-	assert.True(t, cleared, "a peer that isn't in the pool has it cleared")
+	assert.False(t, cleared, "a pool never seen as a membership is left alone")
+
+	cfg = &poolConfig{pool: "1", chain: chain, cleared: make(chan struct{}, 1)}
+	bl := newLiveBlockchain(t, own, cfg)
+	recordPoolMemberConfirmed(chain, "1") // it was a member once, and the chain no longer lists it
+	cleared, err = bl.ReconcilePoolConfig(t.Context())
+	require.NoError(t, err)
+	assert.True(t, cleared, "a former member that left has the pool cleared")
 	waitCleared(t, cfg)
 }
 
