@@ -171,7 +171,7 @@ func (bl *FxBlockchain) handleAutoPinUnpair(from peer.ID, w http.ResponseWriter,
 // AutoPinPair is the P2P client-side method for the mobile bridge.
 func (bl *FxBlockchain) AutoPinPair(ctx context.Context, to peer.ID, r AutoPinPairRequest) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -203,7 +203,7 @@ func (bl *FxBlockchain) AutoPinPair(ctx context.Context, to peer.ID, r AutoPinPa
 // AutoPinRefresh is the P2P client-side method for the mobile bridge.
 func (bl *FxBlockchain) AutoPinRefresh(ctx context.Context, to peer.ID, r AutoPinRefreshRequest) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -235,7 +235,7 @@ func (bl *FxBlockchain) AutoPinRefresh(ctx context.Context, to peer.ID, r AutoPi
 // AutoPinUnpair is the P2P client-side method for the mobile bridge.
 func (bl *FxBlockchain) AutoPinUnpair(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+to.String()+".invalid/"+actionAutoPinUnpair, nil)

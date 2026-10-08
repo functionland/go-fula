@@ -169,7 +169,7 @@ func TestBloxStoreCid(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test StoreCid operation (this will likely fail due to network setup)
-	err = blox.StoreCid(ctx, link, 3) // Limit of 3 replicas
+	_ = blox.StoreCid(ctx, link, 3) // Limit of 3 replicas
 	// We don't assert success here as it depends on network connectivity
 	// But we test that the method exists and can be called
 	assert.NotNil(t, blox)
@@ -216,7 +216,7 @@ func TestBloxStoreManifest(t *testing.T) {
 	}
 
 	// Test StoreManifest operation
-	err = blox.StoreManifest(ctx, linksWithLimits, 10)
+	_ = blox.StoreManifest(ctx, linksWithLimits, 10)
 	// We don't assert success here as it depends on network connectivity
 	// But we test that the method exists and can be called
 	assert.NotNil(t, blox)
@@ -260,11 +260,11 @@ func TestBloxPushPull(t *testing.T) {
 	defer h2.Close()
 
 	// Test Push operation (will likely fail due to network setup)
-	err = blox.Push(ctx, h2.ID(), link)
+	_ = blox.Push(ctx, h2.ID(), link)
 	// We don't assert success here as it depends on network connectivity
 
 	// Test Pull operation (will likely fail due to network setup)
-	err = blox.Pull(ctx, h2.ID(), link)
+	_ = blox.Pull(ctx, h2.ID(), link)
 	// We don't assert success here as it depends on network connectivity
 
 	assert.NotNil(t, blox)

@@ -70,7 +70,7 @@ func (b *StreamBuffer) IsClosed() bool {
 
 func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionBloxFreeSpace, nil)
@@ -97,7 +97,7 @@ func (bl *FxBlockchain) BloxFreeSpace(ctx context.Context, to peer.ID) ([]byte, 
 
 func (bl *FxBlockchain) EraseBlData(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionEraseBlData, nil)
@@ -124,7 +124,7 @@ func (bl *FxBlockchain) EraseBlData(ctx context.Context, to peer.ID) ([]byte, er
 
 func (bl *FxBlockchain) WifiRemoveall(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionWifiRemoveall, nil)
@@ -151,7 +151,7 @@ func (bl *FxBlockchain) WifiRemoveall(ctx context.Context, to peer.ID) ([]byte, 
 
 func (bl *FxBlockchain) Reboot(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionReboot, nil)
@@ -178,7 +178,7 @@ func (bl *FxBlockchain) Reboot(ctx context.Context, to peer.ID) ([]byte, error) 
 
 func (bl *FxBlockchain) Partition(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionPartition, nil)
@@ -205,7 +205,7 @@ func (bl *FxBlockchain) Partition(ctx context.Context, to peer.ID) ([]byte, erro
 
 func (bl *FxBlockchain) DeleteFulaConfig(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionDeleteFulaConfig, nil)
@@ -231,7 +231,7 @@ func (bl *FxBlockchain) DeleteFulaConfig(ctx context.Context, to peer.ID) ([]byt
 }
 func (bl *FxBlockchain) GetAccount(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionGetAccount, nil)
@@ -259,7 +259,7 @@ func (bl *FxBlockchain) GetAccount(ctx context.Context, to peer.ID) ([]byte, err
 func (bl *FxBlockchain) FetchContainerLogs(ctx context.Context, to peer.ID, r wifi.FetchContainerLogsRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -295,7 +295,7 @@ func (bl *FxBlockchain) FetchContainerLogs(ctx context.Context, to peer.ID, r wi
 
 func (bl *FxBlockchain) ChatWithAI(ctx context.Context, to peer.ID, r wifi.ChatWithAIRequest) (*StreamBuffer, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -375,7 +375,7 @@ func (bl *FxBlockchain) ChatWithAI(ctx context.Context, to peer.ID, r wifi.ChatW
 func (bl *FxBlockchain) FindBestAndTargetInLogs(ctx context.Context, to peer.ID, r wifi.FindBestAndTargetInLogsRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -412,7 +412,7 @@ func (bl *FxBlockchain) FindBestAndTargetInLogs(ctx context.Context, to peer.ID,
 func (bl *FxBlockchain) GetFolderSize(ctx context.Context, to peer.ID, r wifi.GetFolderSizeRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -449,7 +449,7 @@ func (bl *FxBlockchain) GetFolderSize(ctx context.Context, to peer.ID, r wifi.Ge
 func (bl *FxBlockchain) GetDatastoreSize(ctx context.Context, to peer.ID, r wifi.GetDatastoreSizeRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -485,7 +485,7 @@ func (bl *FxBlockchain) GetDatastoreSize(ctx context.Context, to peer.ID, r wifi
 
 func (bl *FxBlockchain) GetDockerImageBuildDates(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionGetDockerImageBuildDates, nil)
@@ -511,7 +511,7 @@ func (bl *FxBlockchain) GetDockerImageBuildDates(ctx context.Context, to peer.ID
 
 func (bl *FxBlockchain) GetClusterInfo(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionGetClusterInfo, nil)
@@ -538,7 +538,7 @@ func (bl *FxBlockchain) GetClusterInfo(ctx context.Context, to peer.ID) ([]byte,
 func (bl *FxBlockchain) DeleteWifi(ctx context.Context, to peer.ID, r wifi.DeleteWifiRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -575,7 +575,7 @@ func (bl *FxBlockchain) DeleteWifi(ctx context.Context, to peer.ID, r wifi.Delet
 func (bl *FxBlockchain) DisconnectWifi(ctx context.Context, to peer.ID, r wifi.DeleteWifiRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -621,10 +621,7 @@ func (bl *FxBlockchain) handleFetchContainerLogs(ctx context.Context, from peer.
 	}
 	log.Debugw("handleFetchContainerLogs received", "req", req)
 
-	out := wifi.FetchContainerLogsResponse{
-		Status: true,
-		Msg:    "",
-	}
+	var out wifi.FetchContainerLogsResponse
 	res, err := wifi.FetchContainerLogs(ctx, req)
 	if err != nil {
 		out = wifi.FetchContainerLogsResponse{
@@ -751,11 +748,7 @@ func (bl *FxBlockchain) handleFindBestAndTargetInLogs(ctx context.Context, from 
 	}
 	log.Debugw("handleFindBestAndTargetInLogs received", "req", req)
 
-	out := wifi.FindBestAndTargetInLogsResponse{
-		Best:   "0",
-		Target: "0",
-		Err:    "",
-	}
+	var out wifi.FindBestAndTargetInLogsResponse
 	best, target, err := wifi.FindBestAndTargetInLogs(ctx, req)
 	if err != nil {
 		out = wifi.FindBestAndTargetInLogsResponse{
@@ -792,10 +785,7 @@ func (bl *FxBlockchain) handleGetFolderSize(ctx context.Context, from peer.ID, w
 	}
 	log.Debugw("handleGetFolderSize received", "req", req)
 
-	out := wifi.GetFolderSizeResponse{
-		FolderPath:  "",
-		SizeInBytes: "",
-	}
+	var out wifi.GetFolderSizeResponse
 	res, err := wifi.GetFolderSize(ctx, req)
 	if err != nil {
 		out = wifi.GetFolderSizeResponse{
@@ -827,7 +817,7 @@ func (bl *FxBlockchain) handleGetDatastoreSize(ctx context.Context, from peer.ID
 	}
 	log.Debugw("handleGetDatastoreSize received", "req", req)
 
-	out := wifi.GetDatastoreSizeResponse{}
+	var out wifi.GetDatastoreSizeResponse
 	res, err := wifi.GetDatastoreSize(ctx, req)
 	if err != nil {
 		out = wifi.GetDatastoreSizeResponse{}

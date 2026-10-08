@@ -621,68 +621,6 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getIPFromSpecificNetwork(ctx context.Context, ssid string) (string, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return "", err
-	}
-
-	for _, iface := range ifaces {
-		var cmdString string
-		cmdString = "iw dev " + iface.Name + " link"
-
-		out, _, err := wifi.RunCommand(ctx, cmdString)
-
-		// Check network connection based on the command used
-		var isConnectedToNetwork bool
-		if err == nil {
-			isConnectedToNetwork = strings.Contains(out, ssid)
-		}
-
-		// If the interface is connected to the specified network, return its IP
-		if isConnectedToNetwork {
-			addrs, err := iface.Addrs()
-			if err != nil {
-				return "", err
-			}
-
-			for _, addr := range addrs {
-				ip, _, err := net.ParseCIDR(addr.String())
-				if err != nil {
-					continue
-				}
-
-				if !ip.IsLoopback() && ip.To4() != nil {
-					return ip.String(), nil
-				}
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no non-loopback IP address found for network %s", ssid)
-}
-
-// This finds the ip address of the device
-func getNonLoopbackIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", err
-	}
-
-	for _, addr := range addrs {
-		ip, _, err := net.ParseCIDR(addr.String())
-		if err != nil {
-			continue
-		}
-
-		if !ip.IsLoopback() && ip.To4() != nil {
-			return ip.String(), nil
-		}
-	}
-
-	return "", fmt.Errorf("no non-loopback IP address found")
-}
-
 func joinPoolHandler(w http.ResponseWriter, r *http.Request) {
 	var poolID string
 

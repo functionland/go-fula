@@ -612,54 +612,6 @@ func updateChainName(newChainName string) error {
 	return nil
 }
 
-func updateConfig(p []peer.ID) error {
-	configMu.Lock()
-	defer configMu.Unlock()
-	// Load existing config file
-	configData, err := os.ReadFile(app.configPath)
-	if err != nil {
-		return err
-	}
-
-	// Parse the existing config file
-	if err := yaml.Unmarshal(configData, &app.config); err != nil {
-		return err
-	}
-
-	// Create a map to hold unique peer IDs
-	uniquePeers := make(map[string]bool)
-
-	// Add existing AuthorizedPeers to the map
-	for _, pidStr := range app.config.AuthorizedPeers {
-		uniquePeers[pidStr] = true
-	}
-
-	// Convert the slice of peer.ID to a slice of strings
-	for _, pid := range p {
-		// Convert the peer.ID to string
-		pidStr := pid.String()
-		// Check if the peer.ID is already in the map
-		if !uniquePeers[pidStr] {
-			// If it's not in the map, add it to the map and the slice
-			uniquePeers[pidStr] = true
-			app.config.AuthorizedPeers = append(app.config.AuthorizedPeers, pidStr)
-		}
-	}
-
-	logger.Infof("Authorized peers: %v", app.config.AuthorizedPeers)
-	// Write back the updated config to the file
-	configData, err = yaml.Marshal(app.config)
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(app.configPath, configData, 0700); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func updatePoolName(newPoolName string) error {
 	configMu.Lock()
 	defer configMu.Unlock()
@@ -879,12 +831,16 @@ func CustomStorageWriteOpenerNone(lctx linking.LinkContext) (io.Writer, ipld.Blo
 // mostly useful to hook up things that register in the default muxer,
 // and don't provide a convenient http.Handler entry point, such as
 // expvar and http/pprof.
+//
+//lint:ignore U1000 kept unused on purpose: it is the only importer of kubo's commands/corehttp stack, and dropping that removes ~250 packages and their init()s (e.g. the dag-jose and git codec registrations) from the daemon
 func defaultMux(path string) corehttp.ServeOption {
 	return func(node *core.IpfsNode, _ net.Listener, mux *http.ServeMux) (*http.ServeMux, error) {
 		mux.Handle(path, http.DefaultServeMux)
 		return mux, nil
 	}
-} // serveHTTPApi collects options, creates listener, prints status message and starts serving requests.
+}
+
+//lint:ignore U1000 kept unused on purpose: it is the only importer of kubo's commands/corehttp stack, and dropping that removes ~250 packages and their init()s (e.g. the dag-jose and git codec registrations) from the daemon
 func rewriteMaddrToUseLocalhostIfItsAny(maddr ma.Multiaddr) ma.Multiaddr {
 	first, rest := ma.SplitFirst(maddr)
 
@@ -897,6 +853,10 @@ func rewriteMaddrToUseLocalhostIfItsAny(maddr ma.Multiaddr) ma.Multiaddr {
 		return maddr // not ip
 	}
 }
+
+// serveHTTPApi collects options, creates listener, prints status message and starts serving requests.
+//
+//lint:ignore U1000 kept unused on purpose: it is the only importer of kubo's commands/corehttp stack, and dropping that removes ~250 packages and their init()s (e.g. the dag-jose and git codec registrations) from the daemon
 func serveHTTPApi(cctx *oldcmds.Context) (<-chan error, error) {
 	cfg, err := cctx.GetConfig()
 	if err != nil {

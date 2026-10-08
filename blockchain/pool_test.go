@@ -315,7 +315,7 @@ func TestFetchUsersAndPopulateSets(t *testing.T) {
 	ctx := context.Background()
 
 	// Test fetching users for a pool
-	err = bl.FetchUsersAndPopulateSets(ctx, "1", true, 30*time.Second)
+	_ = bl.FetchUsersAndPopulateSets(ctx, "1", true, 30*time.Second)
 
 	// This may fail without proper setup, but tests the interface
 	// The method should handle the case gracefully
@@ -343,7 +343,7 @@ func TestDiscoverPoolAndChain(t *testing.T) {
 
 	// Test discovery functionality
 	// This is a private method, so we test it indirectly through FetchUsersAndPopulateSets
-	err = bl.FetchUsersAndPopulateSets(ctx, "0", true, 30*time.Second)
+	_ = bl.FetchUsersAndPopulateSets(ctx, "0", true, 30*time.Second)
 
 	// The method should handle discovery gracefully
 	assert.NotNil(t, bl)

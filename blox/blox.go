@@ -17,7 +17,6 @@ import (
 	"github.com/functionland/go-fula/blockchain"
 	"github.com/functionland/go-fula/common"
 	"github.com/ipfs-cluster/ipfs-cluster/api"
-	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/kubo/client/rpc"
@@ -110,27 +109,6 @@ func New(o ...Option) (*Blox, error) {
 	}
 
 	return &p, nil
-}
-
-func (p *Blox) storeCidIPFS(ctx context.Context, c path.Path) error {
-	getCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if p.rpc == nil {
-		return fmt.Errorf("IPFS rpc is undefined")
-	}
-	_, err := p.rpc.Block().Get(getCtx, c)
-	if err != nil {
-		log.Errorw("It seems that the link is not found", "c", c, "err", err)
-		return err
-	}
-	pinCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	err = p.rpc.Pin().Add(pinCtx, c)
-	if err != nil {
-		log.Errorw("It seems that the link is found but not pinned", "c", c, "err", err)
-		return err
-	}
-	return nil
 }
 
 func (p *Blox) StoreCid(ctx context.Context, l ipld.Link, limit int) error {

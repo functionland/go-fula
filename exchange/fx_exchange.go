@@ -323,7 +323,7 @@ func (e *FxExchange) Start(ctx context.Context) error {
 
 func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error {
 	if e.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.exchange")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.exchange")
 	}
 
 	cid := l.(cidlink.Link).Cid
@@ -365,7 +365,7 @@ func (e *FxExchange) Pull(ctx context.Context, from peer.ID, l ipld.Link) error 
 }
 func (e *FxExchange) PullBlock(ctx context.Context, from peer.ID, l ipld.Link) error {
 	if e.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.exchange")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.exchange")
 	}
 
 	cl := l.(cidlink.Link).Cid
@@ -405,7 +405,7 @@ func (e *FxExchange) PullBlock(ctx context.Context, from peer.ID, l ipld.Link) e
 
 func (e *FxExchange) Push(ctx context.Context, to peer.ID, l ipld.Link) error {
 	if e.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.exchange")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.exchange")
 	}
 
 	log := log.With("cid", l.(cidlink.Link).Cid)
@@ -678,7 +678,7 @@ func (e *FxExchange) handlePull(from peer.ID, w http.ResponseWriter, r *http.Req
 	log.Debug("Instantiating background push in response to pull request")
 	ctx := context.TODO()
 	if e.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.exchange")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.exchange")
 	}
 	if err := e.Push(ctx, from, cidlink.Link{Cid: p.Link}); err != nil {
 		log.Errorw("Failed to fetch in response to push", "err", err)
@@ -757,7 +757,7 @@ func (e *FxExchange) SetAuth(ctx context.Context, on peer.ID, subject peer.ID, a
 		return nil
 	}
 	if e.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.exchange")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.exchange")
 	}
 	r := authorizationRequest{Subject: subject, Allow: allow}
 	var buf bytes.Buffer

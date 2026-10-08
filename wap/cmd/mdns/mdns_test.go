@@ -2,7 +2,6 @@ package mdns
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -237,9 +236,4 @@ func keys(m map[string]*zeroconf.ServiceEntry) []string {
 		result = append(result, k)
 	}
 	return result
-}
-
-func init() {
-	// Suppress log output during tests
-	_ = fmt.Sprintf("test init")
 }

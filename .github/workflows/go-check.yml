@@ -12,8 +12,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25.x"
+      # Analyzer tools must build with the Go above (1.25: cmd/blox doesn't build on 1.26 yet). staticcheck
+      # v0.7.0 (2026.1) and x/tools v0.49.0 are the last releases that do; newer ones need Go 1.26, and
+      # v0.4.6 no longer builds on 1.25. Bump these together with go-version.
       - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@v0.4.6
+        run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
       - name: Clear Go module cache
         run: go clean -modcache
       - name: Check that go.mod is tidy
@@ -37,7 +40,7 @@ jobs:
         run: go vet ./...
       - name: Install shadow analyzer
         if: success() || failure()
-        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@latest
+        run: go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@v0.49.0
       # A shadowed `err` in wap/pkg/server once left the WAP API refusing to start after a SUCCESSFUL bind:
       # the retry loop redeclared err, so the outer err still held the original failure and Serve() logged
       # "Successfully bound ..." immediately followed by "... Server will not start." `go vet` does not catch

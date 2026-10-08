@@ -112,7 +112,7 @@ func (c *Client) beginOp() (context.Context, func(), error) {
 // ensureConnected attempts to connect to blox using peerstore addresses (direct + relay),
 // and falls back to IPFS DHT peer discovery if the direct attempt fails and DHT is enabled.
 func (c *Client) ensureConnected(ctx context.Context) error {
-	ctx = network.WithUseTransient(ctx, "fx.mobile")
+	ctx = network.WithAllowLimitedConn(ctx, "fx.mobile")
 
 	// Close stale connections to avoid "dial backoff" from expired relay v2
 	// circuits that libp2p still considers "connected".
@@ -227,7 +227,7 @@ func (c *Client) Ping() ([]byte, error) {
 
 	for i := 0; i < pingCount; i++ {
 		pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
-		pingCtx = network.WithUseTransient(pingCtx, "fx.mobile.ping")
+		pingCtx = network.WithAllowLimitedConn(pingCtx, "fx.mobile.ping")
 		result := <-libp2pping.Ping(pingCtx, c.h, c.bloxPid)
 		pingCancel()
 		if result.Error != nil {

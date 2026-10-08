@@ -146,7 +146,7 @@ func TestRealDeviceConnection(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		ctx = network.WithUseTransient(ctx, "test")
+		ctx = network.WithAllowLimitedConn(ctx, "test")
 		s, err := client.h.NewStream(ctx, client.bloxPid, protocol.ID("/x/fula-blockchain"))
 		if err != nil {
 			t.Fatalf("NewStream failed: %v", err)
@@ -173,7 +173,7 @@ func TestRealDeviceConnection(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		ctx = network.WithUseTransient(ctx, "test")
+		ctx = network.WithAllowLimitedConn(ctx, "test")
 		conn, err := gostream.Dial(ctx, client.h, client.bloxPid, "/x/fula-blockchain")
 		if err != nil {
 			t.Fatalf("gostream.Dial failed: %v", err)
@@ -209,7 +209,7 @@ func TestRealDeviceConnection(t *testing.T) {
 	t.Run("Ping", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		ctx = network.WithUseTransient(ctx, "test")
+		ctx = network.WithAllowLimitedConn(ctx, "test")
 
 		const pingCount = 3
 		var successes int

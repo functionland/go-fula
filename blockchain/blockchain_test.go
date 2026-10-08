@@ -181,7 +181,7 @@ func TestCallEVMChainWithRetry(t *testing.T) {
 
 	// This test demonstrates the intended behavior
 	// The actual implementation would need to be modified to support dependency injection
-	_, _, err = bl.callEVMChainWithRetry(ctx, "test", "eth_call", params, 3)
+	_, _, _ = bl.callEVMChainWithRetry(ctx, "test", "eth_call", params, 3)
 
 	// For now, we just verify the method exists
 	assert.NotNil(t, bl)

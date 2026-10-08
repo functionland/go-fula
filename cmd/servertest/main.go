@@ -200,7 +200,7 @@ func main() {
 
 	const poolName = "1"
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-	//ctx = network.WithUseTransient(ctx, "fx.exchange")
+	//ctx = network.WithAllowLimitedConn(ctx, "fx.exchange")
 	defer cancel()
 
 	// Elevate log level to show internal communications.

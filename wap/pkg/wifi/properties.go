@@ -177,7 +177,7 @@ func GetDockerImageBuildDates() (GetDockerImageBuildDatesResponse, error) {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
 
-		imageInspect, _, err := cli.ImageInspectWithRaw(context.Background(), c.ImageID)
+		imageInspect, err := cli.ImageInspect(context.Background(), c.ImageID)
 		if err != nil {
 			continue
 		}
@@ -544,7 +544,7 @@ func GetContainerInfo(containerName string) (DockerInfo, error) {
 		return DockerInfo{}, err
 	}
 
-	imageJSON, _, err := cli.ImageInspectWithRaw(context.Background(), containerJSON.Image)
+	imageJSON, err := cli.ImageInspect(context.Background(), containerJSON.Image)
 	if err != nil {
 		return DockerInfo{}, err
 	}

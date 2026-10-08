@@ -127,17 +127,15 @@ func resolveProxyTargetIP() string {
 	if ifaces == nil {
 		ifaces, _ = net.Interfaces()
 	}
-	if ifaces != nil {
-		for _, iface := range ifaces {
-			if iface.Name == "lo" || strings.HasPrefix(iface.Name, "docker") ||
-				strings.HasPrefix(iface.Name, "br-") || strings.HasPrefix(iface.Name, "veth") {
-				continue
-			}
-			if ip := getIPv4FromInterface(iface.Name); ip != "" {
-				log.Infow("Detected container bridge IP for proxy target (bridge networking mode)",
-					"iface", iface.Name, "ip", ip)
-				return ip
-			}
+	for _, iface := range ifaces {
+		if iface.Name == "lo" || strings.HasPrefix(iface.Name, "docker") ||
+			strings.HasPrefix(iface.Name, "br-") || strings.HasPrefix(iface.Name, "veth") {
+			continue
+		}
+		if ip := getIPv4FromInterface(iface.Name); ip != "" {
+			log.Infow("Detected container bridge IP for proxy target (bridge networking mode)",
+				"iface", iface.Name, "ip", ip)
+			return ip
 		}
 	}
 
@@ -431,16 +429,6 @@ func (p *Blox) watchKuboP2P(ctx context.Context) {
 					"remaining", time.Until(longCooldownUntil),
 					"failedRestarts", consecutiveFailedRestarts)
 				continue
-			}
-
-			// If a previous bounce already verified as failed, count it.
-			// We judge a bounce as failed if circuit is still missing
-			// bounceVerifyGracePeriod after the bounce.
-			if !lastRestartAt.IsZero() && time.Since(lastRestartAt) >= bounceVerifyGracePeriod {
-				// Only count once per failed bounce (next gate-1 reset clears it).
-				if consecutiveFailedRestarts == 0 || lastRestartAt.After(time.Now().Add(-bounceVerifyGracePeriod-minTimeBetweenFulaRestarts)) {
-					// no-op; we account for it on the actual bounce decision below
-				}
 			}
 
 			// Gate 3: short cooldown between back-to-back bounces.

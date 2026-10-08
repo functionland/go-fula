@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -226,14 +225,6 @@ func main() {
 
 	updateIPFSConfigIdentity(&ipfsCfg, config)
 
-	/*
-		// Fetch users that are in the same pool
-		users := []string{}
-		if config.PoolName != "0" && config.PoolName != "" {
-			users = fetchPoolUsers(config.PoolName)
-		}
-		updateIPFSConfigBootstrap(&ipfsCfg, config.IpfsBootstrapNodes, users) // We cannot do this as we dont know the ip of these nodes
-	*/
 	updateDatastorePath(&ipfsCfg, ipfsDatastorePath, apiIpAddr)
 	// Enable libp2p stream mounting so kubo can forward P2P protocols to go-fula's TCP server
 	ipfsCfg.Experimental.Libp2pStreamMounting = true
@@ -348,34 +339,6 @@ func readIPFSConfig(sourceIpfsConfig, path string) (IPFSConfig, error) {
 	return cfg, nil
 }
 
-func fetchPoolUsers(poolName string) []string {
-	url := "https://api.node3.functionyard.fula.network/fula/pool/users"
-	payload := map[string]interface{}{
-		"pool_id": poolName,
-	}
-	payloadBytes, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		panic(fmt.Sprintf("Failed to fetch pool users: %v", err))
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		panic(fmt.Sprintf("Unexpected status code: %d", resp.StatusCode))
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-	var apiResponse ApiResponse
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		panic(fmt.Sprintf("Failed to parse ApiResponse: %v", err))
-	}
-
-	userIDs := []string{}
-	for _, user := range apiResponse.Users {
-		userIDs = append(userIDs, user.PeerID)
-	}
-	return userIDs
-}
-
 // deriveKuboKey derives a separate deterministic Ed25519 key for kubo
 // from the original private key using HMAC-SHA256 with a fixed domain separator.
 // This keeps the original key for ipfs-cluster identity while giving kubo
@@ -443,10 +406,6 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
 	ipfsCfg.Addresses.Gateway = "/ip4/127.0.0.1/tcp/8081"
 	// Update the path to the new specified path
 	ipfsCfg.Addresses.API = "/ip4/" + apiIp + "/tcp/5001"
-}
-
-func updateIPFSConfigBootstrap(ipfsCfg *IPFSConfig, predefinedBootstraps, bootstrapPeers []string) {
-	ipfsCfg.Bootstrap = append(predefinedBootstraps, bootstrapPeers...)
 }
 
 func writeIPFSConfig(path string, cfg IPFSConfig) {
