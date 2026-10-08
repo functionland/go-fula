@@ -48,8 +48,8 @@ type Client struct {
 	bloxPid peer.ID
 	relays  []string
 
-	ipfsDHT       *dht.IpfsDHT   // Standard IPFS DHT for peer discovery fallback
-	ipfsDHTReady  chan struct{}   // Closed when DHT bootstrap completes
+	ipfsDHT       *dht.IpfsDHT  // Standard IPFS DHT for peer discovery fallback
+	ipfsDHTReady  chan struct{} // Closed when DHT bootstrap completes
 	ipfsDHTCtx    context.Context
 	ipfsDHTCancel context.CancelFunc
 
@@ -112,7 +112,7 @@ func (c *Client) beginOp() (context.Context, func(), error) {
 // ensureConnected attempts to connect to blox using peerstore addresses (direct + relay),
 // and falls back to IPFS DHT peer discovery if the direct attempt fails and DHT is enabled.
 func (c *Client) ensureConnected(ctx context.Context) error {
-	ctx = network.WithUseTransient(ctx, "fx.mobile")
+	ctx = network.WithAllowLimitedConn(ctx, "fx.mobile")
 
 	// Close stale connections to avoid "dial backoff" from expired relay v2
 	// circuits that libp2p still considers "connected".
@@ -196,10 +196,10 @@ func (c *Client) ConnectToBlox() error {
 // Success is true if at least one ping succeeded.
 func (c *Client) Ping() ([]byte, error) {
 	type PingResult struct {
-		Success    bool     `json:"success"`
-		Successes  int      `json:"successes"`
-		AvgRttMs   int64    `json:"avg_rtt_ms"`
-		Errors     []string `json:"errors"`
+		Success   bool     `json:"success"`
+		Successes int      `json:"successes"`
+		AvgRttMs  int64    `json:"avg_rtt_ms"`
+		Errors    []string `json:"errors"`
 	}
 
 	opCtx, done, err := c.beginOp()
@@ -214,8 +214,8 @@ func (c *Client) Ping() ([]byte, error) {
 	// Ensure we're connected (direct → relay → DHT)
 	if err := c.ensureConnected(ctx); err != nil {
 		result := PingResult{
-			Success:  false,
-			Errors:   []string{fmt.Sprintf("connection failed: %v", err)},
+			Success: false,
+			Errors:  []string{fmt.Sprintf("connection failed: %v", err)},
 		}
 		return json.Marshal(result)
 	}
@@ -227,7 +227,7 @@ func (c *Client) Ping() ([]byte, error) {
 
 	for i := 0; i < pingCount; i++ {
 		pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
-		pingCtx = network.WithUseTransient(pingCtx, "fx.mobile.ping")
+		pingCtx = network.WithAllowLimitedConn(pingCtx, "fx.mobile.ping")
 		result := <-libp2pping.Ping(pingCtx, c.h, c.bloxPid)
 		pingCancel()
 		if result.Error != nil {

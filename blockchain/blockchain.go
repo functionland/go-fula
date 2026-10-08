@@ -67,8 +67,6 @@ type (
 		fetchCheckStop   chan struct{}
 
 		stopFetchUsersAfterJoinChan chan struct{}
-		cachedAccount               string
-		isAccountCached             bool
 
 		fetchMutex sync.Mutex
 		isFetching bool
@@ -284,9 +282,18 @@ func GetChainConfigs() map[string]ChainConfig {
 	}
 }
 
+// chainConfigs returns the chain configurations this instance talks to: GetChainConfigs(), unless a test replaced
+// them with withChainConfigs.
+func (bl *FxBlockchain) chainConfigs() map[string]ChainConfig {
+	if bl.chainConfigOverride != nil {
+		return bl.chainConfigOverride
+	}
+	return GetChainConfigs()
+}
+
 // callEVMChain makes calls to EVM-compatible chains (Base/Skale) using JSON-RPC
 func (bl *FxBlockchain) callEVMChain(ctx context.Context, chainName string, method string, params []interface{}) ([]byte, int, error) {
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return nil, http.StatusBadRequest, fmt.Errorf("unsupported chain: %s", chainName)
@@ -1060,11 +1067,6 @@ func contains(slice []string, str string) bool {
 	return false
 }
 
-func (bl *FxBlockchain) cleanUnwantedPeers(keepPeers []peer.ID) {
-	// No-op: go-fula no longer has a libp2p host or peerstore.
-	// Peer management is handled by kubo.
-}
-
 func (bl *FxBlockchain) checkIfUserHasOpenPoolRequests(ctx context.Context, topicString string) (bool, error) {
 	topic, err := strconv.Atoi(topicString)
 	if err != nil {
@@ -1329,77 +1331,6 @@ func loadCreatorPeerID(poolID int) (string, error) {
 func saveCreatorPeerID(poolID int, peerID string) error {
 	filename := fmt.Sprintf(creatorPeerIDFilePath, poolID)
 	return os.WriteFile(filename, []byte(peerID), 0644) // Adjust permissions if needed
-}
-
-func fetchPoolDetails(ctx context.Context, bl *FxBlockchain, poolID int) (*Pool, error) {
-	req := PoolListRequestWithPoolId{PoolID: poolID}
-	action := "actionPoolList"
-
-	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", action, req)
-	if err != nil {
-		return nil, fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
-	}
-
-	if statusCode != http.StatusOK {
-		var errMsg map[string]interface{}
-		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
-			return nil, fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
-				statusCode, errMsg["message"], errMsg["description"])
-		} else {
-			return nil, fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
-		}
-	}
-
-	var response PoolListResponse
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, err
-	}
-
-	for _, pool := range response.Pools {
-		if pool.PoolID == poolID {
-			return &pool, nil
-		}
-	}
-
-	return nil, fmt.Errorf("pool with ID %d not found", poolID)
-}
-
-func (bl *FxBlockchain) fetchUserDetails(ctx context.Context, poolID int) (*PoolUserListResponse, error) {
-	req := PoolUserListRequest{
-		PoolID: poolID,
-	}
-	action := "actionPoolUserList"
-
-	responseBody, statusCode, err := bl.callBlockchain(ctx, "POST", action, req)
-	if err != nil {
-		return nil, fmt.Errorf("blockchain call error: %w, status code: %d", err, statusCode)
-	}
-
-	if statusCode != http.StatusOK {
-		var errMsg map[string]interface{}
-		if jsonErr := json.Unmarshal(responseBody, &errMsg); jsonErr == nil {
-			return nil, fmt.Errorf("unexpected response status: %d, message: %s, description: %s",
-				statusCode, errMsg["message"], errMsg["description"])
-		} else {
-			return nil, fmt.Errorf("unexpected response status: %d, body: %s", statusCode, string(responseBody))
-		}
-	}
-
-	var response PoolUserListResponse
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, err
-	}
-
-	return &response, nil
-}
-
-func (bl *FxBlockchain) findPeerID(creatorClusterPeerID string, userDetails *PoolUserListResponse) string {
-	for _, user := range userDetails.Users {
-		if user.Account == creatorClusterPeerID {
-			return user.PeerID
-		}
-	}
-	return ""
 }
 
 func (bl *FxBlockchain) handleActionManifestBatchUpload(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request, req *ManifestBatchUploadRequest) {

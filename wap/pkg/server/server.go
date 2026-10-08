@@ -55,6 +55,21 @@ type multiCloser struct {
 	// context: that one is `defer cancel()`-ed, so it dies the moment Serve returns, and a watcher hung off
 	// it would exit on its first tick without ever retrying. The watcher lives until the server is closed.
 	stopWatch chan struct{}
+	// watchers counts the running background watchers (hotspot, LAN setup) so Close() returns only once they
+	// have stopped; nothing they read can then change under them.
+	watchers sync.WaitGroup
+}
+
+// trackWatcher registers a background watcher with Close(), or reports false if the server is already closed
+// (the watcher must then not start). Called under mc.mu, so it can't race Close()'s Wait.
+func (mc *multiCloser) trackWatcher() bool {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if mc.closed {
+		return false
+	}
+	mc.watchers.Add(1)
+	return true
 }
 
 // add registers a listener, or closes it immediately and reports false if the server is already shutting down
@@ -70,10 +85,9 @@ func (mc *multiCloser) add(l io.Closer) bool {
 	return true
 }
 
-// Implement Close method for multiCloser
+// Close closes every listener, stops the background watchers and waits for them to exit.
 func (mc *multiCloser) Close() error {
 	mc.mu.Lock()
-	defer mc.mu.Unlock()
 	mc.closed = true
 	if mc.stopWatch != nil {
 		close(mc.stopWatch)
@@ -86,6 +100,10 @@ func (mc *multiCloser) Close() error {
 		}
 	}
 	mc.listeners = nil
+	mc.mu.Unlock()
+	// Wait without holding mu: a watcher may be about to call add(), which takes it. With closed set, add()
+	// refuses and the watcher returns, so this is at most one tick's work.
+	mc.watchers.Wait()
 	return err
 }
 
@@ -619,68 +637,6 @@ func disableAccessPointHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("error building the response, %v", err), http.StatusInternalServerError)
 		return
 	}
-}
-
-func getIPFromSpecificNetwork(ctx context.Context, ssid string) (string, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return "", err
-	}
-
-	for _, iface := range ifaces {
-		var cmdString string
-		cmdString = "iw dev " + iface.Name + " link"
-
-		out, _, err := wifi.RunCommand(ctx, cmdString)
-
-		// Check network connection based on the command used
-		var isConnectedToNetwork bool
-		if err == nil {
-			isConnectedToNetwork = strings.Contains(out, ssid)
-		}
-
-		// If the interface is connected to the specified network, return its IP
-		if isConnectedToNetwork {
-			addrs, err := iface.Addrs()
-			if err != nil {
-				return "", err
-			}
-
-			for _, addr := range addrs {
-				ip, _, err := net.ParseCIDR(addr.String())
-				if err != nil {
-					continue
-				}
-
-				if !ip.IsLoopback() && ip.To4() != nil {
-					return ip.String(), nil
-				}
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no non-loopback IP address found for network %s", ssid)
-}
-
-// This finds the ip address of the device
-func getNonLoopbackIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", err
-	}
-
-	for _, addr := range addrs {
-		ip, _, err := net.ParseCIDR(addr.String())
-		if err != nil {
-			continue
-		}
-
-		if !ip.IsLoopback() && ip.To4() != nil {
-			return ip.String(), nil
-		}
-	}
-
-	return "", fmt.Errorf("no non-loopback IP address found")
 }
 
 func joinPoolHandler(w http.ResponseWriter, r *http.Request) {

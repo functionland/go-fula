@@ -274,7 +274,7 @@ func (cfg *Config) init(mc *Client) error {
 					}
 
 					// Allow transient (relay) connections for gostream dials
-					dialCtx := network.WithUseTransient(ctx, "fx.mobile")
+					dialCtx := network.WithAllowLimitedConn(ctx, "fx.mobile")
 
 					// Close stale connections to avoid "dial backoff" from expired relay v2
 					// circuits that libp2p still considers "connected".

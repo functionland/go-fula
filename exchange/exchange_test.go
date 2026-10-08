@@ -196,15 +196,15 @@ func TestExchangePushPull(t *testing.T) {
 	link := cidlink.Link{Cid: testCid}
 
 	// Test Push operation (will likely fail due to network setup)
-	err = ex.Push(ctx, h2.ID(), link)
+	_ = ex.Push(ctx, h2.ID(), link)
 	// We don't assert success here as it depends on network connectivity
 
 	// Test Pull operation (will likely fail due to network setup)
-	err = ex.Pull(ctx, h2.ID(), link)
+	_ = ex.Pull(ctx, h2.ID(), link)
 	// We don't assert success here as it depends on network connectivity
 
 	// Test PullBlock operation
-	err = ex.PullBlock(ctx, h2.ID(), link)
+	_ = ex.PullBlock(ctx, h2.ID(), link)
 	// We don't assert success here as it depends on network connectivity
 
 	assert.NotNil(t, ex)
@@ -318,10 +318,10 @@ func TestExchangeErrorHandling(t *testing.T) {
 	link := cidlink.Link{Cid: testCid}
 
 	// These operations should handle errors gracefully
-	err = ex.Push(ctx, invalidPeerID, link)
+	_ = ex.Push(ctx, invalidPeerID, link)
 	// We expect errors but the system should not panic
 
-	err = ex.Pull(ctx, invalidPeerID, link)
+	_ = ex.Pull(ctx, invalidPeerID, link)
 	// We expect errors but the system should not panic
 
 	assert.NotNil(t, ex)
@@ -367,7 +367,7 @@ func TestExchangeTimeout(t *testing.T) {
 	defer h2.Close()
 
 	// Test operations with timeout context
-	err = ex.Push(ctx, h2.ID(), link)
+	_ = ex.Push(ctx, h2.ID(), link)
 	// Should handle timeout gracefully
 
 	assert.NotNil(t, ex)

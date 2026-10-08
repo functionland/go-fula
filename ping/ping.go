@@ -246,7 +246,7 @@ func (pn *FxPing) Ping(ctx context.Context, to peer.ID) (int, int, error) {
 	}
 
 	if pn.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.ping")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.ping")
 	}
 
 	var totalDuration time.Duration

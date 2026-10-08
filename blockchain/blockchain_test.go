@@ -58,13 +58,34 @@ func TestFxBlockchainCreation(t *testing.T) {
 		WithAllowTransientConnection(true),
 		WithBlockchainEndPoint("127.0.0.1:4000"),
 		WithTimeout(30),
+		withListenAddrs("127.0.0.1:0", "127.0.0.1:0"),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, bl)
+	t.Cleanup(func() { _ = bl.Shutdown(context.Background()) })
 
 	// Test that blockchain can start
 	err = bl.Start(ctx)
 	assert.NoError(t, err)
+}
+
+// TestDefaultListenAddrsAndChainConfigs pins what the daemon gets when no test hook is set.
+func TestDefaultListenAddrsAndChainConfigs(t *testing.T) {
+	bl, err := NewFxBlockchain(NewSimpleKeyStorer(""), WithGetPoolName(nil), WithGetChainName(nil),
+		WithUpdatePoolName(nil), WithUpdateChainName(nil))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = bl.Shutdown(context.Background()) })
+
+	assert.Equal(t, "0.0.0.0:4020", bl.proxyListenAddr)
+	assert.Equal(t, "0.0.0.0:4021", bl.pingListenAddr)
+	assert.Equal(t, GetChainConfigs(), bl.chainConfigs())
+	// nil getters/setters keep the defaults instead of leaving nil funcs to panic on.
+	require.NotNil(t, bl.getPoolName)
+	require.NotNil(t, bl.getChainName)
+	require.NotNil(t, bl.updatePoolName)
+	require.NotNil(t, bl.updateChainName)
+	assert.Equal(t, "0", bl.getPoolName())
+	assert.Equal(t, "", bl.getChainName())
 }
 
 // TestCallEVMChain tests EVM chain calls with mock server
@@ -181,7 +202,7 @@ func TestCallEVMChainWithRetry(t *testing.T) {
 
 	// This test demonstrates the intended behavior
 	// The actual implementation would need to be modified to support dependency injection
-	_, _, err = bl.callEVMChainWithRetry(ctx, "test", "eth_call", params, 3)
+	_, _, _ = bl.callEVMChainWithRetry(ctx, "test", "eth_call", params, 3)
 
 	// For now, we just verify the method exists
 	assert.NotNil(t, bl)
@@ -220,8 +241,10 @@ func TestBlockchainHealthCheck(t *testing.T) {
 		WithSelfPeerID(h.ID()),
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
+		withListenAddrs("127.0.0.1:0", "127.0.0.1:0"),
 	)
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = bl.Shutdown(context.Background()) })
 
 	ctx := context.Background()
 

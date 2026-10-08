@@ -33,6 +33,20 @@ func writeConfig(t *testing.T, authorizer string, write bool) {
 	config.FULA_CONFIG_PATH = path
 }
 
+// claimConfig gives the config file writeConfig created an owner, replacing it atomically (write + rename) at
+// the same path, so a running watcher sees the change without config.FULA_CONFIG_PATH changing under it.
+func claimConfig(t *testing.T, authorizer string) {
+	t.Helper()
+	path := config.FULA_CONFIG_PATH
+	body := "storeDir: /uniondrive\nauthorizer: " + authorizer + "\n"
+	if err := os.WriteFile(path+".new", []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+".new", path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBloxHasOwner(t *testing.T) {
 	t.Run("no config file at all → unowned (a fresh box)", func(t *testing.T) {
 		writeConfig(t, "", false)
@@ -349,7 +363,7 @@ func TestLANSetupWatchStopsOnceTheBloxHasAnOwner(t *testing.T) {
 	defer func() { _ = mc.Close() }()
 	startLANSetupWatch(mc, http.NewServeMux(), "0", "10.42.0.1", nil)
 
-	writeConfig(t, "12D3KooWPnaMDrD7QLZKiT2iktjm9Kucx7XEPrSCUS6TTBbYuiRj", true) // claimed
+	claimConfig(t, "12D3KooWPnaMDrD7QLZKiT2iktjm9Kucx7XEPrSCUS6TTBbYuiRj") // claimed
 	mu.Lock()
 	addrs = append(addrs, addr)
 	mu.Unlock()

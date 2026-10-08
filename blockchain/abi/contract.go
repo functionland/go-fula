@@ -96,9 +96,7 @@ var MethodSignatures = struct {
 // DecodePoolsResult decodes the result from pools(uint32) contract call
 func DecodePoolsResult(data string) (*Pool, error) {
 	// Remove 0x prefix
-	if strings.HasPrefix(data, "0x") {
-		data = data[2:]
-	}
+	data = strings.TrimPrefix(data, "0x")
 
 	// Check if we have enough data (minimum 9 * 32 bytes = 288 hex chars)
 	if len(data) < 288 {
@@ -247,9 +245,7 @@ func DecodePoolsResult(data string) (*Pool, error) {
 // DecodeIsMemberOfPoolResult decodes the result from isPeerIdMemberOfPool(uint32,bytes32) contract call
 func DecodeIsMemberOfPoolResult(data string) (*IsMemberOfPoolResult, error) {
 	// Remove 0x prefix
-	if strings.HasPrefix(data, "0x") {
-		data = data[2:]
-	}
+	data = strings.TrimPrefix(data, "0x")
 
 	// Check if we have enough data (2 * 32 bytes = 128 hex chars)
 	if len(data) < 128 {
@@ -280,9 +276,7 @@ func DecodeIsMemberOfPoolResult(data string) (*IsMemberOfPoolResult, error) {
 // DecodeGetMemberPeerIdsResult decodes the result from getMemberPeerIds(uint32,address) contract call
 func DecodeGetMemberPeerIdsResult(data string) (*GetMemberPeerIdsResult, error) {
 	// Remove 0x prefix
-	if strings.HasPrefix(data, "0x") {
-		data = data[2:]
-	}
+	data = strings.TrimPrefix(data, "0x")
 
 	// Check if we have enough data (minimum 64 hex chars for offset + length)
 	if len(data) < 64 {
@@ -346,30 +340,26 @@ func EncodePoolIdsCall(index uint32) string {
 // DecodePoolIdResponse decodes the response from poolIds(uint256) call
 func DecodePoolIdResponse(result string) (uint32, error) {
 	// Remove 0x prefix
-	if strings.HasPrefix(result, "0x") {
-		result = result[2:]
-	}
-	
+	result = strings.TrimPrefix(result, "0x")
+
 	// Should be 64 hex characters (32 bytes)
 	if len(result) != 64 {
 		return 0, fmt.Errorf("invalid response length: expected 64 hex chars, got %d", len(result))
 	}
-	
+
 	// Parse as uint64 first, then convert to uint32
 	poolID, err := strconv.ParseUint(result, 16, 64)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse pool ID: %w", err)
 	}
-	
+
 	return uint32(poolID), nil
 }
 
 // EncodeIsPeerIdMemberOfPoolCall encodes the isPeerIdMemberOfPool(uint32,bytes32) method call
 func EncodeIsPeerIdMemberOfPoolCall(poolID uint32, peerIDBytes32 string) string {
 	// Remove 0x prefix from peerIDBytes32 if present
-	if strings.HasPrefix(peerIDBytes32, "0x") {
-		peerIDBytes32 = peerIDBytes32[2:]
-	}
+	peerIDBytes32 = strings.TrimPrefix(peerIDBytes32, "0x")
 
 	return fmt.Sprintf("%s%064x%s", MethodSignatures.IsPeerIdMemberOfPool, poolID, peerIDBytes32)
 }
@@ -377,9 +367,7 @@ func EncodeIsPeerIdMemberOfPoolCall(poolID uint32, peerIDBytes32 string) string 
 // EncodeGetMemberPeerIdsCall encodes the getMemberPeerIds(uint32,address) method call
 func EncodeGetMemberPeerIdsCall(poolID uint32, memberAddress string) string {
 	// Remove 0x prefix from memberAddress if present
-	if strings.HasPrefix(memberAddress, "0x") {
-		memberAddress = memberAddress[2:]
-	}
+	memberAddress = strings.TrimPrefix(memberAddress, "0x")
 
 	// Pad address to 32 bytes (64 hex chars)
 	paddedAddress := fmt.Sprintf("%064s", memberAddress)
@@ -390,9 +378,7 @@ func EncodeGetMemberPeerIdsCall(poolID uint32, memberAddress string) string {
 // EncodeRemoveMemberPeerIdCall encodes the removeMemberPeerId(uint32,bytes32) method call
 func EncodeRemoveMemberPeerIdCall(poolID uint32, peerIDBytes32 string) string {
 	// Remove 0x prefix from peerIDBytes32 if present
-	if strings.HasPrefix(peerIDBytes32, "0x") {
-		peerIDBytes32 = peerIDBytes32[2:]
-	}
+	peerIDBytes32 = strings.TrimPrefix(peerIDBytes32, "0x")
 
 	return fmt.Sprintf("%s%064x%s", MethodSignatures.RemoveMemberPeerId, poolID, peerIDBytes32)
 }
@@ -400,9 +386,7 @@ func EncodeRemoveMemberPeerIdCall(poolID uint32, peerIDBytes32 string) string {
 // EncodeJoinRequestsCall encodes the joinRequests(uint32,bytes32) public-mapping getter call
 func EncodeJoinRequestsCall(poolID uint32, peerIDBytes32 string) string {
 	// Remove 0x prefix from peerIDBytes32 if present
-	if strings.HasPrefix(peerIDBytes32, "0x") {
-		peerIDBytes32 = peerIDBytes32[2:]
-	}
+	peerIDBytes32 = strings.TrimPrefix(peerIDBytes32, "0x")
 
 	return fmt.Sprintf("%s%064x%s", MethodSignatures.JoinRequests, poolID, peerIDBytes32)
 }
@@ -412,9 +396,7 @@ func EncodeJoinRequestsCall(poolID uint32, peerIDBytes32 string) string {
 // 0 = no request.
 func DecodeJoinRequestStatus(data string) (uint8, error) {
 	// Remove 0x prefix
-	if strings.HasPrefix(data, "0x") {
-		data = data[2:]
-	}
+	data = strings.TrimPrefix(data, "0x")
 
 	// 8 * 32 bytes = 512 hex chars
 	if len(data) < 512 {

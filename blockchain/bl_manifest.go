@@ -20,7 +20,7 @@ import (
 func (bl *FxBlockchain) ManifestUpload(ctx context.Context, to peer.ID, r ManifestUploadRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -57,7 +57,7 @@ func (bl *FxBlockchain) ManifestUpload(ctx context.Context, to peer.ID, r Manife
 func (bl *FxBlockchain) ManifestStore(ctx context.Context, to peer.ID, r ManifestStoreRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -234,7 +234,7 @@ func (bl *FxBlockchain) HandleManifestsAvailable(ctx context.Context, poolIDStri
 func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r ManifestAvailableRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -265,7 +265,7 @@ func (bl *FxBlockchain) ManifestAvailable(ctx context.Context, to peer.ID, r Man
 func (bl *FxBlockchain) ManifestBatchStore(ctx context.Context, to peer.ID, r ManifestBatchStoreRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -296,7 +296,7 @@ func (bl *FxBlockchain) ManifestBatchStore(ctx context.Context, to peer.ID, r Ma
 func (bl *FxBlockchain) ManifestBatchUpload(ctx context.Context, to peer.ID, r ManifestBatchUploadMobileRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -327,7 +327,7 @@ func (bl *FxBlockchain) ManifestBatchUpload(ctx context.Context, to peer.ID, r M
 func (bl *FxBlockchain) ManifestRemove(ctx context.Context, to peer.ID, r ManifestRemoveRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -364,7 +364,7 @@ func (bl *FxBlockchain) ManifestRemove(ctx context.Context, to peer.ID, r Manife
 func (bl *FxBlockchain) ManifestRemoveStorer(ctx context.Context, to peer.ID, r ManifestRemoveStorerRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -401,7 +401,7 @@ func (bl *FxBlockchain) ManifestRemoveStorer(ctx context.Context, to peer.ID, r 
 func (bl *FxBlockchain) ManifestRemoveStored(ctx context.Context, to peer.ID, r ManifestRemoveStoredRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer

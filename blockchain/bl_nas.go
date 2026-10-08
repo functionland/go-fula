@@ -110,7 +110,7 @@ func (bl *FxBlockchain) handleNasCredentials(from peer.ID, w http.ResponseWriter
 // NasCredentials is the P2P client-side method for retrieving the NAS credentials.
 func (bl *FxBlockchain) NasCredentials(ctx context.Context, to peer.ID, r NasCredentialsRequest) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer

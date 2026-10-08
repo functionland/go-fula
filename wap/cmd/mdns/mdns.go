@@ -238,11 +238,11 @@ func NewZeroConfService(port int) (*MDNSServer, error) {
 	log.Debugw("mdns instance name", "name", name)
 
 	service, err := zeroconf.Register(
-		name,              // unique instance name per device
-		"_fulatower._tcp", // service type and protocol
-		"local.",          // service domain
-		port,              // service port
-		meta,              // service metadata
+		name,               // unique instance name per device
+		"_fulatower._tcp",  // service type and protocol
+		"local.",           // service domain
+		port,               // service port
+		meta,               // service metadata
 		getLANInterfaces(), // only physical/LAN interfaces
 	)
 

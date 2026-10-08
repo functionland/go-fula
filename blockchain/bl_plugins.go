@@ -283,7 +283,7 @@ func (bl *FxBlockchain) uninstallPluginImpl(ctx context.Context, pluginName stri
 
 func (bl *FxBlockchain) ListPlugins(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionListPlugins, nil)
@@ -300,7 +300,7 @@ func (bl *FxBlockchain) ListPlugins(ctx context.Context, to peer.ID) ([]byte, er
 
 func (bl *FxBlockchain) InstallPlugin(ctx context.Context, to peer.ID, pluginName string, paramsString string) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -322,7 +322,7 @@ func (bl *FxBlockchain) InstallPlugin(ctx context.Context, to peer.ID, pluginNam
 
 func (bl *FxBlockchain) UninstallPlugin(ctx context.Context, to peer.ID, pluginName string) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -344,7 +344,7 @@ func (bl *FxBlockchain) UninstallPlugin(ctx context.Context, to peer.ID, pluginN
 
 func (bl *FxBlockchain) ListActivePlugins(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionListActivePlugins, nil)
@@ -483,7 +483,7 @@ func (bl *FxBlockchain) showPluginStatusImpl(ctx context.Context, pluginName str
 
 func (bl *FxBlockchain) GetInstallOutput(ctx context.Context, to peer.ID, pluginName string, paramsString string) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -505,7 +505,7 @@ func (bl *FxBlockchain) GetInstallOutput(ctx context.Context, to peer.ID, plugin
 
 func (bl *FxBlockchain) GetInstallStatus(ctx context.Context, to peer.ID, pluginName string) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -723,7 +723,7 @@ func (bl *FxBlockchain) HandleUpdatePlugin(w http.ResponseWriter, r *http.Reques
 
 func (bl *FxBlockchain) UpdatePlugin(ctx context.Context, to peer.ID, pluginName string) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer

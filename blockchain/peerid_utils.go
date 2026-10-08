@@ -62,9 +62,7 @@ func peerIdToBytes32(peerID string) (string, error) {
 
 	// Remove the 'z' prefix for comparison
 	originalWithoutZ := peerID
-	if strings.HasPrefix(originalWithoutZ, "z") {
-		originalWithoutZ = originalWithoutZ[1:]
-	}
+	originalWithoutZ = strings.TrimPrefix(originalWithoutZ, "z")
 
 	if reconstructed != originalWithoutZ {
 		return "", fmt.Errorf("could not revert the encoded bytes32 back to original PeerID. Got: %s, Expected: %s", reconstructed, originalWithoutZ)
@@ -77,9 +75,7 @@ func peerIdToBytes32(peerID string) (string, error) {
 // Always returns a multibase-style PeerID (without the 'z' prefix by default)
 func bytes32ToPeerId(digestBytes32 string) (string, error) {
 	// Remove 0x prefix if present
-	if strings.HasPrefix(digestBytes32, "0x") {
-		digestBytes32 = digestBytes32[2:]
-	}
+	digestBytes32 = strings.TrimPrefix(digestBytes32, "0x")
 
 	// Decode hex string to bytes
 	pubkeyBytes, err := hex.DecodeString(digestBytes32)

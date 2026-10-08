@@ -28,7 +28,7 @@ type PingResponse struct {
 func (bl *FxBlockchain) PoolCreate(ctx context.Context, to peer.ID, r PoolCreateRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -149,7 +149,7 @@ func (bl *FxBlockchain) HandlePoolJoin(method string, action string, from peer.I
 func (bl *FxBlockchain) PoolJoin(ctx context.Context, to peer.ID, r PoolJoinRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -194,7 +194,7 @@ func (bl *FxBlockchain) StopPingServer(ctx context.Context) error {
 func (bl *FxBlockchain) PoolCancelJoin(ctx context.Context, to peer.ID, r PoolCancelJoinRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -344,7 +344,7 @@ func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
 func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequestsRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -381,7 +381,7 @@ func (bl *FxBlockchain) PoolRequests(ctx context.Context, to peer.ID, r PoolRequ
 func (bl *FxBlockchain) PoolList(ctx context.Context, to peer.ID, r PoolListRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -418,7 +418,7 @@ func (bl *FxBlockchain) PoolList(ctx context.Context, to peer.ID, r PoolListRequ
 func (bl *FxBlockchain) ReplicateInPool(ctx context.Context, to peer.ID, r ReplicateRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -455,7 +455,7 @@ func (bl *FxBlockchain) ReplicateInPool(ctx context.Context, to peer.ID, r Repli
 func (bl *FxBlockchain) PoolUserList(ctx context.Context, to peer.ID, r PoolUserListRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -492,7 +492,7 @@ func (bl *FxBlockchain) PoolUserList(ctx context.Context, to peer.ID, r PoolUser
 func (bl *FxBlockchain) PoolVote(ctx context.Context, to peer.ID, r PoolVoteRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -529,7 +529,7 @@ func (bl *FxBlockchain) PoolVote(ctx context.Context, to peer.ID, r PoolVoteRequ
 func (bl *FxBlockchain) PoolLeave(ctx context.Context, to peer.ID, r PoolLeaveRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -713,7 +713,7 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return EVMPoolListResponse{}, fmt.Errorf("unsupported chain: %s", chainName)
@@ -881,7 +881,7 @@ func (bl *FxBlockchain) HandleIsMemberOfPool(ctx context.Context, req IsMemberOf
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[req.ChainName]
 	if !exists {
 		return IsMemberOfPoolResponse{}, fmt.Errorf("unsupported chain: %s", req.ChainName)
@@ -976,7 +976,7 @@ func (bl *FxBlockchain) GetPoolCreatorPeerID(ctx context.Context, poolID uint32,
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return "", fmt.Errorf("unsupported chain: %s", chainName)
@@ -1129,7 +1129,7 @@ func (bl *FxBlockchain) discoverPoolChain(ctx context.Context, poolID uint32) (s
 
 // validatePoolOnChain checks if a pool exists on a specific chain
 func (bl *FxBlockchain) validatePoolOnChain(ctx context.Context, poolID uint32, chainName string) error {
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return fmt.Errorf("unsupported chain: %s", chainName)
@@ -1437,7 +1437,7 @@ func (bl *FxBlockchain) ClusterPeerPoolStatus(ctx context.Context, poolID uint32
 // strictEthCall runs a read-only eth_call against the pool contract on chainName and returns the raw result; RPC,
 // HTTP and JSON-RPC errors are all returned as errors.
 func (bl *FxBlockchain) strictEthCall(ctx context.Context, chainName string, callData string) (string, error) {
-	chainConfig, exists := GetChainConfigs()[chainName]
+	chainConfig, exists := bl.chainConfigs()[chainName]
 	if !exists {
 		return "", fmt.Errorf("unsupported chain: %s", chainName)
 	}

@@ -16,7 +16,7 @@ import (
 func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -46,7 +46,7 @@ func (bl *FxBlockchain) Seeded(ctx context.Context, to peer.ID, r SeededRequest)
 
 func (bl *FxBlockchain) AccountCreate(ctx context.Context, to peer.ID) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+to.String()+".invalid/"+actionAccountCreate, nil)
@@ -72,7 +72,7 @@ func (bl *FxBlockchain) AccountCreate(ctx context.Context, to peer.ID) ([]byte, 
 
 func (bl *FxBlockchain) AccountFund(ctx context.Context, to peer.ID, r AccountFundRequest) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -104,7 +104,7 @@ func (bl *FxBlockchain) AccountFund(ctx context.Context, to peer.ID, r AccountFu
 func (bl *FxBlockchain) AccountExists(ctx context.Context, to peer.ID, r AccountExistsRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -135,7 +135,7 @@ func (bl *FxBlockchain) AccountExists(ctx context.Context, to peer.ID, r Account
 func (bl *FxBlockchain) AccountBalance(ctx context.Context, to peer.ID, r AccountBalanceRequest) ([]byte, error) {
 
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -165,7 +165,7 @@ func (bl *FxBlockchain) AccountBalance(ctx context.Context, to peer.ID, r Accoun
 
 func (bl *FxBlockchain) AssetsBalance(ctx context.Context, to peer.ID, r AssetsBalanceRequest) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
@@ -195,7 +195,7 @@ func (bl *FxBlockchain) AssetsBalance(ctx context.Context, to peer.ID, r AssetsB
 
 func (bl *FxBlockchain) TransferToFula(ctx context.Context, to peer.ID, r TransferToFulaRequest) ([]byte, error) {
 	if bl.allowTransientConnection {
-		ctx = network.WithUseTransient(ctx, "fx.blockchain")
+		ctx = network.WithAllowLimitedConn(ctx, "fx.blockchain")
 	}
 
 	var buf bytes.Buffer
