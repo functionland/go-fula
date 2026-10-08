@@ -30,7 +30,9 @@ jobs:
         env:
           SECRETS_DIR: ${{ github.workspace }}/secrets
 
+      # mobile's client tests spend ~5 min waiting out the client's fixed dial timeouts (there is no device to
+      # reach); under -race that package alone comes close to go test's default 10 min limit.
       - name: Run tests with race detector
-        run: go test -v -race ./...
+        run: go test -v -race -timeout 20m ./...
         env:
           SECRETS_DIR: ${{ github.workspace }}/secrets

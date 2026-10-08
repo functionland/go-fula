@@ -165,7 +165,11 @@ func startHotspotWatch(mc *multiCloser, mux http.Handler, listenAddr string) {
 // Binding is the readiness test: net.Listen fails with "cannot assign requested address" until the interface
 // holds the IP, so no separate interface polling is needed.
 func watchForHotspot(stop <-chan struct{}, mc *multiCloser, mux http.Handler, listenAddr string) {
+	if !mc.trackWatcher() {
+		return // already closed
+	}
 	go func() {
+		defer mc.watchers.Done()
 		ticker := time.NewTicker(hotspotWatchInterval)
 		defer ticker.Stop()
 		for {
@@ -300,7 +304,11 @@ func startLANSetupWatch(mc *multiCloser, mux http.Handler, port string, apIP str
 	}
 	handler := lanSetupGuard(withCORS(mux))
 
+	if !mc.trackWatcher() {
+		return // closed in the meantime
+	}
 	go func() {
+		defer mc.watchers.Done()
 		ticker := time.NewTicker(lanWatchInterval)
 		defer ticker.Stop()
 		for {
