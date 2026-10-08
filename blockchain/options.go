@@ -36,6 +36,8 @@ type (
 		clusterPeerID            peer.ID      // IPFS cluster peer ID (original identity), used for on-chain pool membership
 		signingKey               crypto.PrivKey // Private key for signing outgoing requests (mobile client)
 		clientProtocolID         string        // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
+		onPoolConfigCleared      func()        // Called after a leave / reconcile cleared the pool from the config
+		poolHost                 bool          // Pool host (--poolHost): never leaves / reconciles its pool
 	}
 )
 
@@ -241,6 +243,23 @@ func WithClusterPeerID(id peer.ID) Option {
 func WithRequestSigning(key crypto.PrivKey) Option {
 	return func(o *options) error {
 		o.signingKey = key
+		return nil
+	}
+}
+
+// WithOnPoolConfigCleared sets a hook run after a pool leave or reconcile removed the pool from the config (the
+// blox uses it to restart the fula services so ipfs-cluster stops following the old pool).
+func WithOnPoolConfigCleared(fn func()) Option {
+	return func(o *options) error {
+		o.onPoolConfigCleared = fn
+		return nil
+	}
+}
+
+// WithPoolHost marks the node as a pool host (--poolHost): pool leave requests and pool reconcile never clear its pool.
+func WithPoolHost(b bool) Option {
+	return func(o *options) error {
+		o.poolHost = b
 		return nil
 	}
 }

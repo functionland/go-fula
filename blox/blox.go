@@ -96,6 +96,14 @@ func New(o ...Option) (*Blox, error) {
 		blockchain.WithIpfsClient(p.rpc),
 		blockchain.WithMinSuccessPingCount(p.minSuccessRate*p.pingCount/100),
 		blockchain.WithIpfsClusterAPI(p.ipfsClusterApi),
+		blockchain.WithPoolHost(p.poolHostMode),
+		// After a pool leave / reconcile cleared the config, restart the fula services so ipfs-cluster re-reads
+		// the (now empty) pool instead of following the old one until the next reboot.
+		blockchain.WithOnPoolConfigCleared(func() {
+			if err := signalFulaRestart(); err != nil {
+				log.Errorw("Failed to signal fula restart after the pool was cleared", "err", err)
+			}
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -565,6 +573,11 @@ func (p *Blox) Start(ctx context.Context) error {
 		}
 	}
 
+	// Only now (pool discovery above is done, so the two never touch the config at the same time): record this
+	// Blox's pool membership, and drop a pool it was a member of but has since left (e.g. from the app while it was
+	// offline). Background, a little later, never on pool hosts; a clear restarts the fula services.
+	p.startPoolReconcile(ctx)
+
 	if err := p.bl.FetchUsersAndPopulateSets(ctx, p.topicName, true, 15*time.Second); err != nil {
 		log.Errorw("FetchUsersAndPopulateSets failed", "err", err)
 	}
@@ -637,6 +650,7 @@ func (p *Blox) Start(ctx context.Context) error {
 			for {
 				select {
 				case <-ticker.C:
+					p.reconcilePool(p.ctx)
 					// instead of FetchAvailableManifestsAndStore See what are the new manifests from ther last time we checked in blockstore
 					// A method that checks the last time we checked for stored blocks file
 					// then it checks the stored files under /uniondrive/ipfs_datastore/blocks/{folders that are not .temp}

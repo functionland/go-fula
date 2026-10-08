@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -324,6 +326,9 @@ func (bl *FxBlockchain) cleanLeaveJoinPool(ctx context.Context, PoolID int) {
 			log.Errorw("Failed to reset chain name", "error", err)
 		}
 	}
+	// (In-memory topic/chain names are not touched here — other request goroutines read them; the services restart
+	// that follows a clear reloads them from the config.)
+	clearPoolMemberConfirmed()
 
 	bl.StopPingServer(ctx)
 	// Announcements no longer used - pool joins handled via blockchain API
@@ -1180,7 +1185,17 @@ func (bl *FxBlockchain) validatePoolOnChain(ctx context.Context, poolID uint32, 
 	return nil
 }
 
-// HandlePoolLeave handles pool leave requests with chain support
+// HandlePoolLeave handles pool leave requests with chain support.
+//
+// The on-chain removal (removeMemberPeerId) is sent by the app from the member's wallet — the device has no key to
+// sign it — so this handler only drops the pool from the local config, and only once the chain confirms the device's
+// cluster peer is neither a member of the pool nor waiting to join it:
+//   - 202: removed on-chain (or never there) → pool and chain cleared from config, fula services restarted so
+//     ipfs-cluster leaves the old pool;
+//   - 202 without changes when no pool is configured;
+//   - 409: the device is configured for a different pool or chain, or the chain still lists it (the app's tx not
+//     mined yet);
+//   - 503: the chain could not be read, or the cluster peer id is unknown — config untouched, safe to retry.
 func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.ID, w http.ResponseWriter, r *http.Request) {
 	log := log.With("action", action, "from", from)
 	var req PoolLeaveRequest
@@ -1197,17 +1212,47 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
+	writeError := func(status int, message, description string) {
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]interface{}{"message": message, "description": description})
+	}
+
 	poolID := req.PoolID
 	chainName := req.ChainName
 
+	if bl.poolHost {
+		writeError(http.StatusConflict, "Pool host", "A pool host does not leave its pool")
+		return
+	}
+
+	// Never clear a different pool than the one asked about.
+	configuredPool := "0"
+	if bl.getPoolName != nil {
+		configuredPool = bl.getPoolName()
+	}
+	if configuredPool != "" && configuredPool != "0" && configuredPool != strconv.Itoa(poolID) {
+		writeError(http.StatusConflict, "Pool mismatch",
+			fmt.Sprintf("This Blox is configured for pool %s, not pool %d", configuredPool, poolID))
+		return
+	}
+	// Nothing configured (e.g. a reconcile already cleared it): nothing to clean up or restart.
+	if configuredPool == "" || configuredPool == "0" {
+		log.Infow("Pool leave: no pool configured, nothing to do", "poolID", poolID, "chain", chainName)
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(PoolLeaveResponse{PoolID: req.PoolID, ChainName: chainName}); err != nil {
+			log.Error("failed to write response: %v", err)
+		}
+		return
+	}
+	configuredChain := ""
+	if bl.getChainName != nil {
+		configuredChain = bl.getChainName()
+	}
+
 	// If no chain name provided, try to determine it from current configuration
 	if chainName == "" {
-		var currentChain string
-		if bl.getChainName != nil {
-			currentChain = bl.getChainName()
-		}
-		if currentChain != "" {
-			chainName = currentChain
+		if configuredChain != "" {
+			chainName = configuredChain
 			log.Debugw("Using current chain configuration", "poolID", poolID, "chain", chainName)
 		} else {
 			// Try to discover which chain this pool exists on
@@ -1222,31 +1267,47 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 			}
 		}
 	}
-
-	// Validate that the pool exists on the specified chain
-	if err := bl.validatePoolOnChain(ctx, uint32(poolID), chainName); err != nil {
-		errMsg := map[string]interface{}{
-			"message":     "Pool validation failed",
-			"description": fmt.Sprintf("Pool %d does not exist on chain %s: %s", poolID, chainName, err.Error()),
-		}
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(errMsg)
+	// Pool ids repeat across chains (a Blox can even be in pool 1 on both): a leave on another chain than the one
+	// this Blox is configured for must not clear its config.
+	if configuredChain != "" && configuredChain != chainName {
+		writeError(http.StatusConflict, "Chain mismatch",
+			fmt.Sprintf("This Blox is configured for pool %s on %s, not on %s", configuredPool, configuredChain, chainName))
 		return
 	}
 
-	// Call the removeMemberPeerId contract method
-	if err := bl.callRemoveMemberPeerId(ctx, uint32(poolID), from.String(), chainName); err != nil {
-		errMsg := map[string]interface{}{
-			"message":     "Failed to remove member from pool",
-			"description": fmt.Sprintf("Contract call failed: %s", err.Error()),
+	// The app sends this right after its removeMemberPeerId tx is mined; a public RPC can lag a block or two.
+	stillListed := false
+	for attempt := 1; attempt <= poolLeaveCheckAttempts; attempt++ {
+		member, pending, err := bl.ClusterPeerPoolStatus(ctx, uint32(poolID), chainName)
+		if err != nil {
+			log.Warnw("Pool leave: membership check failed", "poolID", poolID, "chain", chainName, "error", err)
+			writeError(http.StatusServiceUnavailable, "Could not verify pool membership",
+				fmt.Sprintf("Membership check on %s failed: %s", chainName, err.Error()))
+			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(errMsg)
+		stillListed = member || pending
+		if !stillListed || attempt == poolLeaveCheckAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			writeError(http.StatusServiceUnavailable, "Could not verify pool membership", ctx.Err().Error())
+			return
+		case <-time.After(poolLeaveCheckInterval):
+		}
+	}
+	if stillListed {
+		writeError(http.StatusConflict, "Still in the pool on-chain",
+			fmt.Sprintf("This Blox is still a member of (or waiting to join) pool %d on %s; remove it on-chain first", poolID, chainName))
 		return
 	}
 
 	// Clean up local configuration and state
-	bl.cleanLeaveJoinPool(ctx, poolID)
+	if err := bl.clearPoolConfig(ctx, poolID); err != nil {
+		log.Errorw("Pool leave: could not clear the pool from the config", "poolID", poolID, "error", err)
+		writeError(http.StatusInternalServerError, "Failed to update the Blox config", err.Error())
+		return
+	}
 
 	statusCode := http.StatusAccepted
 	res = PoolLeaveResponse{
@@ -1261,32 +1322,125 @@ func (bl *FxBlockchain) HandlePoolLeave(method string, action string, from peer.
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		log.Error("failed to write response: %v", err)
 	}
+	// Give the response time to reach the app before the services restart.
+	bl.signalPoolConfigCleared(poolConfigClearedRestartDelay)
 }
 
-// callRemoveMemberPeerId calls the removeMemberPeerId contract method
-func (bl *FxBlockchain) callRemoveMemberPeerId(ctx context.Context, poolID uint32, peerID string, chainName string) error {
-	chainConfigs := GetChainConfigs()
-	chainConfig, exists := chainConfigs[chainName]
+const (
+	poolLeaveCheckAttempts = 3
+	// PoolReconcileMinInterval caps automatic (reconcile) clears — and the services restart each one triggers — to
+	// one per interval, so no combination of chain / RPC answers can make a restart loop.
+	PoolReconcileMinInterval = 24 * time.Hour
+	joinRequestPending       = 1 // JoinRequest.status of a request still waiting for votes
+)
+
+// Variables (not constants) so tests can shorten them.
+var (
+	poolLeaveCheckInterval        = 4 * time.Second
+	poolConfigClearedRestartDelay = 3 * time.Second
+	poolReconcileConfirmDelay     = 30 * time.Second
+)
+
+// Marker files (variables so tests can point them at a temp dir):
+//   - PoolMemberConfirmedFilePath holds "<chain>:<pool>" that this firmware has seen the Blox's cluster peer be a
+//     member of. ReconcilePoolConfig only ever clears a configured pool it confirmed this way — a Blox that WAS a
+//     member and no longer is (e.g. it left from the app while offline). A configured pool never seen as a
+//     membership (a join that never landed on-chain, or any config from before this firmware that isn't a
+//     membership) is left alone, so devices in that state keep running exactly as before.
+//   - PoolReconcileClearedAtFilePath: when ReconcilePoolConfig last cleared one (see PoolReconcileMinInterval).
+//   - PoolReconcileDisabledFilePath: while it exists, ReconcilePoolConfig does nothing (operations kill switch).
+var (
+	PoolMemberConfirmedFilePath    = "/internal/.tmp/pool_member_confirmed.tmp"
+	PoolReconcileClearedAtFilePath = "/internal/.tmp/pool_reconcile_cleared_at.tmp"
+	PoolReconcileDisabledFilePath  = "/internal/.disable_pool_reconcile"
+)
+
+func poolKey(chainName, pool string) string { return chainName + ":" + pool }
+
+// recordPoolMemberConfirmed is not locked: its only caller, ReconcilePoolConfig, runs once a few minutes after start
+// and then every 6 h, so calls never overlap (the leave handler only deletes the file). Add a lock if that changes.
+func recordPoolMemberConfirmed(chainName, pool string) {
+	if confirmed, ok := readPoolMemberConfirmed(); ok && confirmed == poolKey(chainName, pool) {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(PoolMemberConfirmedFilePath), 0755); err != nil {
+		log.Warnw("Failed to create directory for the confirmed pool membership", "err", err)
+		return
+	}
+	if err := os.WriteFile(PoolMemberConfirmedFilePath, []byte(poolKey(chainName, pool)), 0644); err != nil {
+		log.Warnw("Failed to record the confirmed pool membership", "err", err)
+	}
+}
+
+func readPoolMemberConfirmed() (string, bool) {
+	b, err := os.ReadFile(PoolMemberConfirmedFilePath)
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(b)), true
+}
+
+func clearPoolMemberConfirmed() {
+	if err := os.Remove(PoolMemberConfirmedFilePath); err != nil && !os.IsNotExist(err) {
+		log.Warnw("Failed to remove the confirmed pool membership", "err", err)
+	}
+}
+
+// signalPoolConfigCleared runs the WithOnPoolConfigCleared hook (the blox wires it to a fula services restart, so
+// ipfs-cluster re-reads the now empty pool) after delay, off the caller's goroutine.
+func (bl *FxBlockchain) signalPoolConfigCleared(delay time.Duration) {
+	if bl.onPoolConfigCleared == nil {
+		return
+	}
+	hook := bl.onPoolConfigCleared
+	go func() {
+		time.Sleep(delay)
+		hook()
+	}()
+}
+
+// ClusterPeerPoolStatus reports whether this device's cluster peer is a member of poolID on chainName, and whether
+// it has a pending join request there. Unlike HandleIsMemberOfPool (which treats RPC failures as "not a member"),
+// any RPC or decoding failure is returned as an error, so callers never clear the config on a guess.
+func (bl *FxBlockchain) ClusterPeerPoolStatus(ctx context.Context, poolID uint32, chainName string) (member bool, pending bool, err error) {
+	if bl.clusterPeerID == "" {
+		return false, false, fmt.Errorf("cluster peer ID is not set")
+	}
+	peerIDBytes32, err := peerIdToBytes32(bl.clusterPeerID.String())
+	if err != nil {
+		return false, false, fmt.Errorf("failed to convert cluster peer ID to bytes32: %w", err)
+	}
+
+	memberResult, err := bl.strictEthCall(ctx, chainName, abi.EncodeIsPeerIdMemberOfPoolCall(poolID, peerIDBytes32))
+	if err != nil {
+		return false, false, fmt.Errorf("isPeerIdMemberOfPool: %w", err)
+	}
+	membership, err := abi.DecodeIsMemberOfPoolResult(memberResult)
+	if err != nil {
+		return false, false, fmt.Errorf("isPeerIdMemberOfPool: %w", err)
+	}
+	if membership.IsMember {
+		return true, false, nil
+	}
+
+	requestResult, err := bl.strictEthCall(ctx, chainName, abi.EncodeJoinRequestsCall(poolID, peerIDBytes32))
+	if err != nil {
+		return false, false, fmt.Errorf("joinRequests: %w", err)
+	}
+	status, err := abi.DecodeJoinRequestStatus(requestResult)
+	if err != nil {
+		return false, false, fmt.Errorf("joinRequests: %w", err)
+	}
+	return false, status == joinRequestPending, nil
+}
+
+// strictEthCall runs a read-only eth_call against the pool contract on chainName and returns the raw result; RPC,
+// HTTP and JSON-RPC errors are all returned as errors.
+func (bl *FxBlockchain) strictEthCall(ctx context.Context, chainName string, callData string) (string, error) {
+	chainConfig, exists := GetChainConfigs()[chainName]
 	if !exists {
-		return fmt.Errorf("unsupported chain: %s", chainName)
+		return "", fmt.Errorf("unsupported chain: %s", chainName)
 	}
-
-	// Convert peer ID to bytes32 format
-	peerIDPeer, err := peer.Decode(peerID)
-	if err != nil {
-		return fmt.Errorf("failed to decode peer ID: %w", err)
-	}
-
-	peerIDBytes32, err := PeerIDToBytes32(peerIDPeer)
-	if err != nil {
-		return fmt.Errorf("failed to convert peer ID to bytes32: %w", err)
-	}
-
-	// Encode the removeMemberPeerId contract call
-	callData := abi.EncodeRemoveMemberPeerIdCall(poolID, peerIDBytes32)
-
-	// For now, we'll use eth_call to validate the call would succeed
-	// In a full implementation, you'd use eth_sendTransaction with proper signing
 	params := []interface{}{
 		map[string]interface{}{
 			"to":   chainConfig.Contract,
@@ -1294,17 +1448,13 @@ func (bl *FxBlockchain) callRemoveMemberPeerId(ctx context.Context, poolID uint3
 		},
 		"latest",
 	}
-
 	response, statusCode, err := bl.callEVMChainWithRetry(ctx, chainName, "eth_call", params, 3)
 	if err != nil {
-		return fmt.Errorf("failed to call removeMemberPeerId on chain %s: %w", chainName, err)
+		return "", err
 	}
-
-	if statusCode != 200 {
-		return fmt.Errorf("unexpected status code %d from chain %s", statusCode, chainName)
+	if statusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code %d from chain %s", statusCode, chainName)
 	}
-
-	// Parse JSON-RPC response
 	var rpcResponse struct {
 		Result string `json:"result"`
 		Error  *struct {
@@ -1312,20 +1462,125 @@ func (bl *FxBlockchain) callRemoveMemberPeerId(ctx context.Context, poolID uint3
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-
 	if err := json.Unmarshal(response, &rpcResponse); err != nil {
-		return fmt.Errorf("failed to parse RPC response: %w", err)
+		return "", fmt.Errorf("failed to parse RPC response: %w", err)
 	}
-
 	if rpcResponse.Error != nil {
-		return fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
+		return "", fmt.Errorf("RPC error: %s", rpcResponse.Error.Message)
 	}
+	return rpcResponse.Result, nil
+}
 
-	// Check for contract-specific errors
-	if contractErr := abi.ParseContractError(rpcResponse.Result); contractErr != nil {
-		return fmt.Errorf("contract error: %w", contractErr)
+// ReconcilePoolConfig clears the configured pool when this firmware has previously seen the Blox be a member of it
+// (PoolMemberConfirmedFilePath) and the chain now definitively says it is neither a member nor waiting to join — i.e.
+// it left (e.g. from the app while offline, or the app's leave notice never arrived). It also records memberships it
+// sees, which is what makes a later leave eligible. A configured pool that was never seen as a membership is never
+// touched. Any read error keeps the config. Returns true when the config was cleared (and the services restart was
+// signalled).
+func (bl *FxBlockchain) ReconcilePoolConfig(ctx context.Context) (bool, error) {
+	if _, err := os.Stat(PoolReconcileDisabledFilePath); err == nil {
+		log.Debugw("Pool reconcile disabled by flag file", "path", PoolReconcileDisabledFilePath)
+		return false, nil
 	}
+	if bl.poolHost || bl.getPoolName == nil || bl.getChainName == nil {
+		return false, nil
+	}
+	pool, chainName := bl.getPoolName(), bl.getChainName()
+	if pool == "" || pool == "0" || chainName == "" {
+		return false, nil
+	}
+	// At most one reconcile clear (and services restart) per PoolReconcileMinInterval, whatever the RPCs answer.
+	if clearedAt, ok := readTimeMarker(PoolReconcileClearedAtFilePath); ok && time.Since(clearedAt) < PoolReconcileMinInterval {
+		log.Debugw("Pool reconcile: cleared recently, skipping", "clearedAt", clearedAt)
+		return false, nil
+	}
+	poolID, err := strconv.ParseUint(pool, 10, 32)
+	if err != nil {
+		return false, fmt.Errorf("invalid configured pool %q: %w", pool, err)
+	}
+	// Two definitive "not listed" answers, a little apart, before acting (RPC nodes can briefly disagree).
+	for check := 1; check <= 2; check++ {
+		if check == 2 {
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(poolReconcileConfirmDelay):
+			}
+		}
+		member, pending, err := bl.ClusterPeerPoolStatus(ctx, uint32(poolID), chainName)
+		if err != nil {
+			return false, err
+		}
+		if member {
+			recordPoolMemberConfirmed(chainName, pool)
+			return false, nil
+		}
+		if pending {
+			return false, nil
+		}
+		if check == 1 {
+			if confirmed, ok := readPoolMemberConfirmed(); !ok || confirmed != poolKey(chainName, pool) {
+				log.Debugw("Pool reconcile: configured pool was never seen as a membership of this Blox; leaving it alone",
+					"pool", pool, "chain", chainName)
+				return false, nil
+			}
+		}
+	}
+	// Abort if the config changed while checking (e.g. a join or rejoin landed meanwhile).
+	if bl.getPoolName() != pool || bl.getChainName() != chainName {
+		log.Infow("Pool reconcile: config changed while checking; leaving it alone", "pool", pool, "chain", chainName)
+		return false, nil
+	}
+	// Record the clear before doing it: if the record can't be written, the rate limit couldn't hold, so don't clear.
+	if err := writeTimeMarker(PoolReconcileClearedAtFilePath, time.Now()); err != nil {
+		return false, fmt.Errorf("cannot record the reconcile time, not clearing: %w", err)
+	}
+	log.Infow("Pool reconcile: this Blox is no longer in the configured pool on-chain; clearing it", "pool", pool, "chain", chainName)
+	if err := bl.clearPoolConfig(ctx, int(poolID)); err != nil {
+		return false, err
+	}
+	bl.signalPoolConfigCleared(0)
+	return true, nil
+}
 
-	log.Infow("Successfully called removeMemberPeerId", "poolID", poolID, "peerID", peerID, "chain", chainName)
+// clearPoolConfig drops the pool from the config (cleanLeaveJoinPool) and confirms it took effect. The services are
+// only restarted after a confirmed clear: if the config write failed, a restart would find the pool again, clear
+// and restart again — a loop.
+func (bl *FxBlockchain) clearPoolConfig(ctx context.Context, poolID int) error {
+	if bl.updatePoolName != nil {
+		if err := bl.updatePoolName("0"); err != nil {
+			return fmt.Errorf("failed to clear the pool in the config: %w", err)
+		}
+	}
+	if bl.updateChainName != nil {
+		if err := bl.updateChainName(""); err != nil {
+			return fmt.Errorf("failed to clear the chain in the config: %w", err)
+		}
+	}
+	bl.cleanLeaveJoinPool(ctx, poolID) // the config writes above make its own resets no-ops
+	if bl.getPoolName != nil {
+		if pool := bl.getPoolName(); pool != "" && pool != "0" {
+			return fmt.Errorf("pool is still %q in the config after clearing it", pool)
+		}
+	}
 	return nil
+}
+
+func readTimeMarker(path string) (time.Time, bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(b)))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func writeTimeMarker(path string, t time.Time) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(t.UTC().Format(time.RFC3339)), 0644)
 }

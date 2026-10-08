@@ -1,0 +1,479 @@
+package blockchain
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/functionland/go-fula/blockchain/abi"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// fakeChain answers the pool contract's eth_calls for every chain RPC (the chain URLs are hard-coded, so the
+// http.Client transport is swapped instead).
+type fakeChain struct {
+	mu            sync.Mutex
+	member        bool   // isPeerIdMemberOfPool result
+	memberAnswers []bool // if set, consumed one per isPeerIdMemberOfPool call (then `member`)
+	status        uint8  // joinRequests(...).status
+	failRPC       bool   // answer every call with a JSON-RPC error
+	calls         int
+	memberCalls   int
+	onMemberCall  func(n int) // runs on each isPeerIdMemberOfPool call (1-based count)
+}
+
+func (f *fakeChain) RoundTrip(req *http.Request) (*http.Response, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	var body struct {
+		ID     interface{}     `json:"id"`
+		Params json.RawMessage `json:"params"`
+	}
+	raw, _ := io.ReadAll(req.Body)
+	_ = json.Unmarshal(raw, &body)
+	var params []map[string]string
+	_ = json.Unmarshal(body.Params, &params)
+	data := ""
+	if len(params) > 0 {
+		data = params[0]["data"]
+	}
+
+	resp := map[string]interface{}{"jsonrpc": "2.0", "id": body.ID}
+	word := func(v uint64) string { return fmt.Sprintf("%064x", v) }
+	switch {
+	case f.failRPC:
+		resp["error"] = map[string]interface{}{"code": -32000, "message": "upstream unavailable"}
+	case strings.HasPrefix(data, abi.MethodSignatures.IsPeerIdMemberOfPool):
+		f.memberCalls++
+		if f.onMemberCall != nil {
+			f.onMemberCall(f.memberCalls)
+		}
+		answer := f.member
+		if len(f.memberAnswers) > 0 {
+			answer, f.memberAnswers = f.memberAnswers[0], f.memberAnswers[1:]
+		}
+		isMember := uint64(0)
+		if answer {
+			isMember = 1
+		}
+		resp["result"] = "0x" + word(isMember) + word(0)
+	case strings.HasPrefix(data, abi.MethodSignatures.JoinRequests):
+		resp["result"] = "0x" + strings.Repeat(word(0), 6) + word(uint64(f.status)) + word(0)
+	default:
+		resp["error"] = map[string]interface{}{"code": -32601, "message": "unexpected call " + data}
+	}
+	out, _ := json.Marshal(resp)
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(bytes.NewReader(out)),
+		Request:    req,
+	}, nil
+}
+
+type poolConfig struct {
+	mu         sync.Mutex
+	pool       string
+	chain      string
+	cleared    chan struct{}
+	hookCalls  int
+	failWrites bool // simulate a config.yaml that can't be written
+}
+
+func (c *poolConfig) getPool() string  { c.mu.Lock(); defer c.mu.Unlock(); return c.pool }
+func (c *poolConfig) getChain() string { c.mu.Lock(); defer c.mu.Unlock(); return c.chain }
+func (c *poolConfig) setPool(p string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.failWrites {
+		return fmt.Errorf("read-only file system")
+	}
+	c.pool = p
+	return nil
+}
+func (c *poolConfig) setChain(ch string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.chain = ch
+	return nil
+}
+
+func newLeaveTestBlockchain(t *testing.T, chain *fakeChain, cfg *poolConfig, withClusterPeer bool, extra ...Option) *FxBlockchain {
+	t.Helper()
+	dir := t.TempDir()
+	PoolMemberConfirmedFilePath = filepath.Join(dir, "pool_member_confirmed.tmp")
+	PoolReconcileClearedAtFilePath = filepath.Join(dir, "pool_reconcile_cleared_at.tmp")
+	PoolReconcileDisabledFilePath = filepath.Join(dir, "disable_pool_reconcile")
+	poolLeaveCheckInterval = 10 * time.Millisecond
+	poolConfigClearedRestartDelay = 0
+	poolReconcileConfirmDelay = 0
+
+	opts := []Option{
+		WithTimeout(30),
+		WithGetPoolName(cfg.getPool),
+		WithUpdatePoolName(cfg.setPool),
+		WithGetChainName(cfg.getChain),
+		WithUpdateChainName(cfg.setChain),
+		WithOnPoolConfigCleared(func() {
+			cfg.mu.Lock()
+			cfg.hookCalls++
+			cfg.mu.Unlock()
+			cfg.cleared <- struct{}{}
+		}),
+	}
+	if withClusterPeer {
+		priv, _, err := crypto.GenerateEd25519Key(rand.Reader)
+		require.NoError(t, err)
+		id, err := peer.IDFromPrivateKey(priv)
+		require.NoError(t, err)
+		opts = append(opts, WithClusterPeerID(id))
+	}
+	bl, err := NewFxBlockchain(NewSimpleKeyStorer(""), append(opts, extra...)...)
+	require.NoError(t, err)
+	bl.ch = &http.Client{Transport: chain}
+	return bl
+}
+
+func leave(bl *FxBlockchain, poolID int, chainName string) *httptest.ResponseRecorder {
+	body := fmt.Sprintf(`{"pool_id":%d,"chain_name":%q}`, poolID, chainName)
+	req := httptest.NewRequest(http.MethodPost, "/"+actionPoolLeave, strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	bl.HandlePoolLeave(http.MethodPost, actionPoolLeave, "", rec, req)
+	return rec
+}
+
+func waitCleared(t *testing.T, cfg *poolConfig) {
+	t.Helper()
+	select {
+	case <-cfg.cleared:
+	case <-time.After(2 * time.Second):
+		t.Fatal("pool-config-cleared hook was not called")
+	}
+}
+
+func TestHandlePoolLeave_NotMemberClearsConfigAndRestarts(t *testing.T) {
+	cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+	bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+	recordPoolMemberConfirmed("skale", "1")
+
+	rec := leave(bl, 1, "skale")
+
+	assert.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+	var res PoolLeaveResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+	assert.Equal(t, 1, res.PoolID)
+	assert.Equal(t, "skale", res.ChainName)
+	assert.Equal(t, "0", cfg.getPool())
+	assert.Equal(t, "", cfg.getChain())
+	_, ok := readPoolMemberConfirmed()
+	assert.False(t, ok, "the confirmed membership is dropped on leave")
+	waitCleared(t, cfg)
+}
+
+func TestHandlePoolLeave_StillMemberOrPendingIs409(t *testing.T) {
+	for name, chain := range map[string]*fakeChain{
+		"member":  {member: true},
+		"pending": {status: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &poolConfig{pool: "1", chain: "base", cleared: make(chan struct{}, 1)}
+			bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+			rec := leave(bl, 1, "base")
+
+			assert.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+			assert.Contains(t, rec.Body.String(), "remove it on-chain first")
+			assert.Equal(t, "1", cfg.getPool())
+			assert.Equal(t, "base", cfg.getChain())
+			assert.Equal(t, 0, cfg.hookCalls)
+		})
+	}
+}
+
+func TestHandlePoolLeave_RechecksBeforeGivingUp(t *testing.T) {
+	cfg := &poolConfig{pool: "1", chain: "base", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{member: true}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+	rec := leave(bl, 1, "base")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, poolLeaveCheckAttempts, chain.calls, "one isPeerIdMemberOfPool read per attempt")
+}
+
+func TestHandlePoolLeave_OtherConfiguredPoolIs409WithoutRPC(t *testing.T) {
+	cfg := &poolConfig{pool: "2", chain: "skale", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+	rec := leave(bl, 1, "skale")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "configured for pool 2")
+	assert.Equal(t, 0, chain.calls)
+	assert.Equal(t, "2", cfg.getPool())
+}
+
+func TestHandlePoolLeave_OtherConfiguredChainIs409WithoutRPC(t *testing.T) {
+	// Pool 1 exists on both chains; a leave of Base pool 1 must not clear a SKALE pool-1 config.
+	cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+	rec := leave(bl, 1, "base")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "configured for pool 1 on skale, not on base")
+	assert.Equal(t, 0, chain.calls)
+	assert.Equal(t, "1", cfg.getPool())
+	assert.Equal(t, "skale", cfg.getChain())
+}
+
+func TestHandlePoolLeave_NothingConfiguredIs202WithoutRestart(t *testing.T) {
+	cfg := &poolConfig{pool: "0", chain: "", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true)
+
+	rec := leave(bl, 1, "skale")
+
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Equal(t, 0, chain.calls)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, cfg.hookCalls, "no services restart when there was nothing to clear")
+}
+
+func TestHandlePoolLeave_PoolHostNeverLeaves(t *testing.T) {
+	cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+	chain := &fakeChain{}
+	bl := newLeaveTestBlockchain(t, chain, cfg, true, WithPoolHost(true))
+
+	rec := leave(bl, 1, "skale")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Equal(t, 0, chain.calls)
+	assert.Equal(t, "1", cfg.getPool())
+}
+
+func TestConfigWriteFailureNeverRestarts(t *testing.T) {
+	// A restart after a failed write would find the pool again, clear, restart again — a loop.
+	t.Run("leave", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1), failWrites: true}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		rec := leave(bl, 1, "skale")
+		assert.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("reconcile", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1), failWrites: true}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		assert.Error(t, err)
+		assert.False(t, cleared)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+}
+
+func TestHandlePoolLeave_UnverifiableIs503AndKeepsConfig(t *testing.T) {
+	t.Run("rpc error", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{failRPC: true}, cfg, true)
+		rec := leave(bl, 1, "skale")
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		assert.Equal(t, "1", cfg.getPool())
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("no cluster peer id", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, false)
+		rec := leave(bl, 1, "skale")
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		assert.Equal(t, "1", cfg.getPool())
+	})
+}
+
+func TestReconcilePoolConfig(t *testing.T) {
+	t.Run("running device whose pool was never seen as a membership: left alone", func(t *testing.T) {
+		// e.g. a join whose on-chain part never landed — such devices keep running exactly as before the update.
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		assert.Equal(t, "skale", cfg.getChain())
+		_, recorded := readTimeMarker(PoolReconcileClearedAtFilePath)
+		assert.False(t, recorded)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("member: kept, and the membership is recorded", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "base", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{member: true}, cfg, true)
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		confirmed, ok := readPoolMemberConfirmed()
+		require.True(t, ok)
+		assert.Equal(t, "base:1", confirmed)
+	})
+	t.Run("was a member, has left: cleared and services restarted", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.True(t, cleared)
+		assert.Equal(t, "0", cfg.getPool())
+		assert.Equal(t, "", cfg.getChain())
+		waitCleared(t, cfg)
+	})
+	t.Run("membership confirmed for another pool or chain: left alone", func(t *testing.T) {
+		for _, confirmed := range [][2]string{{"base", "1"}, {"skale", "2"}} {
+			cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+			bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+			recordPoolMemberConfirmed(confirmed[0], confirmed[1])
+			cleared, err := bl.ReconcilePoolConfig(t.Context())
+			require.NoError(t, err)
+			assert.False(t, cleared, "confirmed %v", confirmed)
+			assert.Equal(t, "1", cfg.getPool())
+		}
+	})
+	t.Run("pending: kept", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{status: 1}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+	})
+	t.Run("rpc error: kept, error returned", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{failRPC: true}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		assert.Error(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("nothing to do without a pool, on a pool host, or with the kill switch", func(t *testing.T) {
+		chain := &fakeChain{}
+		unset := &poolConfig{pool: "0", chain: "", cleared: make(chan struct{}, 1)}
+		cleared, err := newLeaveTestBlockchain(t, chain, unset, true).ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+
+		host := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, chain, host, true, WithPoolHost(true))
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err = bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+
+		off := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl = newLeaveTestBlockchain(t, chain, off, true)
+		recordPoolMemberConfirmed("skale", "1")
+		require.NoError(t, os.WriteFile(PoolReconcileDisabledFilePath, nil, 0644))
+		cleared, err = bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", off.getPool())
+
+		assert.Equal(t, 0, chain.calls)
+	})
+}
+
+func TestReconcilePoolConfigLoopGuards(t *testing.T) {
+	t.Run("at most one clear per interval: a second pass within 24 h does nothing", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		chain := &fakeChain{}
+		bl := newLeaveTestBlockchain(t, chain, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		require.True(t, cleared)
+		waitCleared(t, cfg)
+
+		// Something puts the same pool back and it is (somehow) recorded as confirmed again; still rate-limited.
+		require.NoError(t, cfg.setPool("1"))
+		require.NoError(t, cfg.setChain("skale"))
+		recordPoolMemberConfirmed("skale", "1")
+		calls := chain.calls
+		cleared, err = bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, calls, chain.calls, "no chain reads while rate-limited")
+		assert.Equal(t, "1", cfg.getPool())
+		assert.Equal(t, 1, cfg.hookCalls)
+	})
+	t.Run("a second read that disagrees keeps the config", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{memberAnswers: []bool{false, true}}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		_, recorded := readTimeMarker(PoolReconcileClearedAtFilePath)
+		assert.False(t, recorded)
+	})
+	t.Run("a join that lands while checking is not wiped", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		chain := &fakeChain{onMemberCall: func(n int) {
+			if n == 2 { // between the two reads: the user joins pool 2
+				_ = cfg.setPool("2")
+			}
+		}}
+		bl := newLeaveTestBlockchain(t, chain, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		require.NoError(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "2", cfg.getPool())
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+	t.Run("if the clear can't be recorded, nothing is cleared", func(t *testing.T) {
+		cfg := &poolConfig{pool: "1", chain: "skale", cleared: make(chan struct{}, 1)}
+		bl := newLeaveTestBlockchain(t, &fakeChain{}, cfg, true)
+		recordPoolMemberConfirmed("skale", "1")
+		blocker := filepath.Join(t.TempDir(), "not-a-dir")
+		require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
+		PoolReconcileClearedAtFilePath = filepath.Join(blocker, "marker.tmp") // parent is a file → unwritable
+		cleared, err := bl.ReconcilePoolConfig(t.Context())
+		assert.Error(t, err)
+		assert.False(t, cleared)
+		assert.Equal(t, "1", cfg.getPool())
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, cfg.hookCalls)
+	})
+}
+
+func TestPoolMemberConfirmedMarker(t *testing.T) {
+	PoolMemberConfirmedFilePath = filepath.Join(t.TempDir(), "pool_member_confirmed.tmp")
+	_, ok := readPoolMemberConfirmed()
+	assert.False(t, ok)
+	recordPoolMemberConfirmed("base", "3")
+	got, ok := readPoolMemberConfirmed()
+	require.True(t, ok)
+	assert.Equal(t, "base:3", got)
+	clearPoolMemberConfirmed()
+	_, err := os.Stat(PoolMemberConfirmedFilePath)
+	assert.True(t, os.IsNotExist(err))
+}
