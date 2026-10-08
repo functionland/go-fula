@@ -282,9 +282,18 @@ func GetChainConfigs() map[string]ChainConfig {
 	}
 }
 
+// chainConfigs returns the chain configurations this instance talks to: GetChainConfigs(), unless a test replaced
+// them with withChainConfigs.
+func (bl *FxBlockchain) chainConfigs() map[string]ChainConfig {
+	if bl.chainConfigOverride != nil {
+		return bl.chainConfigOverride
+	}
+	return GetChainConfigs()
+}
+
 // callEVMChain makes calls to EVM-compatible chains (Base/Skale) using JSON-RPC
 func (bl *FxBlockchain) callEVMChain(ctx context.Context, chainName string, method string, params []interface{}) ([]byte, int, error) {
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return nil, http.StatusBadRequest, fmt.Errorf("unsupported chain: %s", chainName)

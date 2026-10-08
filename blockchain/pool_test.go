@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -404,29 +405,37 @@ func TestMembershipCheck(t *testing.T) {
 func TestPoolDiscoveryWithMockServer(t *testing.T) {
 	ctx := context.Background()
 
-	// Create mock server that returns the real contract responses
+	// Create mock server that returns the real contract responses. It runs on the server's goroutines, so it
+	// reports problems with t.Errorf (require/t.Fatalf must only be called from the test goroutine).
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var requestBody map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&requestBody)
-		require.NoError(t, err)
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Errorf("mock: decoding request: %v", err)
+			return
+		}
 
-		method, ok := requestBody["method"].(string)
-		require.True(t, ok)
-
+		method, _ := requestBody["method"].(string)
 		switch method {
 		case "eth_call":
-			params, ok := requestBody["params"].([]interface{})
-			require.True(t, ok)
-			require.Len(t, params, 2)
-
-			callParams, ok := params[0].(map[string]interface{})
-			require.True(t, ok)
-
-			data, ok := callParams["data"].(string)
-			require.True(t, ok)
+			params, _ := requestBody["params"].([]interface{})
+			if len(params) != 2 {
+				t.Errorf("mock: eth_call wants 2 params, got %d", len(params))
+				return
+			}
+			callParams, _ := params[0].(map[string]interface{})
+			data, _ := callParams["data"].(string)
 
 			// Mock responses based on the method being called
-			if data == abi.EncodePoolsCall(1) {
+			if data == abi.EncodePoolIdsCall(0) {
+				// One pool on the chain: poolIds(0) = 1; any later index reverts below.
+				response := map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      requestBody["id"],
+					"result":  "0x0000000000000000000000000000000000000000000000000000000000000001",
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(response)
+			} else if data == abi.EncodePoolsCall(1) {
 				// Return the real pools(1) response
 				response := map[string]interface{}{
 					"jsonrpc": "2.0",
@@ -458,10 +467,13 @@ func TestPoolDiscoveryWithMockServer(t *testing.T) {
 				json.NewEncoder(w).Encode(response)
 			}
 		default:
-			t.Fatalf("Unexpected method: %s", method)
+			t.Errorf("mock: unexpected method %q", method)
 		}
 	}))
 	defer mockServer.Close()
+	skale := GetChainConfigs()["skale"]
+	skale.RPC = mockServer.URL
+	skale.BackupRPC = ""
 
 	// Create test peer
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, rand.Reader)
@@ -478,8 +490,10 @@ func TestPoolDiscoveryWithMockServer(t *testing.T) {
 		WithAuthorizer(h.ID()),
 		WithTimeout(30),
 		WithBlockchainEndPoint(mockServer.URL),
+		withChainConfigs(map[string]ChainConfig{"skale": skale}),
 	)
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = bl.Shutdown(context.Background()) })
 
 	// Test HandleEVMPoolList
 	response, err := bl.HandleEVMPoolList(ctx, "skale")
@@ -506,7 +520,8 @@ func TestPoolDiscoveryWithMockServer(t *testing.T) {
 	memberResponse, err := bl.HandleIsMemberOfPool(ctx, memberReq)
 	require.NoError(t, err, "HandleIsMemberOfPool should succeed")
 	assert.True(t, memberResponse.IsMember, "Peer should be a member of pool 1")
-	assert.Equal(t, "0xCe12f8cE914dA115191De28f2E1796a24E475B72", memberResponse.MemberAddress, "Member address should match")
+	assert.True(t, strings.EqualFold("0xCe12f8cE914dA115191De28f2E1796a24E475B72", memberResponse.MemberAddress),
+		"Member address should match, got %s", memberResponse.MemberAddress)
 
 	t.Logf("Membership check test successful:")
 	t.Logf("  PeerID: %s", memberReq.PeerID)

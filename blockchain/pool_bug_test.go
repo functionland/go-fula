@@ -1,3 +1,7 @@
+//go:build livechain
+
+// Calls the real SKALE and Base pool contracts: run with `go test -tags livechain ./blockchain/`.
+
 package blockchain
 
 import (

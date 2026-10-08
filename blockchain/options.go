@@ -32,12 +32,15 @@ type (
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 		rpc                      *rpc.HttpApi
 		ipfsClusterApi           ipfsCluster.Client
-		selfPeerID               peer.ID        // Peer ID derived from private key, used for authorization checks
-		clusterPeerID            peer.ID        // IPFS cluster peer ID (original identity), used for on-chain pool membership
-		signingKey               crypto.PrivKey // Private key for signing outgoing requests (mobile client)
-		clientProtocolID         string         // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
-		onPoolConfigCleared      func()         // Called after a leave / reconcile cleared the pool from the config
-		poolHost                 bool           // Pool host (--poolHost): never leaves / reconciles its pool
+		selfPeerID               peer.ID                // Peer ID derived from private key, used for authorization checks
+		clusterPeerID            peer.ID                // IPFS cluster peer ID (original identity), used for on-chain pool membership
+		signingKey               crypto.PrivKey         // Private key for signing outgoing requests (mobile client)
+		clientProtocolID         string                 // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
+		onPoolConfigCleared      func()                 // Called after a leave / reconcile cleared the pool from the config
+		poolHost                 bool                   // Pool host (--poolHost): never leaves / reconciles its pool
+		proxyListenAddr          string                 // TCP address of the kubo-forwarded blockchain proxy
+		pingListenAddr           string                 // TCP address of the kubo-forwarded ping server
+		chainConfigOverride      map[string]ChainConfig // Replaces GetChainConfigs() when set (tests only)
 	}
 )
 
@@ -74,6 +77,8 @@ func newOptions(o ...Option) (*options, error) {
 		fetchFrequency:           time.Hour * 1, // default frequency, e.g., 1 hour
 		rpc:                      nil,
 		ipfsClusterApi:           nil,
+		proxyListenAddr:          ProxyListenAddr,
+		pingListenAddr:           PingListenAddr,
 	}
 	for _, apply := range o {
 		if err := apply(&opts); err != nil {
@@ -177,16 +182,23 @@ func WithTopicName(n string) Option {
 	}
 }
 
+// WithUpdatePoolName sets the pool name setter. A nil setter keeps the default (callers such as blox.New pass
+// their own option through even when it was never set).
 func WithUpdatePoolName(updatePoolName func(string) error) Option {
 	return func(o *options) error {
-		o.updatePoolName = updatePoolName
+		if updatePoolName != nil {
+			o.updatePoolName = updatePoolName
+		}
 		return nil
 	}
 }
 
+// WithGetPoolName sets the pool name getter. A nil getter keeps the default.
 func WithGetPoolName(getPoolName func() string) Option {
 	return func(o *options) error {
-		o.getPoolName = getPoolName
+		if getPoolName != nil {
+			o.getPoolName = getPoolName
+		}
 		return nil
 	}
 }
@@ -198,16 +210,22 @@ func WithChainName(n string) Option {
 	}
 }
 
+// WithUpdateChainName sets the chain name setter. A nil setter keeps the default.
 func WithUpdateChainName(updateChainName func(string) error) Option {
 	return func(o *options) error {
-		o.updateChainName = updateChainName
+		if updateChainName != nil {
+			o.updateChainName = updateChainName
+		}
 		return nil
 	}
 }
 
+// WithGetChainName sets the chain name getter. A nil getter keeps the default.
 func WithGetChainName(getChainName func() string) Option {
 	return func(o *options) error {
-		o.getChainName = getChainName
+		if getChainName != nil {
+			o.getChainName = getChainName
+		}
 		return nil
 	}
 }
@@ -268,6 +286,29 @@ func WithPoolHost(b bool) Option {
 func WithClientProtocolID(pid string) Option {
 	return func(o *options) error {
 		o.clientProtocolID = pid
+		return nil
+	}
+}
+
+// withListenAddrs moves the proxy and ping servers off ProxyListenAddr / PingListenAddr (tests use
+// "127.0.0.1:0" so parallel or repeated Starts don't collide). Empty keeps the default.
+func withListenAddrs(proxy, ping string) Option {
+	return func(o *options) error {
+		if proxy != "" {
+			o.proxyListenAddr = proxy
+		}
+		if ping != "" {
+			o.pingListenAddr = ping
+		}
+		return nil
+	}
+}
+
+// withChainConfigs replaces the built-in chain configurations (RPC endpoints, contracts), so tests can point the
+// EVM calls at a mock server.
+func withChainConfigs(c map[string]ChainConfig) Option {
+	return func(o *options) error {
+		o.chainConfigOverride = c
 		return nil
 	}
 }

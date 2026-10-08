@@ -713,7 +713,7 @@ func (bl *FxBlockchain) HandleEVMPoolList(ctx context.Context, chainName string)
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return EVMPoolListResponse{}, fmt.Errorf("unsupported chain: %s", chainName)
@@ -881,7 +881,7 @@ func (bl *FxBlockchain) HandleIsMemberOfPool(ctx context.Context, req IsMemberOf
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[req.ChainName]
 	if !exists {
 		return IsMemberOfPoolResponse{}, fmt.Errorf("unsupported chain: %s", req.ChainName)
@@ -976,7 +976,7 @@ func (bl *FxBlockchain) GetPoolCreatorPeerID(ctx context.Context, poolID uint32,
 	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(bl.timeout))
 	defer cancel()
 
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return "", fmt.Errorf("unsupported chain: %s", chainName)
@@ -1129,7 +1129,7 @@ func (bl *FxBlockchain) discoverPoolChain(ctx context.Context, poolID uint32) (s
 
 // validatePoolOnChain checks if a pool exists on a specific chain
 func (bl *FxBlockchain) validatePoolOnChain(ctx context.Context, poolID uint32, chainName string) error {
-	chainConfigs := GetChainConfigs()
+	chainConfigs := bl.chainConfigs()
 	chainConfig, exists := chainConfigs[chainName]
 	if !exists {
 		return fmt.Errorf("unsupported chain: %s", chainName)
@@ -1437,7 +1437,7 @@ func (bl *FxBlockchain) ClusterPeerPoolStatus(ctx context.Context, poolID uint32
 // strictEthCall runs a read-only eth_call against the pool contract on chainName and returns the raw result; RPC,
 // HTTP and JSON-RPC errors are all returned as errors.
 func (bl *FxBlockchain) strictEthCall(ctx context.Context, chainName string, callData string) (string, error) {
-	chainConfig, exists := GetChainConfigs()[chainName]
+	chainConfig, exists := bl.chainConfigs()[chainName]
 	if !exists {
 		return "", fmt.Errorf("unsupported chain: %s", chainName)
 	}

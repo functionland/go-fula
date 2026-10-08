@@ -21,7 +21,7 @@ const (
 // blockchain commands forwarded by kubo's libp2p stream mounting.
 // Requests are authenticated via signed headers (see auth_signed.go).
 func (bl *FxBlockchain) StartProxy(ctx context.Context) error {
-	listener, err := net.Listen("tcp", ProxyListenAddr)
+	listener, err := net.Listen("tcp", bl.proxyListenAddr)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func (bl *FxBlockchain) StartProxy(ctx context.Context) error {
 			log.Errorw("Proxy server stopped erroneously", "err", err)
 		}
 	}()
-	log.Infow("Blockchain proxy server started", "addr", ProxyListenAddr)
+	log.Infow("Blockchain proxy server started", "addr", bl.proxyListenAddr)
 	return nil
 }
 

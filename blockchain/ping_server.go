@@ -34,7 +34,7 @@ type PingServerResponse struct {
 // Any HTTP request to the server returns a JSON response with basic node info,
 // including ipfs-cluster health when the cluster is reachable.
 func (bl *FxBlockchain) StartPingProxy(ctx context.Context) error {
-	listener, err := net.Listen("tcp", PingListenAddr)
+	listener, err := net.Listen("tcp", bl.pingListenAddr)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (bl *FxBlockchain) StartPingProxy(ctx context.Context) error {
 			log.Errorw("Ping server stopped erroneously", "err", err)
 		}
 	}()
-	log.Infow("Ping proxy server started", "addr", PingListenAddr)
+	log.Infow("Ping proxy server started", "addr", bl.pingListenAddr)
 	return nil
 }
 

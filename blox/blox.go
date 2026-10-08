@@ -642,7 +642,9 @@ func (p *Blox) Start(ctx context.Context) error {
 						log.Errorf("Error retrieving last checked time: %v", err)
 						continue
 					}
-					p.topicName = p.getPoolName()
+					if p.getPoolName != nil {
+						p.topicName = p.getPoolName()
+					}
 					if p.topicName != "0" {
 						shortCtx, shortCtxCancel := context.WithDeadline(p.ctx, time.Now().Add(60*time.Second))
 						defer shortCtxCancel()

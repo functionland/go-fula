@@ -1,9 +1,15 @@
+//go:build livechain
+
+// Calls the real SKALE and Base pool contracts, so it needs network and follows live chain state: run it with
+// `go test -tags livechain ./blockchain/`.
+
 package blockchain
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,8 +163,9 @@ func TestRealContractIntegration(t *testing.T) {
 				t.Logf("  Members: %d/%d", poolData.MemberCount, poolData.MaxMembers)
 
 				// Verify the decoded data matches expected values
+				expectedName := map[string]string{"skale": "Global-S1", "base": "Global-B1"}[chainName]
 				assert.Equal(t, uint32(1), poolData.ID, "Pool ID should be 1")
-				assert.Equal(t, "Global-S1", poolData.Name, "Pool name should be Global-S1")
+				assert.Equal(t, expectedName, poolData.Name, "Pool 1 name on %s", chainName)
 				assert.Equal(t, "global", poolData.Region, "Pool region should be global")
 			})
 		}
@@ -249,7 +256,9 @@ func TestRealContractIntegration(t *testing.T) {
 				// - Base: false, 0x0000000000000000000000000000000000000000
 				if chainName == "skale" {
 					assert.True(t, membershipResult.IsMember, "Peer should be member on Skale")
-					assert.Equal(t, "0xCe12f8cE914dA115191De28f2E1796a24E475B72", membershipResult.MemberAddress, "Member address should match on Skale")
+					// The decoder returns lowercase hex, so compare without the EIP-55 checksum casing.
+					assert.True(t, strings.EqualFold("0xCe12f8cE914dA115191De28f2E1796a24E475B72", membershipResult.MemberAddress),
+						"Member address should match on Skale, got %s", membershipResult.MemberAddress)
 				} else if chainName == "base" {
 					assert.False(t, membershipResult.IsMember, "Peer should not be member on Base")
 					assert.Equal(t, "0x0000000000000000000000000000000000000000", membershipResult.MemberAddress, "Member address should be zero on Base")
