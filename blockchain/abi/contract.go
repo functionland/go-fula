@@ -349,18 +349,18 @@ func DecodePoolIdResponse(result string) (uint32, error) {
 	if strings.HasPrefix(result, "0x") {
 		result = result[2:]
 	}
-	
+
 	// Should be 64 hex characters (32 bytes)
 	if len(result) != 64 {
 		return 0, fmt.Errorf("invalid response length: expected 64 hex chars, got %d", len(result))
 	}
-	
+
 	// Parse as uint64 first, then convert to uint32
 	poolID, err := strconv.ParseUint(result, 16, 64)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse pool ID: %w", err)
 	}
-	
+
 	return uint32(poolID), nil
 }
 

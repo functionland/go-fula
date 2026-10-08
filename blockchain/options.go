@@ -32,12 +32,12 @@ type (
 		fetchFrequency           time.Duration //Hours that it should update the list of pool users and pool requests if not called through pubsub
 		rpc                      *rpc.HttpApi
 		ipfsClusterApi           ipfsCluster.Client
-		selfPeerID               peer.ID      // Peer ID derived from private key, used for authorization checks
-		clusterPeerID            peer.ID      // IPFS cluster peer ID (original identity), used for on-chain pool membership
+		selfPeerID               peer.ID        // Peer ID derived from private key, used for authorization checks
+		clusterPeerID            peer.ID        // IPFS cluster peer ID (original identity), used for on-chain pool membership
 		signingKey               crypto.PrivKey // Private key for signing outgoing requests (mobile client)
-		clientProtocolID         string        // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
-		onPoolConfigCleared      func()        // Called after a leave / reconcile cleared the pool from the config
-		poolHost                 bool          // Pool host (--poolHost): never leaves / reconciles its pool
+		clientProtocolID         string         // Protocol ID for kubo p2p forwarding (e.g. "/x/fula-blockchain")
+		onPoolConfigCleared      func()         // Called after a leave / reconcile cleared the pool from the config
+		poolHost                 bool           // Pool host (--poolHost): never leaves / reconciles its pool
 	}
 )
 

@@ -48,8 +48,8 @@ type Client struct {
 	bloxPid peer.ID
 	relays  []string
 
-	ipfsDHT       *dht.IpfsDHT   // Standard IPFS DHT for peer discovery fallback
-	ipfsDHTReady  chan struct{}   // Closed when DHT bootstrap completes
+	ipfsDHT       *dht.IpfsDHT  // Standard IPFS DHT for peer discovery fallback
+	ipfsDHTReady  chan struct{} // Closed when DHT bootstrap completes
 	ipfsDHTCtx    context.Context
 	ipfsDHTCancel context.CancelFunc
 
@@ -196,10 +196,10 @@ func (c *Client) ConnectToBlox() error {
 // Success is true if at least one ping succeeded.
 func (c *Client) Ping() ([]byte, error) {
 	type PingResult struct {
-		Success    bool     `json:"success"`
-		Successes  int      `json:"successes"`
-		AvgRttMs   int64    `json:"avg_rtt_ms"`
-		Errors     []string `json:"errors"`
+		Success   bool     `json:"success"`
+		Successes int      `json:"successes"`
+		AvgRttMs  int64    `json:"avg_rtt_ms"`
+		Errors    []string `json:"errors"`
 	}
 
 	opCtx, done, err := c.beginOp()
@@ -214,8 +214,8 @@ func (c *Client) Ping() ([]byte, error) {
 	// Ensure we're connected (direct → relay → DHT)
 	if err := c.ensureConnected(ctx); err != nil {
 		result := PingResult{
-			Success:  false,
-			Errors:   []string{fmt.Sprintf("connection failed: %v", err)},
+			Success: false,
+			Errors:  []string{fmt.Sprintf("connection failed: %v", err)},
 		}
 		return json.Marshal(result)
 	}

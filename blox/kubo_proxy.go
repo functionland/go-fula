@@ -29,8 +29,8 @@ const (
 
 	healthCheckInterval = 30 * time.Second
 
-	poolsAPIEndpoint             = "https://pools.fx.land/pools/"
-	serverKuboPeerIDCachePath    = "/internal/.tmp/pool_%s_server_kubo.tmp"
+	poolsAPIEndpoint          = "https://pools.fx.land/pools/"
+	serverKuboPeerIDCachePath = "/internal/.tmp/pool_%s_server_kubo.tmp"
 
 	// Static relay PeerID — matches Peering.Peers / Swarm.RelayClient.StaticRelays
 	// in the kubo template config. The watchdog gates fula restarts on actual

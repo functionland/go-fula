@@ -24,7 +24,7 @@ func TestPoolDiscoveryAndMembership(t *testing.T) {
 
 	// Test both chains
 	chains := []string{"skale", "base"}
-	
+
 	for _, chainName := range chains {
 		t.Run("Chain_"+chainName, func(t *testing.T) {
 			t.Logf("Testing pool discovery and membership for chain: %s", chainName)
@@ -67,7 +67,7 @@ func TestPoolDiscoveryAndMembership(t *testing.T) {
 						return
 					}
 
-					t.Logf("Membership result for pool %d on chain %s: isMember=%t, address=%s", 
+					t.Logf("Membership result for pool %d on chain %s: isMember=%t, address=%s",
 						pool.ID, chainName, resp.IsMember, resp.MemberAddress)
 
 					// Verify response structure
@@ -145,7 +145,7 @@ func TestPoolDiscoveryReturnsCorrectPoolIDs(t *testing.T) {
 	defer cancel()
 
 	chains := []string{"skale", "base"}
-	
+
 	for _, chainName := range chains {
 		t.Run("PoolIDs_"+chainName, func(t *testing.T) {
 			poolList, err := bl.HandleEVMPoolList(ctx, chainName)
@@ -156,7 +156,7 @@ func TestPoolDiscoveryReturnsCorrectPoolIDs(t *testing.T) {
 			t.Logf("Chain %s discovered pools:", chainName)
 			for i, pool := range poolList.Pools {
 				t.Logf("  Pool[%d]: ID=%d, Name=%s, Creator=%s", i, pool.ID, pool.Name, pool.Creator)
-				
+
 				// Verify pool ID is valid (not 0)
 				if pool.ID == 0 {
 					t.Errorf("Pool at index %d has invalid ID 0", i)

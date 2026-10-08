@@ -128,15 +128,15 @@ type IPFSConfig struct {
 			LowWater    int    `json:"LowWater"`
 			GracePeriod string `json:"GracePeriod"`
 		} `json:"ConnMgr"`
-		DisableBandwidthMetrics bool     `json:"DisableBandwidthMetrics"`
-		DisableNatPortMap       bool     `json:"DisableNatPortMap"`
-		RelayClient struct {
+		DisableBandwidthMetrics bool `json:"DisableBandwidthMetrics"`
+		DisableNatPortMap       bool `json:"DisableNatPortMap"`
+		RelayClient             struct {
 			Enabled      bool     `json:"Enabled,omitempty"`
 			StaticRelays []string `json:"StaticRelays,omitempty"`
 		} `json:"RelayClient"`
 		RelayService struct{} `json:"RelayService"`
-		ResourceMgr             struct{} `json:"ResourceMgr"`
-		Transports              struct {
+		ResourceMgr  struct{} `json:"ResourceMgr"`
+		Transports   struct {
 			Multiplexers map[string]interface{} `json:"Multiplexers"`
 			Network      map[string]interface{} `json:"Network"`
 			Security     map[string]interface{} `json:"Security"`
@@ -444,7 +444,6 @@ func updateDatastorePath(ipfsCfg *IPFSConfig, newPath string, apiIp string) {
 	// Update the path to the new specified path
 	ipfsCfg.Addresses.API = "/ip4/" + apiIp + "/tcp/5001"
 }
-
 
 func updateIPFSConfigBootstrap(ipfsCfg *IPFSConfig, predefinedBootstraps, bootstrapPeers []string) {
 	ipfsCfg.Bootstrap = append(predefinedBootstraps, bootstrapPeers...)
